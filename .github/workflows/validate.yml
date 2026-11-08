@@ -85,7 +85,9 @@ jobs:
           DATABASE_NAME: test_leuret
           CONTRACTOR_MIGRATOR_PASSWORD: ci_migrator_password
           CONTRACTOR_API_PASSWORD: ci_api_password
-          MIGRATOR_DATABASE_URL: postgresql://contractor_migrator:ci_migrator_password@127.0.0.1:5432/test_leuret
+          # La migración histórica 024 no selecciona contractor_owner; la base
+          # efímera usa postgres solo para reproducir el esquema completo.
+          MIGRATOR_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/test_leuret
         run: |
           node database/scripts/bootstrap.mjs
           node database/scripts/migrate.mjs
