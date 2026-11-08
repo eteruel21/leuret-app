@@ -510,9 +510,13 @@ export type AccountDeletionResponse = {
   profilePersonalDataAnonymized: boolean;
   sessionsRevoked: boolean;
   storageCleanup: {
-    status: "completed" | "not_required" | "failed";
+    status: "completed" | "not_required" | "queued_for_retry";
     objectCount: number;
+    completedObjectCount: number;
+    pendingObjectCount: number;
     failedObjectCount: number;
+    retryScheduled: boolean;
+    sharedProjectPhotosPreserved: number;
     note: string;
   };
 };

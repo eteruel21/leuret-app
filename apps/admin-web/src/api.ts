@@ -380,8 +380,26 @@ export async function exportAccountData(): Promise<
   >("/account/export");
 }
 
-export async function deleteAccount(): Promise<void> {
-  await authenticatedRequest<unknown>(
+export type AccountDeletionResponse = {
+  success: boolean;
+  accountStatus: "deleted";
+  authenticationDisabled: boolean;
+  profilePersonalDataAnonymized: boolean;
+  sessionsRevoked: boolean;
+  storageCleanup: {
+    status: "completed" | "not_required" | "queued_for_retry";
+    objectCount: number;
+    completedObjectCount: number;
+    pendingObjectCount: number;
+    failedObjectCount: number;
+    retryScheduled: boolean;
+    sharedProjectPhotosPreserved: number;
+    note: string;
+  };
+};
+
+export async function deleteAccount(): Promise<AccountDeletionResponse> {
+  return authenticatedRequest<AccountDeletionResponse>(
     "/account",
     {
       method: "DELETE"

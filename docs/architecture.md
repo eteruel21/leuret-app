@@ -49,7 +49,7 @@ La API sigue un patrón modular basado en servicios y repositorios.
 ### 3.2 Seguridad y Privacidad ARCO
 1. **Encabezados de Seguridad**: HSTS, CSP, X-Content-Type-Options, Referrer-Policy y Permissions-Policy configurados en cada respuesta Fastify.
 2. **Control de Acceso Contextual (RLS)**: Cada transacción SQL establece `app.current_user_id()`.
-3. **Eliminación y Depuración**: La solicitud `DELETE /account` anonimiza datos personales en PostgreSQL y programa la eliminación física de adjuntos en 30 días según la Política de Retención.
+3. **Eliminación y Depuración**: La solicitud `DELETE /account` anonimiza los datos personales y revoca las credenciales en una transacción PostgreSQL. Los documentos personales se registran en una cola durable, se intentan eliminar inmediatamente de R2 y se reintentan mediante un Worker programado. Las fotos de proyectos se conservan como recursos compartidos de la empresa.
 
 ---
 

@@ -34,7 +34,8 @@ Este documento define la configuración y activación de monitoreo continuo de d
 
 ## 4. Alertas de Seguridad y Rate Limiting
 
-- **Monitoreo de Endpoints de Autenticación**: `/auth/login`, `/auth/refresh`, `/account/delete`.
+- **Monitoreo de Endpoints de Autenticación**: `/auth/login`, `/auth/refresh`, `DELETE /account`.
+- **Limpieza de cuentas**: registrar por tanda los trabajos reclamados, completados y conservados para reintento, sin incluir claves de almacenamiento ni datos personales en los logs.
 - **Regla de Seguridad**:
   - Disparo de bloqueo por rate limiting (respuestas `429 Too Many Requests`) > 15 eventos por minuto.
   - Alerta inmediata a canales de guardia ante múltiples intentos fallidos de autenticación.

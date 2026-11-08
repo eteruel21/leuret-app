@@ -30,6 +30,11 @@
       "bucket_name": "contractor-private-storage"
     }
   ],
+  "triggers": {
+    "crons": [
+      "*/5 * * * *"
+    ]
+  },
   "routes": [
     {
       "pattern": "api.leurettech.com",

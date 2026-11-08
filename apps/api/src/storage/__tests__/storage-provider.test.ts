@@ -5,6 +5,7 @@ import {
   buildSecureStorageKey,
   configureR2Storage,
   sanitizeExtension,
+  normalizeStorageKey,
   isLocalStorageFallbackAllowed,
   uploadStorageFile,
   downloadStorageFile,
@@ -36,6 +37,30 @@ test("sanitizeExtension: normaliza extensiones inseguras o desconocidas a .jpg",
   assert.equal(sanitizeExtension("documento.pdf"), ".pdf");
   assert.equal(sanitizeExtension("malicioso.exe"), ".jpg");
   assert.equal(sanitizeExtension("script.sh"), ".jpg");
+});
+
+test("normalizeStorageKey: rechaza URLs y escapes de directorio", () => {
+  assert.equal(
+    normalizeStorageKey(
+      "profile-documents/11111111-1111-4111-8111-111111111111/identification"
+    ),
+    "profile-documents/11111111-1111-4111-8111-111111111111/identification"
+  );
+
+  for (const unsafeKey of [
+    "../secreto.txt",
+    "projects/company/../../secreto.txt",
+    "/etc/passwd",
+    "https://storage.example/private.pdf",
+    "projects/company/file.jpg?token=secret",
+    "projects\\company\\file.jpg",
+    "projects//company/file.jpg",
+    " projects/company/file.jpg"
+  ]) {
+    expect(() => normalizeStorageKey(unsafeKey)).toThrow(
+      "La clave de almacenamiento no es válida."
+    );
+  }
 });
 
 test("Operaciones de almacenamiento: subida, descarga, firma y eliminación", async () => {
@@ -128,6 +153,17 @@ test("Operaciones de almacenamiento usan el binding R2 configurado", async () =>
   await deleteStorageFile(storagePath);
   expect(bucket.delete).toHaveBeenCalledWith(storagePath);
   expect(storedObjects.has(storagePath)).toBe(false);
+});
+
+test("deleteStorageFile no envía una clave insegura a R2", async () => {
+  const bucket = createR2BucketMock();
+  configureR2Storage(bucket);
+
+  await expect(
+    deleteStorageFile("https://storage.example/private.pdf")
+  ).rejects.toThrow("La clave de almacenamiento no es válida.");
+
+  expect(bucket.delete).not.toHaveBeenCalled();
 });
 
 function createR2BucketMock(
