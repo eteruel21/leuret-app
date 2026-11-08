@@ -256,6 +256,7 @@ export async function getStorageSignedUrl(
 
   return generateSignedPhotoUrl(
     photoId,
+    storagePath,
     expiresInMinutes
   );
 }

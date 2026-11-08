@@ -24,14 +24,20 @@ export type UploadPhotoInput = {
   isPrivate?: boolean;
 };
 
-export async function listProjectPhotos(companyId: string, projectId: string): Promise<ProjectPhoto[]> {
+export async function listProjectPhotos(
+  companyId: string,
+  projectId: string
+): Promise<{ photos: ProjectPhoto[]; error: string | null }> {
   try {
     const res = await authenticatedRequest<{ photos: ProjectPhoto[] }>(
       `/companies/${companyId}/projects/${projectId}/photos`
     );
-    return res.photos;
-  } catch {
-    return [];
+    return { photos: res.photos, error: null };
+  } catch (error) {
+    return {
+      photos: [],
+      error: error instanceof Error ? error.message : "No fue posible cargar las fotos."
+    };
   }
 }
 
@@ -54,14 +60,9 @@ export async function deleteProjectPhoto(
   companyId: string,
   projectId: string,
   photoId: string
-): Promise<boolean> {
-  try {
-    await authenticatedRequest(
-      `/companies/${companyId}/projects/${projectId}/photos/${photoId}`,
-      { method: "DELETE" }
-    );
-    return true;
-  } catch {
-    return false;
-  }
+): Promise<void> {
+  await authenticatedRequest(
+    `/companies/${companyId}/projects/${projectId}/photos/${photoId}`,
+    { method: "DELETE" }
+  );
 }

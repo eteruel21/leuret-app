@@ -53,11 +53,21 @@ export async function createProjectPhotoRepo(userId: string, input: CreatePhotoI
   });
 }
 
-export async function getPhotoByIdRepo(userId: string, photoId: string) {
+export async function getPhotoByIdRepo(
+  userId: string,
+  companyId: string,
+  projectId: string,
+  photoId: string
+) {
   return withUserTransaction(userId, async (client) => {
     const result = await client.query(
-      `SELECT * FROM public.project_photos WHERE id = $1 LIMIT 1`,
-      [photoId]
+      `
+        SELECT *
+        FROM public.project_photos
+        WHERE id = $1 AND company_id = $2 AND project_id = $3
+        LIMIT 1
+      `,
+      [photoId, companyId, projectId]
     );
     return result.rows[0] ?? null;
   });

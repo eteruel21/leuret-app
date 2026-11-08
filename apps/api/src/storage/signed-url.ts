@@ -3,8 +3,21 @@ import { env } from "../config/env.js";
 
 const secret = new TextEncoder().encode(env.JWT_SECRET);
 
-export async function generateSignedPhotoUrl(photoId: string, expiresInMinutes: number = 60): Promise<string> {
-  const token = await new SignJWT({ photoId })
+export type SignedPhotoPayload = {
+  photoId: string;
+  storagePath: string;
+};
+
+export async function generateSignedPhotoUrl(
+  photoId: string,
+  storagePath: string,
+  expiresInMinutes: number = 60
+): Promise<string> {
+  const token = await new SignJWT({
+    kind: "project_photo",
+    photoId,
+    storagePath
+  })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${expiresInMinutes}m`)
@@ -31,10 +44,21 @@ export async function generateSignedProfileDocumentUrl(
   return `/storage/profile-documents/${encodeURIComponent(userId)}/${encodeURIComponent(documentType)}?token=${token}`;
 }
 
-export async function verifyPhotoToken(token: string): Promise<string | null> {
+export async function verifyPhotoToken(token: string): Promise<SignedPhotoPayload | null> {
   try {
     const { payload } = await jwtVerify(token, secret);
-    return typeof payload.photoId === "string" ? payload.photoId : null;
+    if (
+      payload.kind !== "project_photo" ||
+      typeof payload.photoId !== "string" ||
+      typeof payload.storagePath !== "string"
+    ) {
+      return null;
+    }
+
+    return {
+      photoId: payload.photoId,
+      storagePath: payload.storagePath
+    };
   } catch {
     return null;
   }

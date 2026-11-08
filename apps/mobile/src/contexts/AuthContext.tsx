@@ -63,6 +63,7 @@ export type UpdateContractorProfileInput = {
   experienceYears: number | null;
   workAreas: string[] | null;
   professionalDescription: string | null;
+  avatarUrl: string | null;
   companyLogoUrl: string | null;
   portfolioUrls: string[] | null;
   certifications: string[] | null;

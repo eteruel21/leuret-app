@@ -2,7 +2,8 @@ import { authenticatedRequest } from "./api";
 import {
   cacheOfflineData,
   enqueueOfflineAction,
-  getCachedOfflineData
+  getCachedOfflineData,
+  isRetryableOfflineError
 } from "./offline-sync-service";
 
 export type ProjectProgressHistoryRecord = {
@@ -58,7 +59,8 @@ export async function recordProjectProgressHistory(
       }
     );
     return res.record;
-  } catch {
+  } catch (error) {
+    if (!isRetryableOfflineError(error)) return null;
     // Si no hay red, encolar en el almacenamiento local y retornar registro optimista
     await enqueueOfflineAction({
       type: "RECORD_PROGRESS",

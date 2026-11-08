@@ -23,6 +23,8 @@ import {
   type ProfileDocumentMimeType,
   type ProfileDocumentType,
 } from "@/services/profile-document-service";
+import { uploadProfileMedia } from "@/services/media-upload-service";
+import { prepareProjectPhoto } from "@/utils/project-photo-picker";
 import { showAlert } from "@/utils/alert";
 
 type FormState = {
@@ -181,6 +183,7 @@ export default function ProfessionalProfileScreen() {
   const [currentStep, setCurrentStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [uploadingDocument, setUploadingDocument] = useState<ProfileDocumentType | null>(null);
+  const [uploadingMedia, setUploadingMedia] = useState<"avatar" | "company-logo" | null>(null);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [form, dispatch] = useReducer(formReducer, INITIAL_FORM);
 
@@ -192,27 +195,28 @@ export default function ProfessionalProfileScreen() {
     setShowCategoryModal(true);
   };
 
-  const handleUploadImage = (setter: (val: string) => void, title: string) => {
-    if (Platform.OS === "web") {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = "image/*";
-      input.onchange = (e) => {
-        const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            setter(reader.result as string);
-          };
-          reader.readAsDataURL(file);
-        }
-      };
-      input.click();
-    } else {
+  const handleUploadImage = async (
+    field: "avatarUrl" | "companyLogoUrl",
+    mediaType: "avatar" | "company-logo"
+  ) => {
+    try {
+      setUploadingMedia(mediaType);
+      const image = await prepareProjectPhoto("library");
+      if (!image) return;
+
+      const url = await uploadProfileMedia({
+        mediaType,
+        fileData: image.fileData,
+        mimeType: image.mimeType
+      });
+      setField(field)(url);
+    } catch (error: unknown) {
       showAlert(
-        "Cargar Archivo",
-        `Para subir tu archivo para "${title}", abre la aplicación en tu navegador web o introduce una URL válida.`
+        "No se pudo subir la imagen",
+        error instanceof Error ? error.message : "Inténtalo nuevamente."
       );
+    } finally {
+      setUploadingMedia(null);
     }
   };
 
@@ -339,6 +343,7 @@ export default function ProfessionalProfileScreen() {
         experienceYears: parseInt(form.experienceYears) || null,
         workAreas: parsedWorkAreas.length ? parsedWorkAreas : null,
         professionalDescription: form.professionalDescription.trim() || null,
+        avatarUrl: form.avatarUrl || null,
         companyLogoUrl: form.companyLogoUrl || null,
         portfolioUrls: parsedPortfolio.length ? parsedPortfolio : null,
         certifications: parsedCertifications.length ? parsedCertifications : null,
@@ -583,11 +588,18 @@ export default function ProfessionalProfileScreen() {
                   </View>
                 ) : (
                   <Pressable
-                    onPress={() => handleUploadImage(setField("avatarUrl") as (v: string) => void, "Foto de Perfil")}
+                    onPress={() => handleUploadImage("avatarUrl", "avatar")}
+                    disabled={uploadingMedia === "avatar"}
                     style={styles.uploadButton}
                   >
-                    <Ionicons name="camera-outline" size={24} color={colors.primary} />
-                    <Text style={styles.uploadButtonText}>Seleccionar Foto de Perfil</Text>
+                    {uploadingMedia === "avatar" ? (
+                      <ActivityIndicator color={colors.primary} />
+                    ) : (
+                      <Ionicons name="camera-outline" size={24} color={colors.primary} />
+                    )}
+                    <Text style={styles.uploadButtonText}>
+                      {uploadingMedia === "avatar" ? "Subiendo..." : "Seleccionar Foto de Perfil"}
+                    </Text>
                   </Pressable>
                 )}
               </View>
@@ -604,11 +616,18 @@ export default function ProfessionalProfileScreen() {
                   </View>
                 ) : (
                   <Pressable
-                    onPress={() => handleUploadImage(setField("companyLogoUrl") as (v: string) => void, "Logo de Empresa")}
+                    onPress={() => handleUploadImage("companyLogoUrl", "company-logo")}
+                    disabled={uploadingMedia === "company-logo"}
                     style={styles.uploadButton}
                   >
-                    <Ionicons name="image-outline" size={24} color={colors.primary} />
-                    <Text style={styles.uploadButtonText}>Seleccionar Logo de Empresa</Text>
+                    {uploadingMedia === "company-logo" ? (
+                      <ActivityIndicator color={colors.primary} />
+                    ) : (
+                      <Ionicons name="image-outline" size={24} color={colors.primary} />
+                    )}
+                    <Text style={styles.uploadButtonText}>
+                      {uploadingMedia === "company-logo" ? "Subiendo..." : "Seleccionar Logo de Empresa"}
+                    </Text>
                   </Pressable>
                 )}
               </View>

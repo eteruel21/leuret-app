@@ -348,7 +348,7 @@ export async function getUserProfileDetails(
       createdAt: photo.created_at,
       projectName: photo.project_name,
       companyName: photo.company_name,
-      url: await generateSignedPhotoUrl(photo.id, 10)
+      url: await generateSignedPhotoUrl(photo.id, photo.storage_path, 10)
     }))
   );
 
