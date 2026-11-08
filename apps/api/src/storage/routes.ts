@@ -1,19 +1,44 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { authenticateRequest, requireActiveUser, requireCompanyRole } from "../auth/authenticate.js";
-import { createProjectPhotoRepo, deleteProjectPhotoRepo, findProjectPhotosRepo } from "./repository.js";
+import {
+  createProjectPhotoRepo,
+  deleteProjectPhotoRepo,
+  findProjectPhotosRepo,
+  getPhotoByIdRepo
+} from "./repository.js";
 import {
   buildSecureStorageKey,
   uploadStorageFile,
   downloadStorageFile,
   deleteStorageFile,
-  getStorageSignedUrl
+  getStorageSignedUrl,
+  normalizeStorageKey
 } from "./provider.js";
 import {
   verifyPhotoToken,
   verifyProfileDocumentToken
 } from "./signed-url.js";
-import { pool } from "../db/pool.js";
+
+const publicImageMimeTypes = ["image/jpeg", "image/png", "image/webp"] as const;
+
+const uploadPublicImageSchema = z.object({
+  fileData: z.string().min(1).max(8_000_000),
+  mimeType: z.enum(publicImageMimeTypes)
+});
+
+const profileMediaUploadSchema = uploadPublicImageSchema.extend({
+  mediaType: z.enum(["avatar", "company-logo"])
+});
+
+const profileMediaParamsSchema = z.object({
+  userId: z.string().uuid(),
+  mediaType: z.enum(["avatar", "company-logo"])
+});
+
+const companyLogoParamsSchema = z.object({
+  companyId: z.string().uuid()
+});
 
 const uploadPhotoSchema = z.object({
   fileName: z.string().trim().min(1).max(180),
@@ -80,7 +105,129 @@ function authenticatedUserId(request: FastifyRequest, reply: FastifyReply): stri
   return userId;
 }
 
+function decodePublicImage(fileData: string): Buffer {
+  return Buffer.from(
+    fileData.replace(/^data:image\/(?:jpeg|png|webp);base64,/, ""),
+    "base64"
+  );
+}
+
+function profileMediaStoragePath(userId: string, mediaType: "avatar" | "company-logo"): string {
+  return `profile-media/${userId}/${mediaType}`;
+}
+
+function companyLogoStoragePath(companyId: string): string {
+  return `company-logos/${companyId}/logo`;
+}
+
 export async function registerStorageRoutes(app: FastifyInstance): Promise<void> {
+  app.post(
+    "/profile/media",
+    { preHandler: authenticateRequest },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedBody = profileMediaUploadSchema.safeParse(request.body);
+      if (!parsedBody.success) {
+        return reply.status(400).send({ message: "La imagen de perfil no es válida." });
+      }
+
+      const buffer = decodePublicImage(parsedBody.data.fileData);
+      if (buffer.length > 5 * 1024 * 1024) {
+        return reply.status(413).send({ message: "La imagen excede el tamaño máximo permitido de 5 MB." });
+      }
+
+      const storagePath = profileMediaStoragePath(userId, parsedBody.data.mediaType);
+      await uploadStorageFile({
+        storagePath,
+        buffer,
+        mimeType: parsedBody.data.mimeType
+      });
+
+      return reply.status(201).send({
+        url: `/storage/public/profile-media/${userId}/${parsedBody.data.mediaType}?v=${Date.now()}`
+      });
+    }
+  );
+
+  app.post(
+    "/companies/:companyId/logo",
+    {
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"])]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedParams = companyLogoParamsSchema.safeParse(request.params);
+      const parsedBody = uploadPublicImageSchema.safeParse(request.body);
+      if (!parsedParams.success || !parsedBody.success) {
+        return reply.status(400).send({ message: "El logotipo no es válido." });
+      }
+
+      const buffer = decodePublicImage(parsedBody.data.fileData);
+      if (buffer.length > 5 * 1024 * 1024) {
+        return reply.status(413).send({ message: "El logotipo excede el tamaño máximo permitido de 5 MB." });
+      }
+
+      const storagePath = companyLogoStoragePath(parsedParams.data.companyId);
+      await uploadStorageFile({
+        storagePath,
+        buffer,
+        mimeType: parsedBody.data.mimeType
+      });
+
+      return reply.status(201).send({
+        url: `/storage/public/company-logos/${parsedParams.data.companyId}?v=${Date.now()}`
+      });
+    }
+  );
+
+  app.get(
+    "/storage/public/profile-media/:userId/:mediaType",
+    async (request, reply) => {
+      const params = profileMediaParamsSchema.safeParse(request.params);
+      if (!params.success) {
+        return reply.status(404).send({ message: "Imagen no encontrada." });
+      }
+
+      try {
+        const { buffer, mimeType } = await downloadStorageFile(
+          profileMediaStoragePath(params.data.userId, params.data.mediaType)
+        );
+        return reply
+          .header("Content-Type", mimeType || "image/jpeg")
+          .header("Cache-Control", "public, max-age=300")
+          .send(buffer);
+      } catch {
+        return reply.status(404).send({ message: "Imagen no encontrada." });
+      }
+    }
+  );
+
+  app.get(
+    "/storage/public/company-logos/:companyId",
+    async (request, reply) => {
+      const params = companyLogoParamsSchema.safeParse(request.params);
+      if (!params.success) {
+        return reply.status(404).send({ message: "Logotipo no encontrado." });
+      }
+
+      try {
+        const { buffer, mimeType } = await downloadStorageFile(
+          companyLogoStoragePath(params.data.companyId)
+        );
+        return reply
+          .header("Content-Type", mimeType || "image/jpeg")
+          .header("Cache-Control", "public, max-age=300")
+          .send(buffer);
+      } catch {
+        return reply.status(404).send({ message: "Logotipo no encontrado." });
+      }
+    }
+  );
+
   // List photos with signed URLs
   app.get(
     "/companies/:companyId/projects/:projectId/photos",
@@ -144,17 +291,30 @@ export async function registerStorageRoutes(app: FastifyInstance): Promise<void>
         mimeType: parsedBody.data.mimeType
       });
 
-      const photoRecord = await createProjectPhotoRepo(userId, {
-        companyId: parsedParams.data.companyId,
-        projectId: parsedParams.data.projectId,
-        taskId: parsedBody.data.taskId,
-        storagePath,
-        fileName: parsedBody.data.fileName,
-        fileSize: buffer.length,
-        mimeType: parsedBody.data.mimeType,
-        caption: parsedBody.data.caption,
-        isPrivate: parsedBody.data.isPrivate
-      });
+      let photoRecord;
+      try {
+        photoRecord = await createProjectPhotoRepo(userId, {
+          companyId: parsedParams.data.companyId,
+          projectId: parsedParams.data.projectId,
+          taskId: parsedBody.data.taskId,
+          storagePath,
+          fileName: parsedBody.data.fileName,
+          fileSize: buffer.length,
+          mimeType: parsedBody.data.mimeType,
+          caption: parsedBody.data.caption,
+          isPrivate: parsedBody.data.isPrivate
+        });
+      } catch (error) {
+        try {
+          await deleteStorageFile(storagePath);
+        } catch (cleanupError) {
+          request.log.error(
+            { cleanupError, storagePath },
+            "No se pudo revertir una carga de foto sin registro"
+          );
+        }
+        throw error;
+      }
 
       const signedUrl = await getStorageSignedUrl(photoRecord.id, photoRecord.storage_path, 60);
       return reply.status(201).send({ photo: { ...photoRecord, signedUrl } });
@@ -176,6 +336,19 @@ export async function registerStorageRoutes(app: FastifyInstance): Promise<void>
         return reply.status(400).send({ message: "Parámetros inválidos." });
       }
 
+      const photo = await getPhotoByIdRepo(
+        userId,
+        parsedParams.data.companyId,
+        parsedParams.data.projectId,
+        parsedParams.data.photoId
+      );
+
+      if (!photo) {
+        return reply.status(404).send({ message: "Foto no encontrada." });
+      }
+
+      await deleteStorageFile(photo.storage_path);
+
       const deleted = await deleteProjectPhotoRepo(
         userId,
         parsedParams.data.companyId,
@@ -184,10 +357,11 @@ export async function registerStorageRoutes(app: FastifyInstance): Promise<void>
       );
 
       if (!deleted) {
-        return reply.status(404).send({ message: "Foto no encontrada." });
+        return reply.status(409).send({
+          message: "La foto cambió mientras se eliminaba. Actualiza el proyecto e inténtalo nuevamente."
+        });
       }
 
-      await deleteStorageFile(deleted.storage_path);
       return { success: true };
     }
   );
@@ -201,25 +375,22 @@ export async function registerStorageRoutes(app: FastifyInstance): Promise<void>
       return reply.status(401).send({ message: "Token firmado requerido." });
     }
 
-    const verifiedPhotoId = await verifyPhotoToken(token);
-    if (!verifiedPhotoId || verifiedPhotoId !== photoId) {
+    const verified = await verifyPhotoToken(token);
+    if (!verified || verified.photoId !== photoId) {
       return reply.status(403).send({ message: "URL firmada inválida o expirada." });
     }
 
-    const result = await pool.query(
-      `SELECT * FROM public.project_photos WHERE id = $1 LIMIT 1`,
-      [photoId]
-    );
-
-    const photo = result.rows[0];
-    if (!photo) {
-      return reply.status(404).send({ message: "Archivo no encontrado." });
+    let storagePath: string;
+    try {
+      storagePath = normalizeStorageKey(verified.storagePath);
+    } catch {
+      return reply.status(403).send({ message: "URL firmada inválida o expirada." });
     }
 
     try {
-      const { buffer, mimeType } = await downloadStorageFile(photo.storage_path);
+      const { buffer, mimeType } = await downloadStorageFile(storagePath);
       return reply
-        .header("Content-Type", photo.mime_type || mimeType || "image/jpeg")
+        .header("Content-Type", mimeType || "image/jpeg")
         .header("Cache-Control", "private, max-age=3600")
         .send(buffer);
     } catch {

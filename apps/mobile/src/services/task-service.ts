@@ -2,7 +2,8 @@ import { authenticatedRequest } from "./api";
 import {
   cacheOfflineData,
   enqueueOfflineAction,
-  getCachedOfflineData
+  getCachedOfflineData,
+  isRetryableOfflineError
 } from "./offline-sync-service";
 
 export type ProjectTaskStatus = "todo" | "in_progress" | "review" | "completed";
@@ -66,7 +67,8 @@ export async function createProjectTask(
       }
     );
     return res.task;
-  } catch {
+  } catch (error) {
+    if (!isRetryableOfflineError(error)) return null;
     await enqueueOfflineAction({
       type: "CREATE_TASK",
       endpoint,

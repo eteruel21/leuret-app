@@ -19,6 +19,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "@/constants/theme";
 import { useCompany } from "@/contexts/CompanyContext";
 import { updateCompanyBillingDetails } from "@/services/company-service";
+import { uploadCompanyLogo } from "@/services/media-upload-service";
+import { prepareProjectPhoto } from "@/utils/project-photo-picker";
 
 export default function InvoiceSettingsScreen() {
   const { activeCompany, refreshCompanies } = useCompany();
@@ -36,28 +38,27 @@ export default function InvoiceSettingsScreen() {
     String(activeCompany?.tax_rate ?? 0),
   );
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
-  const handleSelectLogoFile = () => {
-    if (Platform.OS === "web") {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = "image/*";
-      input.onchange = (e) => {
-        const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            setLogoUrl(reader.result as string);
-          };
-          reader.readAsDataURL(file);
-        }
-      };
-      input.click();
-    } else {
+  const handleSelectLogoFile = async () => {
+    if (!activeCompany) return;
+
+    try {
+      setUploadingLogo(true);
+      const image = await prepareProjectPhoto("library");
+      if (!image) return;
+      const url = await uploadCompanyLogo(activeCompany.id, {
+        fileData: image.fileData,
+        mimeType: image.mimeType
+      });
+      setLogoUrl(url);
+    } catch (error: unknown) {
       Alert.alert(
-        "Cargar logotipo",
-        "Para cargar una imagen local, abre la plataforma web o introduce la dirección URL del logotipo."
+        "No se pudo subir el logotipo",
+        error instanceof Error ? error.message : "Inténtalo nuevamente."
       );
+    } finally {
+      setUploadingLogo(false);
     }
   };
 
@@ -220,13 +221,20 @@ export default function InvoiceSettingsScreen() {
             <View style={styles.logoUploadActions}>
               <Pressable
                 onPress={handleSelectLogoFile}
+                disabled={uploadingLogo}
                 style={({ pressed }) => [
                   styles.uploadFileButton,
                   pressed && styles.pressed,
                 ]}
               >
-                <Ionicons name="cloud-upload-outline" size={18} color={colors.primary} />
-                <Text style={styles.uploadFileButtonText}>Cargar archivo de imagen</Text>
+                {uploadingLogo ? (
+                  <ActivityIndicator color={colors.primary} />
+                ) : (
+                  <Ionicons name="cloud-upload-outline" size={18} color={colors.primary} />
+                )}
+                <Text style={styles.uploadFileButtonText}>
+                  {uploadingLogo ? "Subiendo..." : "Cargar archivo de imagen"}
+                </Text>
               </Pressable>
 
               <TextInput

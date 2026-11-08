@@ -49,6 +49,7 @@ const updateContractorSchema = z.object({
     .max(3000)
     .nullable(),
 
+  avatarUrl: z.string().trim().max(1000).nullable(),
   companyLogoUrl: z.string().trim().max(1000).nullable(),
 
   portfolioUrls: z
@@ -242,19 +243,20 @@ export async function registerProfileRoutes(
                 experience_years = $7,
                 work_areas = $8,
                 professional_description = $9,
-                company_logo_url = $10,
-                portfolio_urls = $11,
-                certifications = $12,
-                availability = $13,
-                preferred_contact_method = $14,
-                emits_invoice = $15,
-                has_transport = $16,
-                work_mode = $17,
-                doc_id_url = $18,
-                doc_operation_notice_url = $19,
-                doc_technical_certs_urls = $20,
-                doc_references_url = $21,
-                doc_address_proof_url = $22,
+                avatar_url = $10,
+                company_logo_url = $11,
+                portfolio_urls = $12,
+                certifications = $13,
+                availability = $14,
+                preferred_contact_method = $15,
+                emits_invoice = $16,
+                has_transport = $17,
+                work_mode = $18,
+                doc_id_url = $19,
+                doc_operation_notice_url = $20,
+                doc_technical_certs_urls = $21,
+                doc_references_url = $22,
+                doc_address_proof_url = $23,
                 updated_at = now()
               WHERE id = app.current_user_id()
                 AND role = 'contractor'
@@ -270,6 +272,7 @@ export async function registerProfileRoutes(
               input.experienceYears,
               input.workAreas,
               input.professionalDescription,
+              input.avatarUrl,
               input.companyLogoUrl,
               input.portfolioUrls,
               input.certifications,

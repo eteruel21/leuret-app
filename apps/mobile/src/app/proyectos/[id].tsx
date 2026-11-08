@@ -157,7 +157,11 @@ export default function ProjectDetailScreen() {
 
       setTasks(tasksResult);
       setProgressHistory(historyResult);
-      setPhotos(photosResult);
+      if (photosResult.error) {
+        Alert.alert("No fue posible cargar las fotos", photosResult.error);
+      } else {
+        setPhotos(photosResult.photos);
+      }
       setActivities(activitiesResult);
 
       setLoading(false);
@@ -308,9 +312,14 @@ export default function ProjectDetailScreen() {
   async function handleDeletePhoto(photoId: string) {
     if (!activeCompany || !project) return;
 
-    const ok = await deleteProjectPhoto(activeCompany.id, project.id, photoId);
-    if (ok) {
+    try {
+      await deleteProjectPhoto(activeCompany.id, project.id, photoId);
       setPhotos(photos.filter((p) => p.id !== photoId));
+    } catch (error) {
+      Alert.alert(
+        "No fue posible eliminar la foto",
+        error instanceof Error ? error.message : "Ocurrió un error inesperado."
+      );
     }
   }
 

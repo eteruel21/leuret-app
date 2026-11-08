@@ -13,6 +13,7 @@ import {
   getStorageSignedUrl,
   type R2BucketBinding
 } from "../provider.js";
+import { verifyPhotoToken } from "../signed-url.js";
 
 afterEach(() => {
   configureR2Storage(null);
@@ -80,6 +81,12 @@ test("Operaciones de almacenamiento: subida, descarga, firma y eliminación", as
 
   const signedUrl = await getStorageSignedUrl("photo-123", key, 60);
   assert.ok(signedUrl.length > 0);
+  const token = new URL(signedUrl, "https://api.example.test").searchParams.get("token");
+  assert.ok(token);
+  await expect(verifyPhotoToken(token)).resolves.toEqual({
+    photoId: "photo-123",
+    storagePath: key
+  });
 
   await deleteStorageFile(key);
 });

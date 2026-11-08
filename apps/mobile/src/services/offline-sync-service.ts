@@ -1,8 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { authenticatedRequest } from "./api";
+import { ApiError, authenticatedRequest, loadStoredSession } from "./api";
 
-const OFFLINE_QUEUE_KEY = "contractor_pro_offline_queue_v1";
+const OFFLINE_QUEUE_PREFIX = "contractor_pro_offline_queue_v2_";
 const OFFLINE_CACHE_PREFIX = "contractor_pro_cache_v1_";
+const MAX_SYNC_RETRIES = 5;
 
 export type QueuedActionType =
   | "RECORD_PROGRESS"
@@ -17,8 +18,11 @@ export type QueuedOfflineAction = {
   endpoint: string;
   method: "POST" | "PUT" | "PATCH" | "DELETE";
   body: Record<string, unknown>;
+  ownerUserId: string;
   createdAt: string;
   retryCount: number;
+  blocked?: boolean;
+  lastError?: string;
 };
 
 export type SyncResultSummary = {
@@ -31,11 +35,30 @@ export type SyncResultSummary = {
 /**
  * Obtiene la lista actual de acciones pendientes en la cola offline.
  */
+async function currentUserId(): Promise<string | null> {
+  const session = await loadStoredSession();
+  return session?.user?.id ?? null;
+}
+
+function queueKey(userId: string): string {
+  return `${OFFLINE_QUEUE_PREFIX}${userId}`;
+}
+
+export function isRetryableOfflineError(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return true;
+  return error.status === 408 || error.status === 429 || error.status >= 500;
+}
+
 export async function getOfflineQueue(): Promise<QueuedOfflineAction[]> {
+  const userId = await currentUserId();
+  if (!userId) return [];
+
   try {
-    const raw = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY);
+    const raw = await AsyncStorage.getItem(queueKey(userId));
     if (!raw) return [];
-    return JSON.parse(raw) as QueuedOfflineAction[];
+    return (JSON.parse(raw) as QueuedOfflineAction[]).filter(
+      (action) => action.ownerUserId === userId
+    );
   } catch {
     return [];
   }
@@ -44,9 +67,9 @@ export async function getOfflineQueue(): Promise<QueuedOfflineAction[]> {
 /**
  * Guarda la cola actualizada de acciones en almacenamiento local.
  */
-async function saveOfflineQueue(queue: QueuedOfflineAction[]): Promise<void> {
+async function saveOfflineQueue(userId: string, queue: QueuedOfflineAction[]): Promise<void> {
   try {
-    await AsyncStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+    await AsyncStorage.setItem(queueKey(userId), JSON.stringify(queue));
   } catch (error) {
     console.error("Error al guardar cola offline:", error);
   }
@@ -56,18 +79,24 @@ async function saveOfflineQueue(queue: QueuedOfflineAction[]): Promise<void> {
  * Encola una nueva acción para ejecución posterior cuando vuelva la señal.
  */
 export async function enqueueOfflineAction(
-  action: Omit<QueuedOfflineAction, "id" | "createdAt" | "retryCount">
+  action: Omit<QueuedOfflineAction, "id" | "ownerUserId" | "createdAt" | "retryCount" | "blocked" | "lastError">
 ): Promise<QueuedOfflineAction> {
+  const userId = await currentUserId();
+  if (!userId) {
+    throw new Error("No hay una sesión activa para guardar la acción offline.");
+  }
+
   const newAction: QueuedOfflineAction = {
     ...action,
     id: `off_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
+    ownerUserId: userId,
     createdAt: new Date().toISOString(),
     retryCount: 0
   };
 
   const queue = await getOfflineQueue();
   queue.push(newAction);
-  await saveOfflineQueue(queue);
+  await saveOfflineQueue(userId, queue);
 
   return newAction;
 }
@@ -76,17 +105,21 @@ export async function enqueueOfflineAction(
  * Elimina una acción específica de la cola.
  */
 export async function removeOfflineAction(actionId: string): Promise<void> {
+  const userId = await currentUserId();
+  if (!userId) return;
   const queue = await getOfflineQueue();
   const updated = queue.filter((a) => a.id !== actionId);
-  await saveOfflineQueue(updated);
+  await saveOfflineQueue(userId, updated);
 }
 
 /**
  * Limpia totalmente la cola de acciones offline.
  */
 export async function clearOfflineQueue(): Promise<void> {
+  const userId = await currentUserId();
+  if (!userId) return;
   try {
-    await AsyncStorage.removeItem(OFFLINE_QUEUE_KEY);
+    await AsyncStorage.removeItem(queueKey(userId));
   } catch (error) {
     console.error("Error al limpiar cola offline:", error);
   }
@@ -96,6 +129,11 @@ export async function clearOfflineQueue(): Promise<void> {
  * Procesa en lote todas las acciones acumuladas en la cola offline.
  */
 export async function processOfflineSyncQueue(): Promise<SyncResultSummary> {
+  const userId = await currentUserId();
+  if (!userId) {
+    return { processed: 0, succeeded: 0, failed: 0, remaining: 0 };
+  }
+
   const queue = await getOfflineQueue();
   if (queue.length === 0) {
     return { processed: 0, succeeded: 0, failed: 0, remaining: 0 };
@@ -106,24 +144,30 @@ export async function processOfflineSyncQueue(): Promise<SyncResultSummary> {
   const remainingQueue: QueuedOfflineAction[] = [];
 
   for (const action of queue) {
+    if (action.blocked) {
+      remainingQueue.push(action);
+      continue;
+    }
+
     try {
       await authenticatedRequest(action.endpoint, {
         method: action.method,
         body: JSON.stringify(action.body)
       });
       succeeded++;
-    } catch {
+    } catch (error) {
       failed++;
-      if (action.retryCount < 5) {
-        remainingQueue.push({
-          ...action,
-          retryCount: action.retryCount + 1
-        });
-      }
+      const retryCount = action.retryCount + 1;
+      remainingQueue.push({
+        ...action,
+        retryCount,
+        blocked: retryCount >= MAX_SYNC_RETRIES || !isRetryableOfflineError(error),
+        lastError: error instanceof Error ? error.message : "No fue posible sincronizar la acción."
+      });
     }
   }
 
-  await saveOfflineQueue(remainingQueue);
+  await saveOfflineQueue(userId, remainingQueue);
 
   return {
     processed: queue.length,
@@ -137,9 +181,11 @@ export async function processOfflineSyncQueue(): Promise<SyncResultSummary> {
  * Guarda en caché local los datos consultados para uso sin conexión.
  */
 export async function cacheOfflineData<T>(cacheKey: string, data: T): Promise<void> {
+  const userId = await currentUserId();
+  if (!userId) return;
   try {
     await AsyncStorage.setItem(
-      `${OFFLINE_CACHE_PREFIX}${cacheKey}`,
+      cacheKeyForUser(userId, cacheKey),
       JSON.stringify({
         timestamp: Date.now(),
         data
@@ -154,12 +200,18 @@ export async function cacheOfflineData<T>(cacheKey: string, data: T): Promise<vo
  * Obtiene los datos guardados en caché local cuando no hay conexión.
  */
 export async function getCachedOfflineData<T>(cacheKey: string): Promise<T | null> {
+  const userId = await currentUserId();
+  if (!userId) return null;
   try {
-    const raw = await AsyncStorage.getItem(`${OFFLINE_CACHE_PREFIX}${cacheKey}`);
+    const raw = await AsyncStorage.getItem(cacheKeyForUser(userId, cacheKey));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { data: T };
     return parsed.data;
   } catch {
     return null;
   }
+}
+
+function cacheKeyForUser(userId: string, key: string): string {
+  return `${OFFLINE_CACHE_PREFIX}${userId}_${key}`;
 }
