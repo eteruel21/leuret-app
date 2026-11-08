@@ -4,6 +4,7 @@ import type {
 } from "fastify";
 
 import { pool } from "../db/pool.js";
+import { withUserTransaction } from "../db/with-user-transaction.js";
 import { safeErrorDetails } from "../security/redaction.js";
 import {
   verifyAccessToken
@@ -94,32 +95,33 @@ export async function requireActiveUser(
     return;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-    await client.query("SELECT set_config('app.user_id', $1, true)", [user.id]);
-    const result = await client.query<{
-      email_confirmed_at: Date | null;
-      deleted_at: Date | null;
-      active: boolean;
-      approved_at: Date | null;
-    }>(
-      `
-        SELECT
-          u.email_confirmed_at,
-          u.deleted_at,
-          p.active,
-          p.approved_at
-        FROM app_auth.users u
-        LEFT JOIN public.profiles p ON p.id = u.id
-        WHERE u.id = $1
-        LIMIT 1
-      `,
-      [user.id]
-    );
-    await client.query("COMMIT");
+    const record = await withUserTransaction(
+      user.id,
+      async (client) => {
+        const result = await client.query<{
+          email_confirmed_at: Date | null;
+          deleted_at: Date | null;
+          active: boolean;
+          approved_at: Date | null;
+        }>(
+          `
+            SELECT
+              u.email_confirmed_at,
+              u.deleted_at,
+              p.active,
+              p.approved_at
+            FROM app_auth.users u
+            LEFT JOIN public.profiles p ON p.id = u.id
+            WHERE u.id = $1
+            LIMIT 1
+          `,
+          [user.id]
+        );
 
-    const record = result.rows[0];
+        return result.rows[0];
+      }
+    );
     if (process.env.NODE_ENV !== "production") {
     }
     if (!record) {
@@ -161,8 +163,6 @@ export async function requireActiveUser(
     reply.status(500).send({
       message: "Error interno al verificar el estado del usuario."
     });
-  } finally {
-    client.release();
   }
 }
 
@@ -186,27 +186,28 @@ export function requireCompanyRole(allowedRoles: ("owner" | "admin" | "estimator
       return;
     }
 
-    const client = await pool.connect();
     try {
-      await client.query("BEGIN");
-      await client.query("SELECT set_config('app.user_id', $1, true)", [userId]);
-      const result = await client.query<{
-        role: string;
-        active: boolean;
-      }>(
-        `
-          SELECT role, active
-          FROM public.company_members
-          WHERE company_id = $1
-            AND user_id = $2
-            AND active = true
-          LIMIT 1
-        `,
-        [companyId, userId]
-      );
-      await client.query("COMMIT");
+      const membership = await withUserTransaction(
+        userId,
+        async (client) => {
+          const result = await client.query<{
+            role: string;
+            active: boolean;
+          }>(
+            `
+              SELECT role, active
+              FROM public.company_members
+              WHERE company_id = $1
+                AND user_id = $2
+                AND active = true
+              LIMIT 1
+            `,
+            [companyId, userId]
+          );
 
-      const membership = result.rows[0];
+          return result.rows[0];
+        }
+      );
       if (!membership) {
         reply.status(403).send({ message: "No eres miembro de esta empresa." });
         return;
@@ -219,8 +220,6 @@ export function requireCompanyRole(allowedRoles: ("owner" | "admin" | "estimator
     } catch (error) {
       request.log.error(safeErrorDetails(error), "Falló una comprobación de autorización.");
       reply.status(500).send({ message: "Error interno al verificar los permisos del rol." });
-    } finally {
-      client.release();
     }
   };
 }

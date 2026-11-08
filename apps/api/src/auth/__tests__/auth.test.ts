@@ -3,6 +3,7 @@ import { buildApp } from "../../app.js";
 import { adminPool } from "../../db/test-db.js";
 import type { FastifyInstance } from "fastify";
 import { installTurnstileTestMock } from "./turnstile-test-helper.js";
+import { hashSecureToken } from "../tokens.js";
 
 describe("T-053: Suite de Pruebas de Autenticación (Auth)", () => {
   let app: FastifyInstance;
@@ -192,5 +193,37 @@ describe("T-053: Suite de Pruebas de Autenticación (Auth)", () => {
     expect(confirmedAccount.statusCode).toBe(200);
     expect(unknownAccount.statusCode).toBe(200);
     expect(confirmedAccount.json()).toEqual(unknownAccount.json());
+  });
+
+  it("9. Un token de restablecimiento solo puede consumirse una vez bajo concurrencia", async () => {
+    const resetToken = "b".repeat(64);
+    await adminPool.query(
+      `
+        INSERT INTO app_auth.tokens (user_id, token_type, token_hash, expires_at)
+        VALUES ($1, 'password_reset', $2, now() + interval '10 minutes')
+      `,
+      [userId, hashSecureToken(resetToken)]
+    );
+
+    const responses = await Promise.all([
+      app.inject({
+        method: "POST",
+        url: "/auth/reset-password",
+        payload: { token: resetToken, newPassword: "FirstPassword123!" }
+      }),
+      app.inject({
+        method: "POST",
+        url: "/auth/reset-password",
+        payload: { token: resetToken, newPassword: "SecondPassword123!" }
+      })
+    ]);
+
+    expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 400]);
+
+    const tokenResult = await adminPool.query(
+      "SELECT used_at FROM app_auth.tokens WHERE token_hash = $1",
+      [hashSecureToken(resetToken)]
+    );
+    expect(tokenResult.rows[0]?.used_at).not.toBeNull();
   });
 });

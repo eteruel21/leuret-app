@@ -34,8 +34,7 @@ import {
   findSessionByRefreshTokenHash,
   updateSessionRotation,
   revokeSession,
-  findTokenByHash,
-  markTokenUsed,
+  consumeTokenByHash,
   confirmEmail,
   updateUserPassword,
   revokeAllUserSessions
@@ -252,6 +251,13 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
             });
           }
 
+          const status = getUserStatus(profile);
+          if (status === "suspended" || status === "deactivated") {
+            return reply.status(403).send({
+              message: "Esta cuenta está suspendida o desactivada."
+            });
+          }
+
           const tokens = await createSession(
             client,
             user.id,
@@ -261,7 +267,6 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
           await updateUserSignIn(client, user.id);
 
-          const status = getUserStatus(profile);
           if (clientType === "web") {
             const { refreshToken, ...restTokens } = tokens;
             reply.setCookie("refreshToken", refreshToken, getCookieOptions());
@@ -345,6 +350,16 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
           });
         }
 
+        const status = getUserStatus(profile);
+        if (status === "suspended" || status === "deactivated") {
+          await revokeAllUserSessions(client, session.user_id);
+          await client.query("COMMIT");
+          reply.clearCookie("refreshToken", getCookieOptions());
+          return reply.status(403).send({
+            message: "Esta cuenta está suspendida o desactivada."
+          });
+        }
+
         const newRefreshToken = createRefreshToken();
         const newRefreshTokenHash = hashRefreshToken(newRefreshToken);
         const newExpiration = new Date(
@@ -364,7 +379,6 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
         await client.query("COMMIT");
 
-        const status = getUserStatus(profile);
         if (isWeb) {
           reply.setCookie("refreshToken", newRefreshToken, getCookieOptions());
           return {
@@ -477,15 +491,14 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       try {
         await client.query("BEGIN");
 
-        const tokenRecord = await findTokenByHash(client, hashedToken, "email_verification");
-        if (!tokenRecord || tokenRecord.used_at || new Date(tokenRecord.expires_at) <= new Date()) {
+        const tokenRecord = await consumeTokenByHash(client, hashedToken, "email_verification");
+        if (!tokenRecord) {
           await client.query("ROLLBACK");
           return reply.status(400).send({
             message: "El enlace de verificación es inválido o ha expirado."
           });
         }
 
-        await markTokenUsed(client, hashedToken);
         await confirmEmail(client, tokenRecord.user_id);
 
         await client.query("COMMIT");
@@ -738,8 +751,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       try {
         await client.query("BEGIN");
 
-        const tokenRecord = await findTokenByHash(client, hashedToken, "password_reset");
-        if (!tokenRecord || tokenRecord.used_at || new Date(tokenRecord.expires_at) <= new Date()) {
+        const tokenRecord = await consumeTokenByHash(client, hashedToken, "password_reset");
+        if (!tokenRecord) {
           await client.query("ROLLBACK");
           return reply.status(400).send({
             message: "El enlace de restablecimiento es inválido o ha expirado."
@@ -748,7 +761,6 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
         const passwordHash = await hashPassword(newPassword);
 
-        await markTokenUsed(client, hashedToken);
         await updateUserPassword(client, tokenRecord.user_id, passwordHash);
         await revokeAllUserSessions(client, tokenRecord.user_id);
 

@@ -1,4 +1,5 @@
 import { withUserTransaction } from "../db/with-user-transaction.js";
+import { revokeAllUserSessions } from "../auth/repository.js";
 import type { z } from "zod";
 import type {
   userSchema,
@@ -355,7 +356,13 @@ export async function updateAdminUserRepo(userId: string, targetUserId: string, 
       ]
     );
 
-    return (result.rowCount ?? 0) > 0;
+    const updated = (result.rowCount ?? 0) > 0;
+
+    if (updated && !input.active) {
+      await revokeAllUserSessions(client, targetUserId);
+    }
+
+    return updated;
   });
 }
 
