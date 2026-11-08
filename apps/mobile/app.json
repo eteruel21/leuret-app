@@ -5,15 +5,15 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "contractorpro",
+    "scheme": "leuret",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.contractorpro.app",
+      "bundleIdentifier": "com.leuret.app",
       "icon": "./assets/expo.icon"
     },
     "android": {
-      "package": "com.contractorpro.app",
+      "package": "com.leuret.app",
       "adaptiveIcon": {
         "backgroundColor": "#F6F1E7",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

@@ -56,6 +56,8 @@
     "prebuild": "expo prebuild",
     "build:android:preview": "eas build -p android --profile preview",
     "build:ios:preview": "eas build -p ios --profile preview",
+    "build:android:pilot": "eas build -p android --profile pilot",
+    "build:ios:pilot": "eas build -p ios --profile pilot",
     "build:android:prod": "eas build -p android --profile production",
     "build:ios:prod": "eas build -p ios --profile production",
     "lint": "expo lint"
