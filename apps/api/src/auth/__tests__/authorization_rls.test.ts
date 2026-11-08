@@ -18,6 +18,7 @@ describe("T-054: Suite de Pruebas de Autorización y RLS", () => {
   };
 
   const tokens: Record<string, string> = {};
+  const refreshTokens: Record<string, string> = {};
   let companyAId: string;
   let companyBId: string;
   let clientAId: string;
@@ -50,8 +51,8 @@ describe("T-054: Suite de Pruebas de Autorización y RLS", () => {
     }
 
     // Configure user states in DB via adminPool FIRST
-    // Owner A & B, Estimator, Sales: verified, active, approved
-    for (const email of [userEmails.ownerA, userEmails.ownerB, userEmails.estimator, userEmails.sales]) {
+    // Usuarios operativos y el futuro suspendido inician verificados y activos.
+    for (const email of [userEmails.ownerA, userEmails.ownerB, userEmails.estimator, userEmails.sales, userEmails.suspended]) {
       await adminPool.query("UPDATE app_auth.users SET email_confirmed_at = now() WHERE email = $1", [email]);
       await adminPool.query(
         "UPDATE public.profiles SET active = true, approved_at = now() WHERE id = (SELECT id FROM app_auth.users WHERE email = $1)",
@@ -66,13 +67,6 @@ describe("T-054: Suite de Pruebas de Autorización y RLS", () => {
       [userEmails.pending]
     );
 
-    // Suspended: verified email, approved_at != null, active = false
-    await adminPool.query("UPDATE app_auth.users SET email_confirmed_at = now() WHERE email = $1", [userEmails.suspended]);
-    await adminPool.query(
-      "UPDATE public.profiles SET active = false, approved_at = now() WHERE id = (SELECT id FROM app_auth.users WHERE email = $1)",
-      [userEmails.suspended]
-    );
-
     // Login AFTER configuring states
     for (const [key, email] of Object.entries(userEmails)) {
       const loginRes = await app.inject({
@@ -83,8 +77,16 @@ describe("T-054: Suite de Pruebas de Autorización y RLS", () => {
       if (loginRes.statusCode === 200) {
         const body = JSON.parse(loginRes.body);
         tokens[key] = body.accessToken;
+        refreshTokens[key] = body.refreshToken;
       }
     }
+
+    // Suspender después de crear la sesión permite verificar acceso y refresh
+    // aun cuando el cambio no haya pasado por el endpoint administrativo.
+    await adminPool.query(
+      "UPDATE public.profiles SET active = false WHERE id = (SELECT id FROM app_auth.users WHERE email = $1)",
+      [userEmails.suspended]
+    );
   });
 
   afterAll(async () => {
@@ -113,6 +115,24 @@ describe("T-054: Suite de Pruebas de Autorización y RLS", () => {
       }
     });
     expect(res.statusCode).toBe(403);
+
+    const refreshRes = await app.inject({
+      method: "POST",
+      url: "/auth/refresh",
+      payload: { refreshToken: refreshTokens.suspended }
+    });
+    expect(refreshRes.statusCode).toBe(403);
+
+    const loginRes = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: {
+        email: userEmails.suspended,
+        password: "Password123!",
+        captchaToken: "login-turnstile-token"
+      }
+    });
+    expect(loginRes.statusCode).toBe(403);
   });
 
   it("3. Aislamiento RLS entre Compañías (Cross-tenant isolation)", async () => {
@@ -167,6 +187,46 @@ describe("T-054: Suite de Pruebas de Autorización y RLS", () => {
       headers: { authorization: `Bearer ${tokens.ownerB}` }
     });
     expect(crossDetailRes.statusCode).toBe(403);
+
+    const projectRes = await app.inject({
+      method: "POST",
+      url: "/projects",
+      headers: { authorization: `Bearer ${tokens.ownerA}` },
+      payload: {
+        companyId: companyAId,
+        clientId: clientAId,
+        name: "Proyecto privado de Company A"
+      }
+    });
+    expect(projectRes.statusCode).toBe(201);
+    const projectAId = JSON.parse(projectRes.body).project.id;
+
+    const crossProjectRes = await app.inject({
+      method: "GET",
+      url: `/projects/${projectAId}?companyId=${companyAId}`,
+      headers: { authorization: `Bearer ${tokens.ownerB}` }
+    });
+    expect(crossProjectRes.statusCode).toBe(403);
+
+    const budgetRes = await app.inject({
+      method: "POST",
+      url: "/budgets/from-project",
+      headers: { authorization: `Bearer ${tokens.ownerA}` },
+      payload: {
+        companyId: companyAId,
+        projectId: projectAId,
+        title: "Presupuesto privado de Company A"
+      }
+    });
+    expect(budgetRes.statusCode).toBe(201);
+    const budgetAId = JSON.parse(budgetRes.body).budgetId;
+
+    const crossBudgetRes = await app.inject({
+      method: "GET",
+      url: `/budgets/${budgetAId}?companyId=${companyAId}`,
+      headers: { authorization: `Bearer ${tokens.ownerB}` }
+    });
+    expect(crossBudgetRes.statusCode).toBe(403);
   });
 
   it("4. Permisos por Rol en la misma Compañía", async () => {

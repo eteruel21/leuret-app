@@ -424,32 +424,24 @@ export async function revokeSession(sessionId: string, userId: string): Promise<
   );
 }
 
-export async function findTokenByHash(
+export async function consumeTokenByHash(
   client: PoolClient,
   tokenHash: string,
   tokenType: "email_verification" | "password_reset"
-): Promise<{ user_id: string; expires_at: Date; used_at: Date | null } | null> {
-  const result = await client.query<{ user_id: string; expires_at: Date; used_at: Date | null }>(
-    `
-      SELECT user_id, expires_at, used_at
-      FROM app_auth.tokens
-      WHERE token_hash = $1 AND token_type = $2
-      LIMIT 1
-    `,
-    [tokenHash, tokenType]
-  );
-  return result.rows[0] ?? null;
-}
-
-export async function markTokenUsed(client: PoolClient, tokenHash: string): Promise<void> {
-  await client.query(
+): Promise<{ user_id: string; expires_at: Date } | null> {
+  const result = await client.query<{ user_id: string; expires_at: Date }>(
     `
       UPDATE app_auth.tokens
       SET used_at = now()
       WHERE token_hash = $1
+        AND token_type = $2
+        AND used_at IS NULL
+        AND expires_at > now()
+      RETURNING user_id, expires_at
     `,
-    [tokenHash]
+    [tokenHash, tokenType]
   );
+  return result.rows[0] ?? null;
 }
 
 export async function confirmEmail(client: PoolClient, userId: string): Promise<void> {

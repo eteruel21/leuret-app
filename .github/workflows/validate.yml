@@ -17,6 +17,19 @@ jobs:
     name: Validate Codebase & Build
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
       NODE_ENV: test
       JWT_SECRET: "ci_jwt_secret_key_at_least_43_characters_long_for_testing_purposes"
@@ -66,19 +79,49 @@ jobs:
             src/account/__tests__/storage-cleanup.test.ts \
             src/storage/__tests__/storage-provider.test.ts
 
-      - name: 8. Test mobile app
+      - name: 8. Prepare isolated authorization database
+        env:
+          DATABASE_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          DATABASE_NAME: test_leuret
+          CONTRACTOR_MIGRATOR_PASSWORD: ci_migrator_password
+          CONTRACTOR_API_PASSWORD: ci_api_password
+          # La migración histórica 024 no selecciona contractor_owner; la base
+          # efímera usa postgres solo para reproducir el esquema completo.
+          MIGRATOR_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/test_leuret
+        run: |
+          node database/scripts/bootstrap.mjs
+          node database/scripts/migrate.mjs
+
+      - name: 9. Test authentication and cross-company isolation
+        env:
+          DATABASE_MODE: postgres
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/test_leuret
+          PGHOST: 127.0.0.1
+          PGPORT: 5432
+          PGDATABASE: test_leuret
+          PGUSER: contractor_api
+          PGPASSWORD: ci_api_password
+          PGSSL: disable
+        run: |
+          npm --workspace apps/api run test -- \
+            src/auth/__tests__/auth.test.ts \
+            src/auth/__tests__/authorization_rls.test.ts \
+            src/admin/__tests__/admin-session-revocation.test.ts \
+            src/db/__tests__/with-user-transaction.test.ts
+
+      - name: 10. Test mobile app
         run: npm run test -w apps/mobile
 
-      - name: 9. Build API backend
+      - name: 11. Build API backend
         run: npm run build:api
 
-      - name: 10. Build admin web application
+      - name: 12. Build admin web application
         run: npm run build:admin
 
-      - name: 11. Build mobile web application
+      - name: 13. Build mobile web application
         run: npm run build:mobile
 
-      - name: 12. Verify production client configuration
+      - name: 14. Verify production client configuration
         run: |
           test -n "$VITE_API_URL"
           test -n "$EXPO_PUBLIC_API_URL"
