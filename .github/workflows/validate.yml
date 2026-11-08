@@ -61,7 +61,10 @@ jobs:
             src/auth/__tests__/captcha-bypass.test.ts \
             src/auth/__tests__/password-reset-contract.test.ts \
             src/services/__tests__/email-delivery.test.ts \
-            src/security/__tests__/redaction.test.ts
+            src/security/__tests__/redaction.test.ts \
+            src/__tests__/account-legal.test.ts \
+            src/account/__tests__/storage-cleanup.test.ts \
+            src/storage/__tests__/storage-provider.test.ts
 
       - name: 8. Test mobile app
         run: npm run test -w apps/mobile

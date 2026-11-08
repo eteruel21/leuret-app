@@ -120,10 +120,12 @@ export function SystemTab({
     try {
       setActionMessage(null);
 
-      await deleteAccount();
+      const result = await deleteAccount();
 
       alert(
-        "Cuenta eliminada/anonimizada exitosamente."
+        result.storageCleanup.status === "queued_for_retry"
+          ? "Cuenta eliminada y anonimizada. Los documentos pendientes se volverán a eliminar automáticamente."
+          : "Cuenta eliminada y anonimizada exitosamente."
       );
 
       await onSignOut();

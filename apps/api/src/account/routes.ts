@@ -5,9 +5,9 @@ import { env } from "../config/env.js";
 import { withUserTransaction } from "../db/with-user-transaction.js";
 import { safeErrorDetails } from "../security/redaction.js";
 import {
-  deleteStorageFile,
   isObjectStorageConfigured
 } from "../storage/provider.js";
+import { processAccountDeletionStorageQueue } from "./storage-cleanup.js";
 import {
   PRIVACY_POLICY_CONTENT,
   TERMS_OF_SERVICE_CONTENT
@@ -15,26 +15,34 @@ import {
 
 type ProfileStorageReferences = {
   id: string;
-  avatar_url: string | null;
-  company_logo_url: string | null;
-  portfolio_urls: string[] | null;
   doc_id_url: string | null;
   doc_operation_notice_url: string | null;
-  doc_technical_certs_urls: string[] | null;
   doc_references_url: string | null;
   doc_address_proof_url: string | null;
 };
 
-type ProjectPhotoStorageReference = {
-  id: string;
-  storage_path: string;
-};
-
 type StorageCleanupItem = {
-  source: "profile" | "project_photo";
-  recordId: string;
   objectReference: string;
 };
+
+const PROFILE_DOCUMENT_FIELDS = [
+  {
+    column: "doc_id_url",
+    documentType: "identification"
+  },
+  {
+    column: "doc_operation_notice_url",
+    documentType: "operation_notice"
+  },
+  {
+    column: "doc_references_url",
+    documentType: "references"
+  },
+  {
+    column: "doc_address_proof_url",
+    documentType: "address_proof"
+  }
+] as const;
 
 function getRefreshTokenClearOptions() {
   const isProductionOrStaging =
@@ -59,72 +67,22 @@ function getRefreshTokenClearOptions() {
   return options;
 }
 
-function sanitizeStorageReference(value: string): string {
-  const sanitized = value.trim().split(/[?#]/, 1)[0] ?? "";
-  if (!sanitized) {
-    return "";
-  }
-
-  try {
-    const url = new URL(sanitized);
-    return decodeURIComponent(url.pathname).replace(/^\/+/, "");
-  } catch {
-    return sanitized.replace(/^\/+/, "");
-  }
-}
-
 function buildStorageCleanupItems(
-  profile: ProfileStorageReferences | undefined,
-  photos: ProjectPhotoStorageReference[]
+  profile: ProfileStorageReferences | undefined
 ): StorageCleanupItem[] {
-  const cleanupItems: StorageCleanupItem[] = [];
-  const seen = new Set<string>();
-
-  const addItem = (
-    source: StorageCleanupItem["source"],
-    recordId: string,
-    value: string | null | undefined
-  ) => {
-    if (!value) {
-      return;
-    }
-
-    const objectReference = sanitizeStorageReference(value);
-    if (!objectReference) {
-      return;
-    }
-
-    const deduplicationKey = `${source}:${recordId}:${objectReference}`;
-    if (seen.has(deduplicationKey)) {
-      return;
-    }
-
-    seen.add(deduplicationKey);
-    cleanupItems.push({ source, recordId, objectReference });
-  };
-
-  if (profile) {
-    addItem("profile", profile.id, profile.avatar_url);
-    addItem("profile", profile.id, profile.company_logo_url);
-    addItem("profile", profile.id, profile.doc_id_url);
-    addItem("profile", profile.id, profile.doc_operation_notice_url);
-    addItem("profile", profile.id, profile.doc_references_url);
-    addItem("profile", profile.id, profile.doc_address_proof_url);
-
-    for (const value of profile.portfolio_urls ?? []) {
-      addItem("profile", profile.id, value);
-    }
-
-    for (const value of profile.doc_technical_certs_urls ?? []) {
-      addItem("profile", profile.id, value);
-    }
+  if (!profile) {
+    return [];
   }
 
-  for (const photo of photos) {
-    addItem("project_photo", photo.id, photo.storage_path);
-  }
+  return PROFILE_DOCUMENT_FIELDS.flatMap((document) => {
+    const expectedObjectReference =
+      `profile-documents/${profile.id}/${document.documentType}`;
+    const storedReference = profile[document.column];
 
-  return cleanupItems;
+    return storedReference?.trim() === expectedObjectReference
+      ? [{ objectReference: expectedObjectReference }]
+      : [];
+  });
 }
 
 export async function registerAccountLegalRoutes(
@@ -599,29 +557,24 @@ export async function registerAccountLegalRoutes(
             const profileStorageRes = await client.query<ProfileStorageReferences>(
               `SELECT
                  profile.id,
-                 profile.avatar_url,
-                 profile.company_logo_url,
-                 profile.portfolio_urls,
                  profile.doc_id_url,
                  profile.doc_operation_notice_url,
-                 profile.doc_technical_certs_urls,
                  profile.doc_references_url,
                  profile.doc_address_proof_url
                FROM public.profiles AS profile
                WHERE profile.id = app.current_user_id()`
             );
 
-            const photoStorageRes =
-              await client.query<ProjectPhotoStorageReference>(
-                `SELECT photo.id, photo.storage_path
-                 FROM public.project_photos AS photo
-                 WHERE photo.created_by = app.current_user_id()
-                 ORDER BY photo.created_at ASC`
-              );
+            const sharedPhotoCountRes = await client.query<{
+              shared_photo_count: number | string;
+            }>(
+              `SELECT count(*)::integer AS shared_photo_count
+               FROM public.project_photos AS photo
+               WHERE photo.created_by = app.current_user_id()`
+            );
 
             const storageCleanupItems = buildStorageCleanupItems(
-              profileStorageRes.rows[0],
-              photoStorageRes.rows
+              profileStorageRes.rows[0]
             );
 
             const requiresExternalStorage =
@@ -637,10 +590,26 @@ export async function registerAccountLegalRoutes(
               );
             }
 
+            for (const item of storageCleanupItems) {
+              await client.query(
+                `SELECT private.enqueue_account_deletion_storage_job(
+                   $1::uuid,
+                   $2::text
+                 )`,
+                [userId, item.objectReference]
+              );
+            }
+
+            await client.query(
+              `DELETE FROM public.user_push_tokens
+               WHERE user_id = app.current_user_id()`
+            );
+
             await client.query(
               `UPDATE public.profiles
                SET full_name = NULL,
                    phone = NULL,
+                   active = false,
                    avatar_url = NULL,
                    first_name = NULL,
                    last_name = NULL,
@@ -720,29 +689,44 @@ export async function registerAccountLegalRoutes(
               throw new Error("No se encontró la cuenta que se desea eliminar.");
             }
 
-            return { storageCleanupItems };
+            return {
+              storageCleanupItems,
+              sharedProjectPhotoCount: Number(
+                sharedPhotoCountRes.rows[0]?.shared_photo_count ?? 0
+              )
+            };
           }
         );
 
-        const storageCleanupResults = await Promise.allSettled(
-          deletionResult.storageCleanupItems.map(async (item) => {
-            await deleteStorageFile(item.objectReference);
-          })
-        );
+        let completedStorageObjectCount = 0;
+        let failedStorageObjectCount = 0;
 
-        const failedStorageItems = deletionResult.storageCleanupItems.filter(
-          (_item, index) => storageCleanupResults[index]?.status === "rejected"
-        );
+        if (deletionResult.storageCleanupItems.length > 0) {
+          try {
+            const cleanupResult =
+              await processAccountDeletionStorageQueue({
+                userId,
+                limit: deletionResult.storageCleanupItems.length
+              });
 
-        if (failedStorageItems.length > 0) {
-          app.log.error(
-            {
-              userId,
-              failedStorageObjectCount: failedStorageItems.length
-            },
-            "La cuenta fue anonimizada, pero falló la eliminación de algunos objetos."
-          );
+            completedStorageObjectCount = Math.min(
+              cleanupResult.completed,
+              deletionResult.storageCleanupItems.length
+            );
+            failedStorageObjectCount = cleanupResult.failed;
+          } catch (error) {
+            app.log.error(
+              safeErrorDetails(error),
+              "La cuenta fue anonimizada; la cola durable realizará la limpieza pendiente."
+            );
+          }
         }
+
+        const pendingStorageObjectCount = Math.max(
+          deletionResult.storageCleanupItems.length -
+            completedStorageObjectCount,
+          0
+        );
 
         reply.clearCookie(
           "refreshToken",
@@ -759,17 +743,22 @@ export async function registerAccountLegalRoutes(
             status:
               deletionResult.storageCleanupItems.length === 0
                 ? "not_required"
-                : failedStorageItems.length === 0
+                : pendingStorageObjectCount === 0
                   ? "completed"
-                  : "failed",
+                  : "queued_for_retry",
             objectCount: deletionResult.storageCleanupItems.length,
-            failedObjectCount: failedStorageItems.length,
+            completedObjectCount: completedStorageObjectCount,
+            pendingObjectCount: pendingStorageObjectCount,
+            failedObjectCount: failedStorageObjectCount,
+            retryScheduled: pendingStorageObjectCount > 0,
+            sharedProjectPhotosPreserved:
+              deletionResult.sharedProjectPhotoCount,
             note:
               deletionResult.storageCleanupItems.length === 0
-                ? "No se encontraron objetos externos asociados a la cuenta."
-                : failedStorageItems.length === 0
-                  ? "Los objetos externos asociados a la cuenta fueron eliminados."
-                  : "La cuenta fue anonimizada, pero algunos objetos externos requieren revisión técnica."
+                ? "No se encontraron documentos personales internos asociados a la cuenta."
+                : pendingStorageObjectCount === 0
+                  ? "Los documentos personales internos asociados a la cuenta fueron eliminados."
+                  : "La cuenta fue anonimizada y la cola durable reintentará la limpieza pendiente."
           }
         };
       } catch (error) {

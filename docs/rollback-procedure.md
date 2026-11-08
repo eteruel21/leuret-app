@@ -1,4 +1,4 @@
-# Procedimiento de Rollback de Producción — Contractor Pro
+# Procedimiento de Rollback de Producción — LEURET
 
 **Fecha de vigencia:** 21 de julio de 2026  
 **Objetivo:** Establecer los pasos sistemáticos para revertir cambios en caso de fallo crítico en despliegue de API, Base de Datos o Frontends.
@@ -49,6 +49,13 @@ En caso de que una migración SQL haya generado errores:
 2. Ir a la pestaña **Deployments**.
 3. En el despliegue anterior estable, seleccionar los tres puntos `...` -> **Rollback to this deployment**.
 4. La actualización tomará efecto en la red CDN global de Cloudflare en menos de 5 segundos.
+
+### 4.1 Cola de eliminación de cuentas (migración 029)
+
+- Ante un fallo del Worker, revertir primero el código a la versión estable anterior y conservar la tabla `private.account_deletion_storage_queue`. La migración es aditiva y mantenerla evita perder trabajos de limpieza pendientes.
+- No eliminar la tabla ni sus funciones mientras exista una fila sin `completed_at`.
+- Después de corregir el Worker, reactivar el cron y verificar que la cola pendiente llegue a cero antes de considerar una reversión destructiva del esquema.
+- No ejecutar manualmente claves de almacenamiento obtenidas de la cola ni incluirlas en logs o tickets.
 
 ---
 

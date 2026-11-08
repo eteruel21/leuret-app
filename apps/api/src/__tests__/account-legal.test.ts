@@ -13,6 +13,10 @@ const accountMocks = vi.hoisted(() => ({
   }>)
 }));
 
+const storageCleanupMocks = vi.hoisted(() => ({
+  process: vi.fn()
+}));
+
 vi.mock("../auth/authenticate.js", () => ({
   authenticateRequest: async (request: any, reply: any) => {
     if (
@@ -53,6 +57,10 @@ vi.mock("../db/with-user-transaction.js", () => ({
   queryAsUser: vi.fn()
 }));
 
+vi.mock("../account/storage-cleanup.js", () => ({
+  processAccountDeletionStorageQueue: storageCleanupMocks.process
+}));
+
 import { buildApp } from "../app.js";
 
 function authenticatedHeaders() {
@@ -74,6 +82,12 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
     accountMocks.executedSql.length = 0;
     accountMocks.transactionUserIds.length = 0;
     accountMocks.queryHandler = async () => emptyQueryResult();
+    storageCleanupMocks.process.mockReset();
+    storageCleanupMocks.process.mockResolvedValue({
+      claimed: 0,
+      completed: 0,
+      failed: 0
+    });
   });
 
   test("GET /health should return 200 and ok status", async () => {
@@ -218,30 +232,39 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
     await app.close();
   });
 
-  test("DELETE /account revokes credentials, anonymizes profile PII and completes storage cleanup", async () => {
+  test("DELETE /account anonymizes PII, enqueues personal documents and preserves shared project photos", async () => {
     accountMocks.authenticated = true;
+    storageCleanupMocks.process.mockResolvedValue({
+      claimed: 1,
+      completed: 0,
+      failed: 1
+    });
+
     accountMocks.queryHandler = async (sql) => {
-      if (/SELECT[\s\S]+profile\.avatar_url[\s\S]+FROM public\.profiles AS profile/i.test(sql)) {
+      if (/SELECT[\s\S]+profile\.doc_id_url[\s\S]+FROM public\.profiles AS profile/i.test(sql)) {
         return {
           rows: [{
             id: USER_ID,
-            avatar_url: "https://storage.example/avatar.jpg?signature=secret",
-            company_logo_url: null,
-            portfolio_urls: ["portfolio/work-one.jpg#preview"],
-            doc_id_url: "documents/id.pdf",
+            doc_id_url:
+              `profile-documents/${USER_ID}/identification`,
             doc_operation_notice_url: null,
-            doc_technical_certs_urls: [],
             doc_references_url: null,
             doc_address_proof_url: null
           }]
         };
       }
 
-      if (/SELECT photo\.id, photo\.storage_path/i.test(sql)) {
+      if (/count\(\*\)::integer AS shared_photo_count/i.test(sql)) {
+        return {
+          rows: [{ shared_photo_count: 2 }]
+        };
+      }
+
+      if (/enqueue_account_deletion_storage_job/i.test(sql)) {
         return {
           rows: [{
-            id: "33333333-3333-4333-8333-333333333333",
-            storage_path: "projects/photo.jpg?temporary=credential"
+            enqueue_account_deletion_storage_job:
+              "33333333-3333-4333-8333-333333333333"
           }]
         };
       }
@@ -271,13 +294,21 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
 
     const allSql = accountMocks.executedSql.join("\n");
     expect(allSql).toMatch(/UPDATE public\.profiles[\s\S]+full_name = NULL/);
+    expect(allSql).toMatch(/DELETE FROM public\.user_push_tokens/);
+    expect(allSql).toMatch(/active = false/);
     expect(allSql).toMatch(/registration_ip = NULL/);
     expect(allSql).toMatch(/doc_address_proof_url = NULL/);
     expect(allSql).toMatch(/UPDATE app_auth\.identities[\s\S]+identity_data = '\{\}'::jsonb/);
     expect(allSql).toMatch(/UPDATE app_auth\.tokens[\s\S]+used_at = COALESCE\(used_at, now\(\)\)/);
     expect(allSql).toMatch(/UPDATE app_auth\.sessions[\s\S]+revoked_at = COALESCE\(revoked_at, now\(\)\)/);
     expect(allSql).toMatch(/UPDATE app_auth\.users[\s\S]+email = NULL[\s\S]+deleted_at = COALESCE\(deleted_at, now\(\)\)/);
+    expect(allSql).toContain("private.enqueue_account_deletion_storage_job");
+    expect(allSql).not.toContain("photo.storage_path");
     expect(allSql).not.toContain("public.activity_logs");
+    expect(storageCleanupMocks.process).toHaveBeenCalledWith({
+      userId: USER_ID,
+      limit: 1
+    });
 
     const body = response.json();
     expect(body).toMatchObject({
@@ -287,9 +318,13 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
       profilePersonalDataAnonymized: true,
       sessionsRevoked: true,
       storageCleanup: {
-        status: "completed",
-        objectCount: 4,
-        failedObjectCount: 0
+        status: "queued_for_retry",
+        objectCount: 1,
+        completedObjectCount: 0,
+        pendingObjectCount: 1,
+        failedObjectCount: 1,
+        retryScheduled: true,
+        sharedProjectPhotosPreserved: 2
       }
     });
     expect(body.storageCleanup).not.toHaveProperty("objects");

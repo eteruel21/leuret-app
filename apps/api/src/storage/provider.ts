@@ -48,6 +48,55 @@ const uploadsLocalDir = path.join(
   "uploads"
 );
 
+export function normalizeStorageKey(storagePath: string): string {
+  if (
+    typeof storagePath !== "string" ||
+    storagePath.length === 0 ||
+    storagePath.length > 1024 ||
+    storagePath !== storagePath.trim() ||
+    !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(storagePath)
+  ) {
+    throw new Error("La clave de almacenamiento no es válida.");
+  }
+
+  const segments = storagePath.split("/");
+  if (
+    segments.some(
+      (segment) =>
+        segment.length === 0 ||
+        segment === "." ||
+        segment === ".."
+    ) ||
+    path.posix.normalize(storagePath) !== storagePath
+  ) {
+    throw new Error("La clave de almacenamiento no es válida.");
+  }
+
+  return storagePath;
+}
+
+function resolveLocalStoragePath(storagePath: string): string {
+  const normalizedKey = normalizeStorageKey(storagePath);
+  const resolvedPath = path.resolve(
+    uploadsLocalDir,
+    normalizedKey
+  );
+  const relativePath = path.relative(
+    uploadsLocalDir,
+    resolvedPath
+  );
+
+  if (
+    relativePath.startsWith(`..${path.sep}`) ||
+    relativePath === ".." ||
+    path.isAbsolute(relativePath)
+  ) {
+    throw new Error("La clave de almacenamiento no es válida.");
+  }
+
+  return resolvedPath;
+}
+
 export function isLocalStorageFallbackAllowed(
   runtimeEnvironment: StorageRuntimeEnvironment = env.NODE_ENV
 ): boolean {
@@ -110,9 +159,11 @@ export async function uploadStorageFile({
   buffer,
   mimeType
 }: UploadInput): Promise<void> {
+  const normalizedKey = normalizeStorageKey(storagePath);
+
   if (r2Bucket) {
     await r2Bucket.put(
-      storagePath,
+      normalizedKey,
       buffer,
       {
         httpMetadata: {
@@ -126,10 +177,7 @@ export async function uploadStorageFile({
 
   assertStorageConfigured();
 
-  const fullPath = path.join(
-    uploadsLocalDir,
-    storagePath
-  );
+  const fullPath = resolveLocalStoragePath(normalizedKey);
 
   await fs.mkdir(
     path.dirname(fullPath),
@@ -148,8 +196,10 @@ export async function downloadStorageFile(
   buffer: Buffer;
   mimeType?: string | undefined;
 }> {
+  const normalizedKey = normalizeStorageKey(storagePath);
+
   if (r2Bucket) {
-    const object = await r2Bucket.get(storagePath);
+    const object = await r2Bucket.get(normalizedKey);
 
     if (!object) {
       throw new Error(
@@ -169,10 +219,7 @@ export async function downloadStorageFile(
 
   assertStorageConfigured();
 
-  const fullPath = path.join(
-    uploadsLocalDir,
-    storagePath
-  );
+  const fullPath = resolveLocalStoragePath(normalizedKey);
 
   const buffer = await fs.readFile(fullPath);
 
@@ -182,18 +229,17 @@ export async function downloadStorageFile(
 export async function deleteStorageFile(
   storagePath: string
 ): Promise<void> {
+  const normalizedKey = normalizeStorageKey(storagePath);
+
   if (r2Bucket) {
-    await r2Bucket.delete(storagePath);
+    await r2Bucket.delete(normalizedKey);
     return;
   }
 
   assertStorageConfigured();
 
   try {
-    const fullPath = path.join(
-      uploadsLocalDir,
-      storagePath
-    );
+    const fullPath = resolveLocalStoragePath(normalizedKey);
 
     await fs.unlink(fullPath);
   } catch {
@@ -203,9 +249,11 @@ export async function deleteStorageFile(
 
 export async function getStorageSignedUrl(
   photoId: string,
-  _storagePath: string,
+  storagePath: string,
   expiresInMinutes: number = 60
 ): Promise<string> {
+  normalizeStorageKey(storagePath);
+
   return generateSignedPhotoUrl(
     photoId,
     expiresInMinutes

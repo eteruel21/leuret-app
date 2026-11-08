@@ -1,8 +1,8 @@
-# Política de Retención y Depuración de Documentos — Contractor App
+# Política de Retención y Depuración de Documentos — LEURET
 
 **Fecha de vigencia:** 14 de septiembre de 2026
 
-Esta política define los criterios de conservación, anonimización y depuración segura de los datos tratados por **Contractor App**, operado en la República de Panamá bajo el nombre comercial **LEURET TECH**.
+Esta política define los criterios de conservación, anonimización y depuración segura de los datos tratados por **LEURET**, operado en la República de Panamá por **LEURET TECH**.
 
 La retención se rige por el principio de conservar datos personales únicamente durante el tiempo necesario para la finalidad informada o durante el plazo que exija una obligación legal aplicable.
 
@@ -25,19 +25,20 @@ La retención se rige por el principio de conservar datos personales únicamente
 
 Cuando un usuario confirma **Eliminar mi cuenta** mediante `DELETE /account`:
 
-1. Se revocan las sesiones y credenciales de autenticación.
+1. Se revocan las sesiones y credenciales de autenticación, se desactiva el perfil y se eliminan los tokens de notificaciones del dispositivo.
 2. Se elimina o anonimiza la información personal del perfil que no deba conservarse por una obligación legal.
-3. Se eliminan del proveedor de almacenamiento los archivos personales asociados a la cuenta que hayan sido identificados por el sistema.
+3. Los documentos personales internos se registran, dentro de la misma transacción, en una cola durable de eliminación. El sistema intenta eliminarlos inmediatamente y Cloudflare reintenta automáticamente cualquier operación temporalmente fallida.
 4. Los registros comerciales, contables, fiscales o de auditoría que deban conservarse permanecen únicamente por el plazo legal aplicable y con acceso restringido.
-5. La aplicación informa si la limpieza de archivos externos fue completada o si ocurrió una incidencia técnica que requiere revisión.
+5. Las fotografías de proyectos se conservan como recursos compartidos de la empresa; no se eliminan únicamente porque se retire la cuenta de quien las cargó.
+6. La aplicación informa si la limpieza fue completada o si permanece en la cola de reintentos.
 
-No se presenta al usuario una eliminación como completada si el sistema únicamente creó una solicitud pendiente sin ejecutar el tratamiento correspondiente.
+No se presenta la limpieza de archivos como completada mientras existan objetos pendientes en la cola. La anonimización de la cuenta y la revocación de credenciales se informan por separado.
 
 ---
 
 ## 3. Exportación y portabilidad
 
-Antes de eliminar su cuenta, el usuario puede solicitar una copia de sus datos mediante `GET /account/export`. La interfaz de Contractor Pro ofrece esta función desde el perfil del usuario.
+Antes de eliminar su cuenta, el usuario puede solicitar una copia de sus datos mediante `GET /account/export`. La interfaz de LEURET ofrece esta función desde el perfil del usuario.
 
 ---
 

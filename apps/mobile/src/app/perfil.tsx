@@ -179,10 +179,10 @@ export default function ProfileScreen() {
       await signOut();
       router.replace("/login");
 
-      if (result.storageCleanup.status === "failed") {
+      if (result.storageCleanup.status === "queued_for_retry") {
         Alert.alert(
           "Cuenta eliminada",
-          "Tu acceso y tus datos personales fueron eliminados, pero algunos archivos externos requieren revisión técnica."
+          "Tu acceso fue deshabilitado y tus datos personales fueron anonimizados. Algunos documentos están pendientes y el sistema volverá a eliminarlos automáticamente."
         );
       } else {
         Alert.alert(
