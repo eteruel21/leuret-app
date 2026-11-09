@@ -49,6 +49,30 @@ describe("T-056: Calculadoras de Construcción (10 Calculadoras)", () => {
       expect(result.totalCost).toBeGreaterThan(0);
     });
 
+    it("Usa el mismo cálculo cuando se ingresa el volumen neto", () => {
+      const mix = {
+        wastePercentage: 5,
+        mixCement: 1,
+        mixSand: 2,
+        mixGravel: 3,
+        cementBagWeight: 42.5,
+        sandBagVolume: 0.0142,
+        gravelBagVolume: 0.0142,
+        sandPriceMode: "cubicMeter",
+        gravelPriceMode: "bag"
+      } as const;
+
+      const fromVolume = calculateConcrete({ ...mix, netVolume: 3 }, defaultPrices);
+      const fromDimensions = calculateConcrete(
+        { ...mix, length: 5, width: 4, thickness: 0.15 },
+        defaultPrices
+      );
+
+      expect(fromVolume).toEqual(fromDimensions);
+      expect(fromVolume.volumeWithWaste).toBeCloseTo(3.15);
+      expect(calculateConcrete({ ...mix, netVolume: -3 }, defaultPrices).netVolume).toBe(0);
+    });
+
     it("Valores cero", () => {
       const result = calculateConcrete(
         {
