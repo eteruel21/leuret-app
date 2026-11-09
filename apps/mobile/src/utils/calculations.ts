@@ -22,6 +22,10 @@ export type ConcreteInput = {
   defaultAggregateBagVolume?: number;
 };
 
+type ConcreteVolumeInput = Omit<ConcreteInput, "length" | "width" | "thickness"> & {
+  netVolume: number;
+};
+
 export type ConcretePrices = {
   cementBag: number;
 
@@ -101,12 +105,12 @@ function createEmptyResult(): ConcreteResult {
 }
 
 export function calculateConcrete(
-  input: ConcreteInput,
+  input: ConcreteInput | ConcreteVolumeInput,
   prices: ConcretePrices,
 ): ConcreteResult {
-  const length = sanitizeNumber(input.length);
-  const width = sanitizeNumber(input.width);
-  const thickness = sanitizeNumber(input.thickness);
+  const netVolume = "netVolume" in input
+    ? sanitizeNumber(input.netVolume)
+    : sanitizeNumber(input.length) * sanitizeNumber(input.width) * sanitizeNumber(input.thickness);
   const wastePercentage = Math.min(
     sanitizeNumber(input.wastePercentage),
     100,
@@ -143,9 +147,8 @@ export function calculateConcrete(
   const totalParts = cementPart + sandPart + gravelPart;
 
   if (
-    length === 0 ||
-    width === 0 ||
-    thickness === 0 ||
+    !Number.isFinite(netVolume) ||
+    netVolume === 0 ||
     cementPart === 0 ||
     sandPart === 0 ||
     gravelPart === 0
@@ -153,7 +156,6 @@ export function calculateConcrete(
     return createEmptyResult();
   }
 
-  const netVolume = length * width * thickness;
   const volumeWithWaste =
     netVolume * (1 + wastePercentage / 100);
   const dryVolume = volumeWithWaste * dryVolumeFactor;

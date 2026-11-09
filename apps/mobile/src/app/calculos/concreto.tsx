@@ -50,10 +50,59 @@ type CatalogPriceTarget =
   | "gravel"
   | "labor";
 
+const DIMENSION_FIELDS = ["length", "width", "thickness"] as const;
+
+type ConcreteUse = {
+  label: string;
+  description: string;
+  dimensions?: Record<(typeof DIMENSION_FIELDS)[number], string>;
+};
+
+const CONCRETE_USES: readonly ConcreteUse[] = [
+  {
+    label: "Losa o piso",
+    description: "Superficie horizontal de espesor uniforme.",
+    dimensions: { length: "Largo", width: "Ancho", thickness: "Espesor" },
+  },
+  {
+    label: "Zapata rectangular",
+    description: "Base de cimentación de espesor uniforme.",
+    dimensions: {
+      length: "Largo de la base",
+      width: "Ancho de la base",
+      thickness: "Espesor",
+    },
+  },
+  {
+    label: "Viga rectangular",
+    description: "Elemento lineal de sección rectangular.",
+    dimensions: { length: "Largo", width: "Ancho", thickness: "Peralte (altura)" },
+  },
+  {
+    label: "Columna rectangular",
+    description: "Elemento vertical de sección rectangular.",
+    dimensions: {
+      length: "Altura",
+      width: "Ancho de la sección",
+      thickness: "Fondo de la sección",
+    },
+  },
+  {
+    label: "Muro macizo",
+    description: "Tramo de muro de espesor uniforme y sin aberturas.",
+    dimensions: { length: "Largo", width: "Altura", thickness: "Espesor" },
+  },
+  {
+    label: "Volumen directo",
+    description: "Ya conoces los metros cúbicos sin desperdicio.",
+  },
+];
+
 type FormState = {
   length: string;
   width: string;
   thickness: string;
+  netVolume: string;
   wastePercentage: string;
 
   cementRatio: string;
@@ -102,6 +151,7 @@ const initialForm: FormState = {
   length: "",
   width: "",
   thickness: "",
+  netVolume: "",
   wastePercentage: "5",
 
   cementRatio: "1",
@@ -130,9 +180,64 @@ function parseNumber(value: string): number {
   return Number.isFinite(result) ? result : 0;
 }
 
-// Las funciones de formato se definen dinámicamente dentro del componente para usar la moneda de la empresa
-
 export default function ConcreteCalculatorScreen() {
+  const [concreteUse, setConcreteUse] = useState<ConcreteUse | null>(null);
+
+  if (concreteUse) {
+    return (
+      <ConcreteCalculatorForm
+        concreteUse={concreteUse}
+        onChangeUse={() => setConcreteUse(null)}
+      />
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.section}>
+          <Text accessibilityRole="header" style={styles.sectionTitle}>
+            ¿Para qué se usará el concreto?
+          </Text>
+          <Text style={styles.sectionDescription}>
+            Elige el elemento que vas a vaciar para ver qué medidas ingresar.
+          </Text>
+
+          <View style={styles.useOptions}>
+            {CONCRETE_USES.map((option) => (
+              <Pressable
+                key={option.label}
+                accessibilityRole="button"
+                accessibilityLabel={option.label}
+                accessibilityHint={option.description}
+                onPress={() => setConcreteUse(option)}
+                style={({ pressed }) => [
+                  styles.useOption,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <View style={styles.useOptionCopy}>
+                  <Text style={styles.useOptionTitle}>{option.label}</Text>
+                  <Text style={styles.useOptionDescription}>{option.description}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function ConcreteCalculatorForm({
+  concreteUse,
+  onChangeUse,
+}: {
+  concreteUse: ConcreteUse;
+  onChangeUse: () => void;
+}) {
+  const { dimensions } = concreteUse;
   const params = useLocalSearchParams<{
     budgetId?: string | string[];
   }>();
@@ -178,6 +283,8 @@ export default function ConcreteCalculatorScreen() {
 
     if (!companyId) return;
 
+    let active = true;
+
     async function loadCatalog(id: string) {
       setCatalogLoading(true);
 
@@ -185,6 +292,8 @@ export default function ConcreteCalculatorScreen() {
         items,
         error: catalogError,
       } = await listCatalogItems(id);
+
+      if (!active) return;
 
       if (catalogError) {
         Alert.alert(
@@ -199,6 +308,9 @@ export default function ConcreteCalculatorScreen() {
     }
 
     void loadCatalog(companyId);
+    return () => {
+      active = false;
+    };
   }, [activeCompany]);
 
   useEffect(() => {
@@ -309,13 +421,9 @@ export default function ConcreteCalculatorScreen() {
     gravelPriceMode,
   ]);
 
-  const canCalculate = useMemo(() => {
-    return (
-      parseNumber(form.length) > 0 &&
-      parseNumber(form.width) > 0 &&
-      parseNumber(form.thickness) > 0
-    );
-  }, [form.length, form.width, form.thickness]);
+  const canCalculate = dimensions
+    ? DIMENSION_FIELDS.every((field) => parseNumber(form[field]) > 0)
+    : parseNumber(form.netVolume) > 0;
 
   function updateField(
     field: keyof FormState,
@@ -386,17 +494,23 @@ export default function ConcreteCalculatorScreen() {
   }
 
   function handleCalculate() {
-    const length = parseNumber(form.length);
-    const width = parseNumber(form.width);
-    const thickness = parseNumber(form.thickness);
-
-    if (length <= 0 || width <= 0 || thickness <= 0) {
+    if (!canCalculate) {
       setError(
-        "Introduce largo, ancho y espesor mayores que cero.",
+        dimensions
+          ? "Introduce medidas mayores que cero."
+          : "Introduce un volumen mayor que cero.",
       );
       setResult(null);
       return;
     }
+
+    const geometry = dimensions
+      ? {
+          length: parseNumber(form.length),
+          width: parseNumber(form.width),
+          thickness: parseNumber(form.thickness),
+        }
+      : { netVolume: parseNumber(form.netVolume) };
 
     const cementRatio = parseNumber(form.cementRatio);
     const sandRatio = parseNumber(form.sandRatio);
@@ -438,9 +552,7 @@ export default function ConcreteCalculatorScreen() {
 
     const calculatedResult = calculateConcrete(
       {
-        length,
-        width,
-        thickness,
+        ...geometry,
         wastePercentage,
 
         mixCement: cementRatio,
@@ -538,7 +650,7 @@ export default function ConcreteCalculatorScreen() {
       companyId: activeCompany.id,
       budgetId,
       itemType: "service",
-      description: `Concreto mezcla ${form.cementRatio}:${form.sandRatio}:${form.gravelRatio}`,
+      description: `Concreto · ${concreteUse.label} · mezcla ${form.cementRatio}:${form.sandRatio}:${form.gravelRatio}`,
       unitName: "m³",
       quantity: result.volumeWithWaste,
       unitCost: unitPrice,
@@ -596,51 +708,54 @@ export default function ConcreteCalculatorScreen() {
 
             <View style={styles.introductionText}>
               <Text style={styles.introductionTitle}>
-                Dimensiones del elemento
+                {concreteUse.label}
               </Text>
 
               <Text style={styles.introductionDescription}>
-                Introduce las medidas en metros. El espesor
-                también debe colocarse en metros.
+                {dimensions
+                  ? "Introduce las medidas en metros. Por ejemplo, 10 cm equivalen a 0.10 m."
+                  : "Introduce el volumen en metros cúbicos antes de sumar el desperdicio."}
               </Text>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={onChangeUse}
+                style={({ pressed }) => [
+                  styles.changeUseButton,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Text style={styles.linkButtonText}>Cambiar uso</Text>
+              </Pressable>
             </View>
           </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>
-              Medidas principales
+              {dimensions ? "Medidas principales" : "Volumen y desperdicio"}
             </Text>
 
             <View style={styles.formGrid}>
-              <FormInput
-                label="Largo"
-                value={form.length}
-                onChangeText={(value) =>
-                  updateField("length", value)
-                }
-                unit="m"
-                placeholder="Ej. 6.00"
-              />
-
-              <FormInput
-                label="Ancho"
-                value={form.width}
-                onChangeText={(value) =>
-                  updateField("width", value)
-                }
-                unit="m"
-                placeholder="Ej. 4.00"
-              />
-
-              <FormInput
-                label="Espesor"
-                value={form.thickness}
-                onChangeText={(value) =>
-                  updateField("thickness", value)
-                }
-                unit="m"
-                placeholder="Ej. 0.10"
-              />
+              {dimensions ? (
+                DIMENSION_FIELDS.map((field) => (
+                  <FormInput
+                    key={field}
+                    label={dimensions[field]}
+                    value={form[field]}
+                    onChangeText={(value) => updateField(field, value)}
+                    unit="m"
+                    placeholder="0.00"
+                  />
+                ))
+              ) : (
+                <FormInput
+                  label="Volumen neto"
+                  value={form.netVolume}
+                  onChangeText={(value) => updateField("netVolume", value)}
+                  unit="m³"
+                  placeholder="0.00"
+                />
+              )}
 
               <FormInput
                 label="Desperdicio"
@@ -651,19 +766,6 @@ export default function ConcreteCalculatorScreen() {
                 unit="%"
                 placeholder="5"
               />
-            </View>
-
-            <View style={styles.helpBox}>
-              <Ionicons
-                name="bulb-outline"
-                size={20}
-                color={colors.warning}
-              />
-
-              <Text style={styles.helpText}>
-                Ejemplo: para una losa de 10 cm de espesor,
-                introduce 0.10 m.
-              </Text>
             </View>
           </View>
 
@@ -846,6 +948,7 @@ export default function ConcreteCalculatorScreen() {
 
           <View style={styles.buttonRow}>
             <Pressable
+              accessibilityRole="button"
               disabled={!canCalculate}
               onPress={handleCalculate}
               style={({ pressed }) => [
@@ -920,7 +1023,7 @@ export default function ConcreteCalculatorScreen() {
                 }
                 style={styles.viewBudgetButton}
               >
-                <Text style={styles.viewBudgetButtonText}>
+                <Text style={styles.linkButtonText}>
                   Ver presupuesto
                 </Text>
 
@@ -1165,6 +1268,7 @@ function FormInput({
 
       <View style={styles.inputContainer}>
         <TextInput
+          accessibilityLabel={unit ? `${label} (${unit})` : label}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -1589,6 +1693,46 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
 
+  useOptions: {
+    gap: 10,
+  },
+
+  useOption: {
+    minHeight: 64,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+
+  useOptionCopy: {
+    flex: 1,
+    gap: 4,
+  },
+
+  useOptionTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
+  useOptionDescription: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+
+  changeUseButton: {
+    minHeight: 44,
+    alignSelf: "flex-start",
+    justifyContent: "center",
+  },
+
   formGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1641,23 +1785,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 13,
     fontWeight: "700",
-  },
-
-  helpBox: {
-    marginTop: 14,
-    padding: 13,
-    borderRadius: radius.sm,
-    backgroundColor: colors.sandSoft,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 9,
-  },
-
-  helpText: {
-    flex: 1,
-    color: colors.primary,
-    fontSize: 12,
-    lineHeight: 18,
   },
 
   ratioRow: {
@@ -1967,7 +2094,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
 
-  viewBudgetButtonText: {
+  linkButtonText: {
     color: colors.primary,
     fontSize: 13,
     fontWeight: "900",
