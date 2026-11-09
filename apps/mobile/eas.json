@@ -57,10 +57,6 @@
     "production": {
       "android": {
         "track": "internal"
-      },
-      "ios": {
-        "appleId": "apple-developer@contractorpro.app",
-        "ascAppId": "0000000000"
       }
     }
   }
