@@ -1,17 +1,17 @@
-# Configuración del Entorno de Producción — Contractor Pro
+# Configuración del Entorno de Producción — Leuret App
 
 **Fecha de actualización:** 21 de julio de 2026
 
-Este documento detalla la lista de verificación y parámetros requeridos para la preparación y endurecimiento del entorno de producción de **Contractor Pro**.
+Este documento detalla la lista de verificación y parámetros requeridos para la preparación y endurecimiento del entorno de producción de **Leuret App**.
 
 ---
 
 ## 1. Configuración de Infraestructura
 
-- **Base de Datos:** PostgreSQL 18 en cluster administrado con SSL forzado (`sslmode=require`), pool de conexiones configurado (mín: 5, máx: 30) y backups automáticos diarios.
+- **Base de Datos:** Supabase PostgreSQL 17 con transporte cifrado. El plan Free actual no incluye backups diarios administrados ni PITR; se debe ejecutar y conservar el respaldo lógico descrito en `docs/backup-restore-verification.md`.
 - **Backend API:** Node.js 22 LTS alojado en Render con auto-restart en fallos, SSL/TLS 1.3 terminado en proxy y balanceo de carga.
 - **Frontend Admin & Mobile Web:** Cloudflare Pages con CDN global, caching de estáticos y políticas de encabezados de seguridad.
-- **Almacenamiento de Archivos:** Cloudflare R2 / S3-compatible bucket privado con firmado de URLs presignadas.
+- **Almacenamiento de Archivos:** Cloudflare R2, bucket privado `contractor-private-storage`. Sus objetos requieren una copia independiente del backup de PostgreSQL.
 
 ---
 
@@ -29,7 +29,7 @@ Este documento detalla la lista de verificación y parámetros requeridos para l
 | `R2_ACCOUNT_ID` | Account ID de Cloudflare | Credencial cifrada |
 | `R2_ACCESS_KEY_ID` | Clave de acceso R2 | Credencial cifrada |
 | `R2_SECRET_ACCESS_KEY` | Clave secreta R2 | Credencial cifrada |
-| `R2_BUCKET_NAME` | Nombre del bucket | `contractor-pro-media-prod` |
+| `R2_BUCKET_NAME` | Nombre del bucket | `contractor-private-storage` |
 
 ---
 
