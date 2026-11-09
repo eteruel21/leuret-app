@@ -1,6 +1,6 @@
-# Guía de Alojamiento y Despliegue en Staging — Contractor App
+# Guía de Alojamiento y Despliegue en Staging — Leuret App
 
-Este documento define la arquitectura de hosting, configuración de seguridad y procedimientos para el entorno de **Staging** de Contractor App.
+Este documento define la arquitectura de hosting, configuración de seguridad y procedimientos para el entorno de **Staging** de Leuret App.
 
 ---
 
@@ -11,7 +11,7 @@ Este documento define la arquitectura de hosting, configuración de seguridad y 
 - **Justificación**:
   - **Permanencia**: Almacenamiento persistente redundante con alta disponibilidad.
   - **Conexiones Seguras**: Requiere transporte cifrado obligatorio SSL/TLS (`PGSSL=require`).
-  - **Backups**: Respaldo automático diario automatizado y soporte de recuperación punto en el tiempo (PITR).
+  - **Backups**: La disponibilidad, retención y PITR dependen del proveedor y del plan contratado. Si no están incluidos, staging debe usar dumps lógicos y una prueba de restauración aislada según `docs/backup-restore-verification.md`.
   - **Connection Pooling**: PgBouncer integrado nativo para optimizar el número de conexiones simultáneas.
 
 ### Fastify API (T-062)
