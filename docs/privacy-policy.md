@@ -1,71 +1,165 @@
-# Política de Privacidad — Contractor App
+# Política de Privacidad — Leuret App
 
-**Fecha de última actualización:** 14 de septiembre de 2026
+**Fecha de última actualización:** 9 de noviembre de 2026
 
-**Contractor App**, operado en la República de Panamá bajo el nombre comercial **LEURET TECH**, respeta la privacidad de sus usuarios. Esta Política de Privacidad describe cómo recopilamos, utilizamos, almacenamos, compartimos, protegemos y eliminamos información personal de conformidad con la Ley 81 de 26 de marzo de 2019 sobre Protección de Datos Personales y demás normativa panameña aplicable.
+Esta Política explica cómo **LEURET TECH**, operador de **Leuret App**, trata los datos personales de usuarios, clientes, contratistas y demás personas relacionadas con la Plataforma.
 
----
+El tratamiento se realiza conforme a la Ley 81 de 26 de marzo de 2019 sobre Protección de Datos Personales, el Decreto Ejecutivo 285 de 18 de mayo de 2021 y demás normas panameñas aplicables.
 
-## 1. Información que Recopilamos
+## 1. Responsable del tratamiento
 
-### 1.1 Información Proporcionada Directamente
-- **Datos de Identificación y Contacto:** Nombre completo, dirección de correo electrónico, número de teléfono, documento de identidad (Cédula/RUC) y dirección.
-- **Información Profesional y Comercial:** Nombre comercial, razón social, especialidades, años de experiencia, certificado de aviso de operación, tarifas y certificaciones.
-- **Datos Operativos:** Proyectos, presupuestos, facturas, clientes registrados, tareas e historial de avance con fotos.
+- **Responsable:** LEURET TECH
+- **Producto:** Leuret App
+- **País de operación:** República de Panamá
+- **Contacto de privacidad:** privacidad@leurettech.com
+- **Contacto legal:** legal@leurettech.com
 
-### 1.2 Información Recopilada Automáticamente
-- **Registros de Sistema:** Dirección IP, tipo de navegador, sistema operativo, identificadores de dispositivo, cookies de sesión y registros de auditoría de actividad (*activity logs*).
+El correo de privacidad es el canal oficial para consultas y ejercicio de derechos. La referencia a este contacto no implica que exista una designación formal de “Delegado de Protección de Datos” cuando la ley no la exija o no se haya realizado.
 
----
+## 2. Datos que podemos tratar
 
-## 2. Finalidad del Tratamiento de Datos
+Según el tipo de cuenta y las funciones utilizadas, podemos tratar:
 
-Utilizamos su información para:
-1. Prestar, mantener y optimizar los servicios de la Plataforma.
-2. Autenticar usuarios, gestionar roles (RBAC) y asegurar la cuenta.
-3. Facilitar la comunicación y contratación entre Contratistas, Empresas y Clientes.
-4. Generar documentos operativos (presupuestos, facturas, órdenes de trabajo).
-5. Cumplir con obligaciones legales, contables, fiscales y de auditoría de seguridad.
+- **Identificación y contacto:** nombre, correo, teléfono, ubicación declarada, cédula, RUC u otros identificadores suministrados.
+- **Perfil profesional o empresarial:** nombre comercial, experiencia, especialidades, categorías, áreas de trabajo, aviso de operación, certificaciones, logotipo y portafolio.
+- **Información operativa y comercial:** empresas, clientes, contactos, direcciones, proyectos, actividades, tareas, presupuestos, facturas, pagos, notas, documentos y fotografías.
+- **Cuenta y autenticación:** identificadores internos, estado de verificación, sesiones, proveedores de identidad y registros de acceso. No exportamos contraseñas ni secretos de autenticación.
+- **Datos técnicos y de seguridad:** dirección IP, dispositivo, navegador, fecha y hora, registros de auditoría, errores, controles antifraude y eventos de seguridad.
+- **Notificaciones:** token del dispositivo y preferencia de recepción cuando el usuario habilita esa función.
+- **Comunicaciones:** consultas de soporte, solicitudes de privacidad y mensajes relacionados con el Servicio.
 
----
+Leuret App puede almacenar información de terceros incorporada por un usuario, por ejemplo datos de sus clientes o contactos. Quien la incorpora debe contar con autorización o fundamento legal suficiente.
 
-## 3. Almacenamiento y Seguridad de la Información
+## 3. Fuentes
 
-- **Cifrado en Transito y Reposo:** Todos los canales de comunicación utilizan TLS 1.3/HTTPS. Los datos de la base de datos se almacenan en infraestructura PostgreSQL segura con aislamiento por usuario (RLS).
-- **Control de Acceso:** Acceso restringido mediante JSON Web Tokens (JWT) y cookies HTTP-only con atributos `SameSite` y `Secure`.
-- **Archivos y Fotografías:** Almacenados en contenedores privados con URLs firmadas con tiempo de expiración limitado.
+Obtenemos datos:
 
----
+- directamente de la persona titular;
+- de administradores o integrantes autorizados de una empresa;
+- de otras personas que legítimamente incorporan información vinculada a un proyecto o relación comercial;
+- automáticamente, durante el uso y protección de la Plataforma;
+- de proveedores de autenticación o servicios conectados, cuando el usuario los autoriza.
 
-## 4. Retención y Supresión de Datos
+## 4. Finalidades y fundamento
 
-De acuerdo con nuestra **Política de Retención de Documentos**:
-- **Cuentas Activas:** Mantendremos su información mientras su cuenta permanezca activa.
-- **Cuentas Eliminadas:** Al confirmar la eliminación de la cuenta, se deshabilita el acceso y se anonimizan los datos personales asociados al perfil. Los archivos externos asociados se eliminan como parte del mismo flujo, salvo aquellos que deban conservarse por una obligación legal.
-- **Registros Fiscales/Contables:** Los registros necesarios para cumplir obligaciones comerciales, contables o fiscales se conservarán durante el plazo legal aplicable. Cuando sea posible, se mantendrán separados o anonimizados respecto de la identidad del usuario eliminado.
+Tratamos datos para:
 
----
+1. crear, autenticar y administrar cuentas;
+2. prestar funciones de gestión de clientes, proyectos, agenda, presupuestos, facturación y cálculos;
+3. facilitar colaboración dentro de empresas y proyectos;
+4. generar, almacenar y compartir documentos solicitados por el usuario;
+5. enviar comunicaciones operativas, de seguridad y recuperación de cuenta;
+6. enviar notificaciones opcionales cuando exista consentimiento;
+7. prevenir fraude, abuso, accesos no autorizados e incidentes;
+8. atender soporte, solicitudes de datos y reclamaciones;
+9. cumplir obligaciones legales, fiscales, contables o requerimientos de autoridad competente;
+10. mantener, diagnosticar y mejorar la confiabilidad del Servicio.
 
-## 5. Derechos de los Usuarios (ARCO / RGPD)
+El tratamiento se apoya, según corresponda, en el consentimiento, la ejecución de la relación de servicio, el cumplimiento de obligaciones legales u otro fundamento permitido por la legislación panameña. Cuando un tratamiento opcional dependa del consentimiento, este podrá retirarse sin afectar el tratamiento realizado lícitamente con anterioridad.
 
-Usted posee los siguientes derechos sobre su información personal:
-- **Acceso y Rectificación:** Puede consultar y actualizar sus datos en cualquier momento desde su perfil.
-- **Exportación (Portabilidad):** Puede descargar una copia íntegra de sus datos en formato JSON (`GET /account/export`).
-- **Eliminación (Supresión):** Puede solicitar el borrado definitivo de su cuenta (`DELETE /account`).
-- **Oposición y Revocación:** Puede solicitar revocar el consentimiento para el tratamiento de datos opcionales.
+## 5. Minimización y exactitud
 
----
+Solicitamos únicamente datos adecuados, pertinentes y limitados a las finalidades informadas. El usuario puede actualizar información desde su perfil y debe procurar que sea exacta y vigente.
 
-## 6. Transferencias y Terceros
+No debe cargar documentos de identidad, información sensible o datos de terceros cuando no sean necesarios o no exista autorización válida.
 
-No vendemos ni alquilamos sus datos personales a terceros. Compartimos información únicamente con proveedores de infraestructura esenciales bajo estrictos acuerdos de confidencialidad:
-- **Hosting y Base de Datos:** PostgreSQL / Render / Cloudflare Pages.
-- **Servicios de Almacenamiento Cifrado:** Cloudflare R2 / S3 compatible.
+## 6. Encargados, proveedores y destinatarios
 
----
+No vendemos ni alquilamos datos personales.
 
-## 7. Contacto de Privacidad
+Podemos utilizar proveedores que procesan información únicamente para prestar servicios a LEURET TECH, entre ellos:
 
-Si desea ejercer sus derechos o tiene consultas sobre esta política:
-- **Delegado de Protección de Datos (DPO):** privacidad@leurettech.com
-- **Dirección Postal:** LEURET TECH, República de Panamá
+- **Cloudflare:** ejecución del API, distribución web, protección, almacenamiento privado y servicios asociados;
+- **Supabase/PostgreSQL:** infraestructura y administración de base de datos;
+- **Resend:** entrega de correos transaccionales;
+- **Expo y proveedores de plataforma móvil:** compilación, distribución y notificaciones cuando esas funciones estén habilitadas;
+- **Apple o Google:** distribución y servicios del sistema operativo cuando corresponda.
+
+También podremos comunicar información a autoridades competentes cuando exista obligación legal, orden válida o necesidad de formular, ejercer o defender reclamaciones.
+
+Los proveedores pueden cambiar. LEURET TECH evaluará su necesidad, acceso y obligaciones de confidencialidad y seguridad.
+
+## 7. Transferencias internacionales
+
+Algunos proveedores pueden procesar o alojar información fuera de Panamá. Cuando exista una transferencia internacional, se aplicarán las condiciones permitidas por la Ley 81, el Decreto Ejecutivo 285 y las garantías contractuales, técnicas u organizativas correspondientes.
+
+## 8. Seguridad
+
+Aplicamos medidas técnicas y organizativas proporcionales al riesgo, incluyendo control de acceso, separación por empresa, cifrado de comunicaciones, credenciales protegidas, almacenamiento privado, registros de auditoría, copias de seguridad y procedimientos de respuesta a incidentes.
+
+Ningún sistema es absolutamente invulnerable. Cuando corresponda legalmente, informaremos a las personas afectadas y a la autoridad competente sobre incidentes que comprometan datos personales.
+
+## 9. Conservación
+
+Conservamos los datos durante el tiempo necesario para prestar el Servicio y cumplir la finalidad informada.
+
+- Los datos de una cuenta activa se conservan mientras la cuenta permanezca vigente.
+- Al eliminar una cuenta, se revocan las sesiones y se anonimiza o elimina la información personal que no deba conservarse.
+- Los documentos personales asociados se eliminan mediante una cola segura con reintentos.
+- Los registros comerciales, fiscales, contables, de seguridad o necesarios para reclamaciones se conservan de forma restringida durante el plazo legal o justificable aplicable.
+- Los respaldos se sustituyen conforme a su ciclo técnico y dejan de contener los datos al expirar dicho ciclo.
+
+La Política de Retención y Depuración de Documentos contiene criterios adicionales.
+
+## 10. Derechos de la persona titular
+
+La persona titular puede ejercer gratuitamente:
+
+- **Acceso:** conocer qué datos tratamos, su origen y finalidad.
+- **Rectificación:** corregir datos erróneos, inexactos, incompletos o desactualizados.
+- **Cancelación:** solicitar eliminación, bloqueo o anonimización cuando corresponda.
+- **Oposición:** oponerse a un tratamiento por motivos legítimos y retirar consentimiento para tratamientos opcionales.
+- **Portabilidad:** obtener una copia estructurada y de uso común cuando proceda.
+
+La exportación inmediata disponible en el perfil complementa, pero no sustituye, el derecho formal de acceso o portabilidad.
+
+## 11. Cómo presentar una solicitud
+
+Puede usar la opción **“Ejercer mis derechos sobre datos”** dentro del perfil o escribir a **privacidad@leurettech.com** indicando:
+
+- nombre y correo asociado a la cuenta;
+- derecho que desea ejercer;
+- descripción clara de la solicitud;
+- información necesaria para localizar los datos.
+
+Podremos solicitar verificación razonable de identidad o representación, evitando pedir información excesiva. No envíe contraseñas, códigos de acceso ni copias completas de documentos de identidad por correo, salvo que LEURET TECH indique un canal seguro y sea estrictamente necesario.
+
+Confirmaremos la recepción y responderemos incluso cuando no existan datos relacionados con la persona solicitante.
+
+## 12. Plazos
+
+Como regla general:
+
+- acceso, cancelación y portabilidad: hasta **10 días hábiles**;
+- rectificación: hasta **5 días hábiles**;
+- oposición: efecto inmediato, salvo que exista un motivo legítimo imperioso o sea necesario para formular, ejercer o defender reclamaciones.
+
+Si una solicitud no puede atenderse total o parcialmente, comunicaremos la razón y las alternativas disponibles, conforme a la ley.
+
+## 13. Eliminación de cuenta
+
+La opción **“Eliminar mi cuenta”** deshabilita el acceso, revoca sesiones, anonimiza el perfil y elimina los documentos personales que no deban conservarse. Si una eliminación externa falla temporalmente, queda registrada para reintento automático.
+
+Las fotografías de proyectos compartidas con una empresa pueden conservarse como parte del registro empresarial. Una solicitud específica sobre ese contenido será evaluada considerando los derechos de la persona titular, la finalidad compartida y las obligaciones de conservación.
+
+## 14. Decisiones automatizadas
+
+Leuret App no adopta decisiones con efectos jurídicos o significativamente similares basadas únicamente en tratamiento automatizado. Las calculadoras producen estimaciones de apoyo que deben ser revisadas por la persona usuaria.
+
+## 15. Personas menores de edad
+
+La Plataforma está dirigida a personas de 18 años o más. No buscamos registrar deliberadamente cuentas de menores. Si se detecta una cuenta creada en contravención de esta regla, se adoptarán medidas para restringirla y eliminar o proteger los datos según corresponda.
+
+## 16. Reclamaciones
+
+La persona titular puede contactar primero a **privacidad@leurettech.com** para procurar una solución. También puede presentar una consulta o denuncia ante la **Autoridad Nacional de Transparencia y Acceso a la Información (ANTAI)**, por medio de su Dirección de Protección de Datos Personales.
+
+## 17. Cambios a esta política
+
+Los cambios materiales se informarán por la Plataforma, correo electrónico u otro medio razonable. La fecha de actualización permanecerá visible.
+
+## 18. Contacto
+
+**LEURET TECH — Leuret App**  
+República de Panamá  
+privacidad@leurettech.com

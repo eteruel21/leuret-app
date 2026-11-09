@@ -31,6 +31,7 @@ import {
 
 const TERMS_URL = "https://admin.leurettech.com/legal/terms";
 const PRIVACY_URL = "https://admin.leurettech.com/legal/privacy";
+const DATA_RIGHTS_EMAIL = "privacidad@leurettech.com";
 
 export default function ProfileScreen() {
   const { profile, user, updateProfile, signOut } = useAuth();
@@ -123,6 +124,26 @@ export default function ProfileScreen() {
       Alert.alert(
         `No se pudo abrir ${title}`,
         error instanceof Error ? error.message : "Intenta nuevamente."
+      );
+    }
+  };
+
+  const openDataRightsRequest = async () => {
+    const subject = encodeURIComponent(
+      "Solicitud de derechos sobre datos — Leuret App"
+    );
+    const body = encodeURIComponent(
+      "Hola LEURET TECH,\n\nDeseo ejercer el siguiente derecho sobre mis datos en Leuret App:\n\n[ ] Acceso\n[ ] Rectificación\n[ ] Cancelación\n[ ] Oposición\n[ ] Portabilidad\n\nDescripción de la solicitud:\n"
+    );
+
+    try {
+      await Linking.openURL(
+        `mailto:${DATA_RIGHTS_EMAIL}?subject=${subject}&body=${body}`
+      );
+    } catch (error) {
+      Alert.alert(
+        "No se pudo abrir el correo",
+        `Escríbenos a ${DATA_RIGHTS_EMAIL} para ejercer tus derechos.`
       );
     }
   };
@@ -352,6 +373,16 @@ export default function ProfileScreen() {
             >
               <Ionicons name="shield-checkmark-outline" size={20} color={colors.textSecondary} />
               <Text style={{ color: colors.text, fontSize: 14, fontWeight: "700" }}>Política de Privacidad</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                void openDataRightsRequest();
+              }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.border }}
+            >
+              <Ionicons name="mail-outline" size={20} color={colors.textSecondary} />
+              <Text style={{ color: colors.text, fontSize: 14, fontWeight: "700" }}>Ejercer mis derechos sobre datos</Text>
             </Pressable>
 
             <Pressable

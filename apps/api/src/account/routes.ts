@@ -92,7 +92,7 @@ export async function registerAccountLegalRoutes(
   // Legal content is bundled with the Worker so it is available at runtime.
   app.get("/legal/terms", async () => ({
     title: "Términos y Condiciones de Uso",
-    updatedAt: "2026-09-14",
+    updatedAt: "2026-11-09",
     content: TERMS_OF_SERVICE_CONTENT
   }));
 
@@ -100,7 +100,7 @@ export async function registerAccountLegalRoutes(
   // Legal content is bundled with the Worker so it is available at runtime.
   app.get("/legal/privacy", async () => ({
     title: "Política de Privacidad",
-    updatedAt: "2026-09-14",
+    updatedAt: "2026-11-09",
     content: PRIVACY_POLICY_CONTENT
   }));
 
