@@ -9,6 +9,7 @@ import { getCompanyDashboard } from "@/services/dashboard-service";
 import {
   buildAttentionItems,
   monthChange,
+  type AttentionItem,
   type AttentionSeverity,
   type CompanyDashboard,
 } from "@/utils/dashboard";
@@ -22,7 +23,7 @@ const SEVERITY_STYLE: Record<AttentionSeverity, { icon: IconName; color: string;
   info: { icon: "information-circle", color: colors.steel, background: colors.infoSoft },
 };
 
-function Kpi({
+export function Kpi({
   label,
   value,
   detail,
@@ -40,18 +41,18 @@ function Kpi({
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole={onPress ? "button" : undefined}
-      style={({ pressed }) => [styles.kpi, pressed && styles.pressed]}
+      style={({ pressed }) => [dashboardStyles.kpi, pressed && dashboardStyles.pressed]}
     >
-      <Text style={styles.kpiLabel}>{label}</Text>
-      <Text style={styles.kpiValue} numberOfLines={1} adjustsFontSizeToFit>
+      <Text style={dashboardStyles.kpiLabel}>{label}</Text>
+      <Text style={dashboardStyles.kpiValue} numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </Text>
       {detail ? (
         <Text
           style={[
-            styles.kpiDetail,
-            tone === "positive" && styles.kpiPositive,
-            tone === "negative" && styles.kpiNegative,
+            dashboardStyles.kpiDetail,
+            tone === "positive" && dashboardStyles.kpiPositive,
+            tone === "negative" && dashboardStyles.kpiNegative,
           ]}
           numberOfLines={2}
         >
@@ -59,6 +60,42 @@ function Kpi({
         </Text>
       ) : null}
     </Pressable>
+  );
+}
+
+/** Lista "Requiere tu atención", compartida por los inicios de cada rol. */
+export function AttentionList({ items: attention }: { items: AttentionItem[] }) {
+  return (
+    <View style={dashboardStyles.attentionCard}>
+      <Text style={dashboardStyles.attentionTitle}>Requiere tu atención</Text>
+      {attention.length === 0 ? (
+        <View style={dashboardStyles.allGood}>
+          <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+          <Text style={dashboardStyles.allGoodText}>Todo al día. No hay cobros, obras ni presupuestos pendientes de acción.</Text>
+        </View>
+      ) : (
+        attention.map((item, index) => {
+          const tone = SEVERITY_STYLE[item.severity];
+          return (
+            <Pressable
+              key={item.id}
+              onPress={() => router.push(item.href as Href)}
+              accessibilityRole="button"
+              style={({ pressed }) => [dashboardStyles.attentionRow, index > 0 && dashboardStyles.attentionDivider, pressed && dashboardStyles.pressed]}
+            >
+              <View style={[dashboardStyles.attentionIcon, { backgroundColor: tone.background }]}>
+                <Ionicons name={tone.icon} size={18} color={tone.color} />
+              </View>
+              <View style={dashboardStyles.attentionCopy}>
+                <Text style={dashboardStyles.attentionItemTitle}>{item.title}</Text>
+                <Text style={dashboardStyles.muted} numberOfLines={2}>{item.detail}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </Pressable>
+          );
+        })
+      )}
+    </View>
   );
 }
 
@@ -87,18 +124,18 @@ export function OwnerDashboard({ companyId }: { companyId: string }) {
 
   if (loading && !dashboard) {
     return (
-      <View style={styles.loadingBox}>
+      <View style={dashboardStyles.loadingBox}>
         <ActivityIndicator color={colors.primary} />
-        <Text style={styles.muted}>Calculando tus indicadores…</Text>
+        <Text style={dashboardStyles.muted}>Calculando tus indicadores…</Text>
       </View>
     );
   }
 
   if (!dashboard) {
     return (
-      <View style={styles.loadingBox}>
+      <View style={dashboardStyles.loadingBox}>
         <Ionicons name="cloud-offline-outline" size={22} color={colors.textMuted} />
-        <Text style={styles.muted}>{error ?? "No se pudieron cargar los indicadores."}</Text>
+        <Text style={dashboardStyles.muted}>{error ?? "No se pudieron cargar los indicadores."}</Text>
       </View>
     );
   }
@@ -109,21 +146,21 @@ export function OwnerDashboard({ companyId }: { companyId: string }) {
   const monthName = new Intl.DateTimeFormat("es-PA", { month: "long" }).format(new Date());
 
   return (
-    <Animated.View entering={FadeInDown.delay(300).duration(460)} style={styles.container}>
-      <View style={styles.headerRow}>
+    <Animated.View entering={FadeInDown.delay(300).duration(460)} style={dashboardStyles.container}>
+      <View style={dashboardStyles.headerRow}>
         <View>
-          <Text style={styles.eyebrow}>TU NEGOCIO</Text>
-          <Text style={styles.title}>Resumen de {monthName}</Text>
+          <Text style={dashboardStyles.eyebrow}>TU NEGOCIO</Text>
+          <Text style={dashboardStyles.title}>Resumen de {monthName}</Text>
         </View>
         {stale ? (
-          <View style={styles.staleBadge}>
+          <View style={dashboardStyles.staleBadge}>
             <Ionicons name="cloud-offline-outline" size={13} color={colors.textSecondary} />
-            <Text style={styles.staleText}>Sin conexión</Text>
+            <Text style={dashboardStyles.staleText}>Sin conexión</Text>
           </View>
         ) : null}
       </View>
 
-      <View style={styles.kpiGrid}>
+      <View style={dashboardStyles.kpiGrid}>
         <Kpi
           label="Cobrado este mes"
           value={money(dashboard.collections.thisMonth)}
@@ -167,41 +204,12 @@ export function OwnerDashboard({ companyId }: { companyId: string }) {
         />
       </View>
 
-      <View style={styles.attentionCard}>
-        <Text style={styles.attentionTitle}>Requiere tu atención</Text>
-        {attention.length === 0 ? (
-          <View style={styles.allGood}>
-            <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-            <Text style={styles.allGoodText}>Todo al día. No hay cobros, obras ni presupuestos pendientes de acción.</Text>
-          </View>
-        ) : (
-          attention.map((item, index) => {
-            const tone = SEVERITY_STYLE[item.severity];
-            return (
-              <Pressable
-                key={item.id}
-                onPress={() => router.push(item.href as Href)}
-                accessibilityRole="button"
-                style={({ pressed }) => [styles.attentionRow, index > 0 && styles.attentionDivider, pressed && styles.pressed]}
-              >
-                <View style={[styles.attentionIcon, { backgroundColor: tone.background }]}>
-                  <Ionicons name={tone.icon} size={18} color={tone.color} />
-                </View>
-                <View style={styles.attentionCopy}>
-                  <Text style={styles.attentionItemTitle}>{item.title}</Text>
-                  <Text style={styles.muted} numberOfLines={2}>{item.detail}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-              </Pressable>
-            );
-          })
-        )}
-      </View>
+      <AttentionList items={attention} />
     </Animated.View>
   );
 }
 
-const styles = StyleSheet.create({
+export const dashboardStyles = StyleSheet.create({
   container: { gap: 12 },
   headerRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" },
   eyebrow: { marginBottom: 5, color: colors.accent, fontSize: 9, fontWeight: "900", letterSpacing: 1.4 },

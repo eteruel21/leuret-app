@@ -33,6 +33,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { OwnerDashboard } from "@/components/OwnerDashboard";
+import { RoleDashboard } from "@/components/RoleDashboard";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   HOME_FOCUS,
@@ -369,6 +370,8 @@ export default function HomeScreen() {
 
           {showOwnerDashboard && activeCompany ? (
             <OwnerDashboard companyId={activeCompany.id} />
+          ) : (role === "sales" || role === "estimator") && activeCompany ? (
+            <RoleDashboard companyId={activeCompany.id} role={role} />
           ) : showProjects || showFinances ? (
           <Animated.View
             entering={FadeInDown.delay(320).duration(480)}
