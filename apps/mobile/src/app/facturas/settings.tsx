@@ -10,6 +10,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -38,6 +39,7 @@ function InvoiceSettingsScreenContent() {
   const [taxRate, setTaxRate] = useState(
     String(activeCompany?.tax_rate ?? 0),
   );
+  const [remindersEnabled, setRemindersEnabled] = useState(activeCompany?.payment_reminders_enabled !== false);
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
@@ -85,6 +87,7 @@ function InvoiceSettingsScreenContent() {
         logoUrl: logoUrl.trim() || null,
         invoicePrefix: invoicePrefix.trim().toUpperCase(),
         taxRate: Number.isFinite(rate) ? rate : 0,
+        paymentRemindersEnabled: remindersEnabled,
       });
 
       if (error) {
@@ -275,6 +278,21 @@ function InvoiceSettingsScreenContent() {
             </View>
           </View>
 
+          <View style={styles.reminderCard}>
+            <View style={styles.reminderCopy}>
+              <Text style={styles.label}>Recordatorios de cobro automáticos</Text>
+              <Text style={styles.reminderHelp}>
+                Enviamos un correo al cliente 3 días antes de que venza la factura, al día siguiente de vencer y una semana después, solo si tiene saldo pendiente y correo registrado.
+              </Text>
+            </View>
+            <Switch
+              value={remindersEnabled}
+              onValueChange={setRemindersEnabled}
+              trackColor={{ true: colors.success, false: colors.border }}
+              accessibilityLabel="Recordatorios de cobro automáticos"
+            />
+          </View>
+
           <Pressable
             onPress={handleSave}
             disabled={saving}
@@ -300,6 +318,21 @@ function InvoiceSettingsScreenContent() {
 }
 
 const styles = StyleSheet.create({
+  reminderCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 8,
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  reminderCopy: { flex: 1 },
+  reminderHelp: { marginTop: 4, color: colors.textSecondary, fontSize: 12, lineHeight: 17 },
+
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

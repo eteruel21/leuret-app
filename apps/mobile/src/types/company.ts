@@ -24,6 +24,8 @@ export type Company = {
   logo_url: string | null;
   currency_code: string;
   tax_rate: number;
+  /** Correos automáticos de cobro a clientes (antes y después del vencimiento). */
+  payment_reminders_enabled?: boolean;
   timezone: string;
   quotation_prefix: string;
   invoice_prefix: string;

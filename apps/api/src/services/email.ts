@@ -424,3 +424,86 @@ La invitación vence en 7 días.
     html
   });
 }
+
+export type InvoiceReminderKind = "due_soon" | "overdue" | "overdue_week";
+
+type InvoiceReminderEmailInput = {
+  to: string;
+  kind: InvoiceReminderKind;
+  clientName?: string | null;
+  companyName: string;
+  companyEmail?: string | null;
+  companyPhone?: string | null;
+  invoiceNumber?: string | null;
+  dueDate: string;
+  amount: string;
+};
+
+/** Texto del recordatorio según el momento: cordial antes, más directo después. */
+export function invoiceReminderCopy(kind: InvoiceReminderKind, invoiceLabel: string, amount: string, dueDate: string) {
+  if (kind === "due_soon") {
+    return {
+      subject: `Recordatorio: ${invoiceLabel} vence el ${dueDate}`,
+      lead: `Te recordamos que la ${invoiceLabel} por ${amount} vence el ${dueDate}.`
+    };
+  }
+  if (kind === "overdue") {
+    return {
+      subject: `${invoiceLabel} vencida`,
+      lead: `La ${invoiceLabel} por ${amount} venció el ${dueDate} y aún tiene saldo pendiente.`
+    };
+  }
+  return {
+    subject: `Segundo aviso: ${invoiceLabel} pendiente de pago`,
+    lead: `La ${invoiceLabel} por ${amount} sigue pendiente desde el ${dueDate}. Te agradecemos ponerte al día.`
+  };
+}
+
+export async function sendInvoiceReminderEmail(input: InvoiceReminderEmailInput): Promise<EmailDeliveryResult> {
+  const invoiceLabel = input.invoiceNumber ? `factura ${input.invoiceNumber}` : "factura";
+  const copy = invoiceReminderCopy(input.kind, invoiceLabel, input.amount, input.dueDate);
+  const companyName = input.companyName.trim() || "tu contratista";
+  const greeting = input.clientName?.trim() ? `Hola, ${input.clientName.trim()}:` : "Hola:";
+  const contact = [input.companyPhone?.trim(), input.companyEmail?.trim()].filter(Boolean).join(" · ");
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>${escapeHtml(copy.subject)}</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f6f1e7; color: #1e2a3a; margin: 0; padding: 24px; }
+        .container { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #ddd8cf; padding: 32px; }
+        .company { font-size: 18px; font-weight: 800; }
+        .amount { font-size: 26px; font-weight: 800; margin: 16px 0 4px; }
+        .muted { color: #5e6d7d; font-size: 14px; }
+        .footer { font-size: 12px; color: #5e6d7d; margin-top: 28px; border-top: 1px solid #e7e1d7; padding-top: 16px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="company">${escapeHtml(companyName)}</div>
+        <p>${escapeHtml(greeting)}</p>
+        <p>${escapeHtml(copy.lead)}</p>
+        <div class="amount">${escapeHtml(input.amount)}</div>
+        <div class="muted">Saldo pendiente · vence ${escapeHtml(input.dueDate)}</div>
+        <p>Si ya realizaste el pago, ignora este mensaje. Para cualquier consulta, comunícate con ${escapeHtml(companyName)}${contact ? `: ${escapeHtml(contact)}` : "."}</p>
+        <p class="footer">Enviado por Leuret en nombre de ${escapeHtml(companyName)}.</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const text = `
+${greeting}
+
+${copy.lead}
+
+Saldo pendiente: ${input.amount} (vence ${input.dueDate})
+
+Si ya realizaste el pago, ignora este mensaje. Consultas: ${companyName}${contact ? ` (${contact})` : ""}.
+  `.trim();
+
+  return deliverWithResend({ to: input.to, subject: `${copy.subject} · ${companyName}`, text, html });
+}
