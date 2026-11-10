@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   listMailThreads: vi.fn(),
   listMailMessages: vi.fn(),
   readMailMessage: vi.fn(),
+  getMailAttachmentDownload: vi.fn(),
   markMailThreadRead: vi.fn(),
   replyToMailMessage: vi.fn()
 }));
@@ -48,6 +49,7 @@ describe("LEURET ADMIN - correos Resend", () => {
     mocks.listMailThreads.mockResolvedValue({ data: [], hasMore: false });
     mocks.listMailMessages.mockResolvedValue({ data: [], hasMore: false });
     mocks.readMailMessage.mockResolvedValue({ id: EMAIL_ID, text: "Consulta" });
+    mocks.getMailAttachmentDownload.mockResolvedValue({ filename: "archivo.pdf", downloadUrl: "https://example.com/signed" });
     mocks.markMailThreadRead.mockResolvedValue(undefined);
     mocks.replyToMailMessage.mockResolvedValue({ id: "email-outbound-1" });
   });
@@ -103,6 +105,21 @@ describe("LEURET ADMIN - correos Resend", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().text).toBe("Consulta");
     expect(mocks.readMailMessage).toHaveBeenCalledWith("privacy", THREAD_ID, EMAIL_ID);
+    await app.close();
+  });
+
+
+  test("el adjunto exige autenticación y UUID válidos", async () => {
+    const app = await createApp();
+    const url = `/admin/mail/privacy/threads/${THREAD_ID}/emails/${EMAIL_ID}/attachments/${IDEMPOTENCY_KEY}`;
+    const blocked = await app.inject({ method: "GET", url });
+    expect(blocked.statusCode).toBe(403);
+    expect(mocks.getMailAttachmentDownload).not.toHaveBeenCalled();
+    const allowed = await app.inject({ method: "GET", url, headers: auth() });
+    expect(allowed.statusCode).toBe(200);
+    expect(mocks.getMailAttachmentDownload).toHaveBeenCalledWith(
+      "privacy", THREAD_ID, EMAIL_ID, IDEMPOTENCY_KEY
+    );
     await app.close();
   });
 
