@@ -477,15 +477,42 @@ export async function listBudgetsForClient(
   }
 }
 
+export type ClientBudgetCompany = {
+  id?: string;
+  name?: string;
+  legal_name?: string | null;
+  tax_id?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  logo_url?: string | null;
+  currency_code?: string;
+  timezone?: string | null;
+};
+
+export type ClientBudgetDetail = Budget & {
+  sections: BudgetSection[];
+  items: BudgetItem[];
+  company?: ClientBudgetCompany | null;
+  project?: { name?: string; code?: string | null } | null;
+  client?: Pick<Client, "id" | "client_type" | "first_name" | "last_name" | "business_name" | "email" | "phone"> | null;
+};
+
 export async function getClientBudgetDetail(
   budgetId: string
 ): Promise<{
-  budget: (Budget & { sections: BudgetSection[]; items: BudgetItem[]; company?: { name?: string; currency_code?: string } | null; project?: { name?: string } | null }) | null;
+  budget: ClientBudgetDetail | null;
   error: string | null;
 }> {
   try {
     const response = await authenticatedRequest<{
-      budget: BudgetRow & { sections: BudgetSection[]; items: BudgetItemRow[]; company?: { name?: string; currency_code?: string } | null; project?: { name?: string } | null };
+      budget: BudgetRow & {
+        sections: BudgetSection[];
+        items: BudgetItemRow[];
+        company?: ClientBudgetDetail["company"];
+        project?: ClientBudgetDetail["project"];
+        client?: ClientBudgetDetail["client"];
+      };
     }>(`/budgets/client/${budgetId}`);
 
     const b = response.budget;
@@ -495,7 +522,8 @@ export async function getClientBudgetDetail(
         sections: b.sections || [],
         items: (b.items || []).map(normalizeItem),
         company: b.company,
-        project: b.project
+        project: b.project,
+        client: b.client ?? null
       },
       error: null
     };
@@ -512,6 +540,23 @@ export async function approveBudget(
     const response = await authenticatedRequest<{ budget: BudgetRow }>(`/budgets/${budgetId}/approve`, {
       method: "POST",
       body: JSON.stringify({ companyId })
+    });
+    return { budget: normalizeBudget(response.budget), error: null };
+  } catch (error) {
+    return { budget: null, error: errorMessage(error) };
+  }
+}
+
+/** Envía un borrador al cliente (queda visible en su portal y le llega un aviso). */
+export async function sendBudget(
+  companyId: string,
+  budgetId: string,
+  validUntil: string | null
+): Promise<{ budget: Budget | null; error: string | null }> {
+  try {
+    const response = await authenticatedRequest<{ budget: BudgetRow }>(`/budgets/${budgetId}/send`, {
+      method: "POST",
+      body: JSON.stringify({ companyId, validUntil })
     });
     return { budget: normalizeBudget(response.budget), error: null };
   } catch (error) {

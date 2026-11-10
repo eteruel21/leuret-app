@@ -86,3 +86,27 @@ export async function deleteProjectPhotoRepo(userId: string, companyId: string, 
     return result.rows[0] ?? null;
   });
 }
+
+/** El equipo decide si el cliente ve la foto en su portal. */
+export async function updateProjectPhotoSharingRepo(
+  userId: string,
+  companyId: string,
+  projectId: string,
+  photoId: string,
+  sharedWithClient: boolean,
+  caption?: string | null
+) {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query(
+      `
+        UPDATE public.project_photos
+        SET is_private = $4,
+            caption = CASE WHEN $5::boolean THEN $6 ELSE caption END
+        WHERE id = $1 AND company_id = $2 AND project_id = $3
+        RETURNING *
+      `,
+      [photoId, companyId, projectId, !sharedWithClient, caption !== undefined, caption ?? null]
+    );
+    return result.rows[0] ?? null;
+  });
+}

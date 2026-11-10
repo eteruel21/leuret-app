@@ -117,6 +117,15 @@ export const approveBudgetSchema = z.object({
   companyId: uuidSchema.optional()
 });
 
+export const sendBudgetSchema = z.object({
+  companyId: uuidSchema,
+  validUntil: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "La vigencia debe tener formato AAAA-MM-DD.")
+    .nullable()
+    .optional()
+});
+
 export const rejectBudgetSchema = z.object({
   companyId: uuidSchema.optional(),
   rejectionReason: z.string().trim().min(2, "El motivo de rechazo es obligatorio.").max(2000)

@@ -90,6 +90,16 @@ export default function ClientTabsLayout() {
       />
 
       <Tabs.Screen
+        name="facturas"
+        options={{
+          title: "Facturas",
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon focused={focused} active="receipt" inactive="receipt-outline" color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
         name="cuenta"
         options={{
           title: "Cuenta",

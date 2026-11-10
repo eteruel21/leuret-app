@@ -82,7 +82,8 @@ jobs:
             --exclude src/admin/__tests__/admin-session-revocation.test.ts \
             --exclude src/db/__tests__/with-user-transaction.test.ts \
             --exclude src/budgets/__tests__/budgets.test.ts \
-            --exclude src/invoices/__tests__/document_numbering.test.ts
+            --exclude src/invoices/__tests__/document_numbering.test.ts \
+            --exclude src/client-portal/__tests__/client-portal.test.ts
 
       - name: 8. Prepare isolated authorization database
         env:
@@ -123,7 +124,8 @@ jobs:
             src/admin/__tests__/admin-session-revocation.test.ts \
             src/db/__tests__/with-user-transaction.test.ts \
             src/budgets/__tests__/budgets.test.ts \
-            src/invoices/__tests__/document_numbering.test.ts
+            src/invoices/__tests__/document_numbering.test.ts \
+            src/client-portal/__tests__/client-portal.test.ts
 
       - name: 11. Test mobile app
         run: npm run test -w apps/mobile

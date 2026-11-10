@@ -15,13 +15,19 @@ export async function findClientBudgets(userId: string) {
         END AS project,
         CASE
           WHEN company.id IS NULL THEN NULL
-          ELSE jsonb_build_object('name', company.name)
+          ELSE jsonb_build_object('id', company.id, 'name', company.name, 'currency_code', company.currency_code)
         END AS company
       FROM public.budgets AS budget
-      JOIN public.clients AS customer ON customer.id = budget.client_id
+      JOIN public.clients AS customer
+        ON customer.id = budget.client_id
+       AND customer.company_id = budget.company_id
       LEFT JOIN public.projects AS project ON project.id = budget.project_id
       LEFT JOIN public.companies AS company ON company.id = budget.company_id
       WHERE customer.user_id = app.current_user_id()
+        AND customer.active = true
+        -- Defensa adicional a la RLS: el cliente nunca ve borradores ni anulados,
+        -- aunque además sea miembro de la empresa.
+        AND budget.status NOT IN ('draft', 'cancelled')
       ORDER BY budget.created_at DESC
     `);
     return result.rows;
@@ -40,14 +46,38 @@ export async function getClientBudgetDetailRepo(userId: string, budgetId: string
           END AS project,
           CASE
             WHEN company.id IS NULL THEN NULL
-            ELSE jsonb_build_object('name', company.name, 'phone', company.phone, 'email', company.email)
-          END AS company
+            ELSE jsonb_build_object(
+              'id', company.id,
+              'name', company.name,
+              'legal_name', company.legal_name,
+              'tax_id', company.tax_id,
+              'phone', company.phone,
+              'email', company.email,
+              'address', company.address,
+              'logo_url', company.logo_url,
+              'currency_code', company.currency_code,
+              'timezone', company.timezone
+            )
+          END AS company,
+          jsonb_build_object(
+            'id', customer.id,
+            'client_type', customer.client_type,
+            'first_name', customer.first_name,
+            'last_name', customer.last_name,
+            'business_name', customer.business_name,
+            'email', customer.email,
+            'phone', customer.phone
+          ) AS client
         FROM public.budgets AS budget
-        JOIN public.clients AS customer ON customer.id = budget.client_id
+        JOIN public.clients AS customer
+          ON customer.id = budget.client_id
+         AND customer.company_id = budget.company_id
         LEFT JOIN public.projects AS project ON project.id = budget.project_id
         LEFT JOIN public.companies AS company ON company.id = budget.company_id
         WHERE budget.id = $1
           AND customer.user_id = app.current_user_id()
+          AND customer.active = true
+          AND budget.status NOT IN ('draft', 'cancelled')
         LIMIT 1
       `,
       [budgetId]
@@ -77,9 +107,27 @@ export async function getClientBudgetDetailRepo(userId: string, budgetId: string
       [budget.id]
     );
 
+    // El cliente ve precios de venta, nunca costos internos ni el desglose de
+    // materiales (que trae costos).
     const itemsResult = await client.query(
       `
-        SELECT *
+        SELECT
+          id,
+          company_id,
+          budget_id,
+          section_id,
+          item_type,
+          description,
+          unit_name,
+          quantity,
+          unit_price,
+          discount_percentage,
+          subtotal,
+          taxable,
+          sort_order,
+          notes,
+          created_at,
+          updated_at
         FROM public.budget_items
         WHERE budget_id = $1
         ORDER BY sort_order ASC, created_at ASC
@@ -87,8 +135,12 @@ export async function getClientBudgetDetailRepo(userId: string, budgetId: string
       [budget.id]
     );
 
+    // Las notas del presupuesto son internas del equipo; al cliente se le
+    // muestran la descripción y las condiciones.
+    const { notes: _internalNotes, ...clientBudget } = budget;
+
     return {
-      ...budget,
+      ...clientBudget,
       sections: sectionsResult.rows,
       items: itemsResult.rows
     };
@@ -654,5 +706,94 @@ export async function applyBudgetPriceUpdatesRepo(
     }
 
     return { updatedCount: result.rowCount ?? 0 };
+  });
+}
+
+export class BudgetSendError extends Error {
+  constructor(
+    readonly code: "not_found" | "not_draft" | "empty" | "invalid_validity",
+    message: string
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Envía un borrador al cliente: pasa a "sent", fija la vigencia y deja
+ * constancia en el historial. Devuelve también el usuario vinculado del
+ * cliente (si tiene cuenta) para avisarle.
+ */
+export async function sendBudgetRepo(
+  userId: string,
+  budgetId: string,
+  companyId: string,
+  validUntil?: string | null
+) {
+  return withUserTransaction(userId, async (client) => {
+    const current = await client.query<{
+      status: string;
+      version: number;
+      valid_until: string | null;
+      item_count: number;
+      client_user_id: string | null;
+    }>(
+      `
+        SELECT
+          budget.status,
+          budget.version,
+          budget.valid_until::text AS valid_until,
+          (SELECT count(*)::int FROM public.budget_items AS item WHERE item.budget_id = budget.id) AS item_count,
+          customer.user_id AS client_user_id
+        FROM public.budgets AS budget
+        LEFT JOIN public.clients AS customer
+          ON customer.id = budget.client_id
+         AND customer.company_id = budget.company_id
+         AND customer.active = true
+        WHERE budget.id = $1 AND budget.company_id = $2
+        LIMIT 1
+        FOR UPDATE OF budget
+      `,
+      [budgetId, companyId]
+    );
+
+    const row = current.rows[0];
+    if (!row) throw new BudgetSendError("not_found", "No se encontró el presupuesto.");
+    if (row.status !== "draft") {
+      throw new BudgetSendError("not_draft", "Solo se pueden enviar presupuestos en borrador.");
+    }
+    if (row.item_count === 0) {
+      throw new BudgetSendError("empty", "Agrega al menos una partida antes de enviarlo.");
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const effectiveValidUntil = validUntil ?? row.valid_until;
+    if (effectiveValidUntil && effectiveValidUntil.slice(0, 10) < today) {
+      throw new BudgetSendError("invalid_validity", "La fecha de vigencia ya pasó.");
+    }
+
+    const updated = await client.query(
+      `
+        UPDATE public.budgets
+        SET status = 'sent',
+            valid_until = COALESCE($3::date, valid_until),
+            updated_at = now()
+        WHERE id = $1 AND company_id = $2
+        RETURNING *
+      `,
+      [budgetId, companyId, validUntil ?? null]
+    );
+
+    await client.query(
+      `
+        INSERT INTO public.budget_change_history (company_id, budget_id, version, action, performed_by, notes)
+        VALUES ($1, $2, $3, 'sent', app.current_user_id(), 'Presupuesto enviado al cliente')
+      `,
+      [companyId, budgetId, row.version]
+    );
+
+    return {
+      budget: updated.rows[0],
+      clientUserId: row.client_user_id
+    };
   });
 }
