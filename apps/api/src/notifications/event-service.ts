@@ -1,5 +1,6 @@
 import { safeErrorDetails } from "../security/redaction.js";
 import { sendPushNotificationToUser } from "./push-service.js";
+import { findCompanyManagerIdsRepo } from "./repository.js";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -40,30 +41,58 @@ async function dispatchEventPush(
   }
 }
 
+function formatAmount(value: unknown, currency: string | null): string | null {
+  const amount = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  try {
+    return new Intl.NumberFormat("es-PA", { style: "currency", currency: currency || "USD" }).format(amount);
+  } catch {
+    return amount.toFixed(2);
+  }
+}
+
+/** Destinatarios sin repetir: el creador primero y luego owners/admins. */
+export function budgetDecisionRecipients(creatorId: string | null, managerIds: string[]): string[] {
+  return [...new Set([creatorId, ...managerIds].filter((id): id is string => Boolean(id)))];
+}
+
 export async function notifyBudgetDecision(
   budgetValue: unknown,
   decision: "approved" | "rejected"
 ): Promise<void> {
   const budget = asRecord(budgetValue);
-  const recipientUserId = textField(budget, "created_by");
+  const creatorId = textField(budget, "created_by");
   const budgetId = textField(budget, "id");
   const companyId = textField(budget, "company_id");
   const budgetNumber = textField(budget, "budget_number");
   const displayNumber = budgetNumber ? ` ${budgetNumber}` : "";
   const approved = decision === "approved";
+  const amount = formatAmount(budget?.total, textField(budget, "currency_code"));
+  const reason = textField(budget, "rejection_reason");
 
-  await dispatchEventPush(
-    recipientUserId,
-    approved ? "Presupuesto aprobado" : "Presupuesto rechazado",
-    approved
-      ? `El cliente aprobó el presupuesto${displayNumber}.`
-      : `El cliente rechazó el presupuesto${displayNumber}.`,
-    {
-      type: approved ? "budget.approved" : "budget.rejected",
-      ...(budgetId ? { budgetId } : {}),
-      ...(companyId ? { companyId } : {})
+  // El dueño y los administradores también se enteran, no solo quien lo creó.
+  let managerIds: string[] = [];
+  if (creatorId && companyId) {
+    try {
+      managerIds = await findCompanyManagerIdsRepo(creatorId, companyId);
+    } catch (error) {
+      console.error("No se pudo obtener el equipo a notificar:", safeErrorDetails(error));
     }
-  );
+  }
+
+  const title = approved ? "Presupuesto aprobado" : "Presupuesto rechazado";
+  const body = approved
+    ? `El cliente aprobó el presupuesto${displayNumber}${amount ? ` por ${amount}` : ""}.`
+    : `El cliente rechazó el presupuesto${displayNumber}${reason ? `: "${reason.slice(0, 120)}"` : "."}`;
+  const data = {
+    type: approved ? "budget.approved" : "budget.rejected",
+    ...(budgetId ? { budgetId } : {}),
+    ...(companyId ? { companyId } : {})
+  };
+
+  for (const recipientId of budgetDecisionRecipients(creatorId, managerIds)) {
+    await dispatchEventPush(recipientId, title, body, data);
+  }
 }
 
 export async function notifyInvoiceIssued(invoiceValue: unknown): Promise<void> {
