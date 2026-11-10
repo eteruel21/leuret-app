@@ -1,7 +1,7 @@
 import { Buffer as NodeBuffer } from "node:buffer";
 import type { FastifyInstance } from "fastify";
 import { requireSuperAdmin } from "./authorize.js";
-import { getAdminCompanyDetailService, listAdminCompaniesService } from "./companies-services.js";
+import { getAdminCompanyDetailService, listAdminCompaniesService, updateAdminCompanyStatusService } from "./companies-services.js";
 import {
   getContractorDocument,
   getContractorReview,
@@ -10,6 +10,7 @@ import {
 import { getUserProfileDetails } from "../profile/details.js";
 import {
   companyParamsSchema,
+  companyStatusSchema,
   userParamsSchema,
   userSchema,
   categorySchema,
@@ -77,6 +78,38 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
 
       reply.header("Cache-Control", "private, no-store");
       return detail;
+    }
+  );
+
+  app.patch(
+    "/admin/companies/:companyId/status",
+    {
+      preHandler: requireSuperAdmin
+    },
+    async (request, reply) => {
+      const params = companyParamsSchema.safeParse(request.params);
+      const body = companyStatusSchema.safeParse(request.body);
+      if (!params.success || !body.success) {
+        return reply.status(400).send({
+          message: body.success ? "La empresa indicada no es válida." : body.error.issues[0]?.message ?? "Datos no válidos."
+        });
+      }
+
+      const company = await updateAdminCompanyStatusService(
+        request.authenticatedUser!.id,
+        params.data.companyId,
+        body.data.active,
+        body.data.reason
+      );
+      if (!company) {
+        return reply.status(404).send({ message: "No se encontró la empresa." });
+      }
+
+      request.log.warn(
+        { companyId: company.id, active: company.active, adminId: request.authenticatedUser!.id },
+        company.active ? "Empresa reactivada desde el panel." : "Empresa suspendida desde el panel."
+      );
+      return { company };
     }
   );
 

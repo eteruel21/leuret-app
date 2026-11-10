@@ -193,13 +193,15 @@ export function requireCompanyRole(allowedRoles: ("owner" | "admin" | "estimator
           const result = await client.query<{
             role: string;
             active: boolean;
+            company_active: boolean | null;
           }>(
             `
-              SELECT role, active
-              FROM public.company_members
-              WHERE company_id = $1
-                AND user_id = $2
-                AND active = true
+              SELECT member.role, member.active, company.active AS company_active
+              FROM public.company_members AS member
+              LEFT JOIN public.companies AS company ON company.id = member.company_id
+              WHERE member.company_id = $1
+                AND member.user_id = $2
+                AND member.active = true
               LIMIT 1
             `,
             [companyId, userId]
@@ -210,6 +212,12 @@ export function requireCompanyRole(allowedRoles: ("owner" | "admin" | "estimator
       );
       if (!membership) {
         reply.status(403).send({ message: "No eres miembro de esta empresa." });
+        return;
+      }
+
+      // Una empresa suspendida desde el panel no puede operar.
+      if (membership.company_active === false) {
+        reply.status(403).send({ message: "Esta empresa está suspendida. Contacta a soporte de Leuret." });
         return;
       }
 

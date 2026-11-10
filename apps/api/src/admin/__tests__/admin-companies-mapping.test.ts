@@ -35,3 +35,11 @@ test("Panel de empresas: sin actividad ni propietario queda en null y ceros", ()
   assert.equal(company.lastActivityAt, null);
   assert.equal(company.active, false);
 });
+
+test("Suspender empresa: exige motivo, reactivar no", async () => {
+  const { companyStatusSchema } = await import("../schemas.js");
+  assert.equal(companyStatusSchema.safeParse({ active: false, reason: "" }).success, false);
+  assert.equal(companyStatusSchema.safeParse({ active: false, reason: "Falta de pago" }).success, true);
+  assert.equal(companyStatusSchema.safeParse({ active: true }).success, true);
+  assert.equal(companyStatusSchema.safeParse({ active: "no" }).success, false);
+});

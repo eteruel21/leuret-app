@@ -45,6 +45,13 @@ export type AdminCompanyDetail = {
     phone: string | null;
     profileActive: boolean | null;
   }>;
+  statusHistory: Array<{
+    id: string;
+    action: "COMPANY_SUSPENDED" | "COMPANY_REACTIVATED" | string;
+    reason: string | null;
+    actorName: string | null;
+    createdAt: string | null;
+  }>;
   recentProjects: Array<{
     id: string;
     name: string;
@@ -62,6 +69,13 @@ export async function loadAdminCompanies(): Promise<AdminCompany[]> {
 
 export async function loadAdminCompanyDetail(companyId: string): Promise<AdminCompanyDetail> {
   return authenticatedRequest<AdminCompanyDetail>(`/admin/companies/${companyId}`);
+}
+
+export async function updateAdminCompanyStatus(companyId: string, active: boolean, reason: string) {
+  return authenticatedRequest<{ company: { id: string; name: string; active: boolean } }>(
+    `/admin/companies/${companyId}/status`,
+    { method: "PATCH", body: JSON.stringify({ active, reason }) }
+  );
 }
 
 export const COMPANY_ROLE_LABELS: Record<string, string> = {
