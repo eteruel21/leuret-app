@@ -41,6 +41,13 @@ export const budgetItemTypeSchema = z.enum([
   "manual"
 ]);
 
+export const budgetItemMaterialSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  quantity: z.number().positive().max(1_000_000),
+  unit: z.string().trim().min(1).max(40),
+  cost: z.number().min(0).max(100_000_000).optional()
+});
+
 export const createBudgetItemSchema = z.object({
   companyId: uuidSchema,
 
@@ -97,7 +104,13 @@ export const createBudgetItemSchema = z.object({
     .trim()
     .max(2000)
     .optional()
-    .default("")
+    .default(""),
+
+  materials: z
+    .array(budgetItemMaterialSchema)
+    .max(50)
+    .nullable()
+    .optional()
 });
 
 export const approveBudgetSchema = z.object({

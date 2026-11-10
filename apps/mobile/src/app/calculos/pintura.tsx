@@ -10,6 +10,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../../constants/theme";
 import { useCompany } from "../../contexts/CompanyContext";
 import { addBudgetItem } from "../../services/budget-service";
+import { compactMaterials, material } from "../../services/budget-materials";
 import { listCatalogItems } from "../../services/catalog-service";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
@@ -159,13 +160,18 @@ export default function PaintScreen() {
       return;
     }
     const price = result.totalCost / result.netArea;
-    const cost = budgetUnitCost(compute(withCatalogCosts(form, tracked)).totalCost,
+    const c = compute(withCatalogCosts(form, tracked));
+    const cost = budgetUnitCost(c.totalCost,
       result.netArea, price);
     const response = await addBudgetItem({
       companyId: activeCompany.id, budgetId, itemType: "service",
       description: `Pintura de paredes (${Math.round(num(form.coats))} manos)`,
       unitName: "m²", quantity: result.netArea, unitCost: cost,
       unitPrice: price, taxable: true,
+      materials: compactMaterials([
+        material("Pintura", c.paintGallonsToBuy, "gal", c.paintCost),
+        primer && material("Primer", c.primerGallonsToBuy, "gal", c.primerCost),
+      ]),
       notes: `${result.paintGallonsToBuy} galones de pintura` +
         (primer ? ` · ${result.primerGallonsToBuy} galones de primer` : ""),
     });

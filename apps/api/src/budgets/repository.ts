@@ -279,10 +279,11 @@ export async function addBudgetItemRepo(userId: string, budgetId: string, input:
           unit_price,
           discount_percentage,
           taxable,
-          notes
+          notes,
+          materials
         )
         VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb
         )
         RETURNING *
       `,
@@ -300,7 +301,10 @@ export async function addBudgetItemRepo(userId: string, budgetId: string, input:
         input.unitPrice,
         input.discountPercentage,
         input.taxable,
-        input.notes || null
+        input.notes || null,
+        input.materials && input.materials.length > 0
+          ? JSON.stringify(input.materials)
+          : null
       ]
     );
 

@@ -18,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../../constants/theme";
 import { useCompany } from "../../contexts/CompanyContext";
 import { addBudgetItem } from "../../services/budget-service";
+import { compactMaterials, material } from "../../services/budget-materials";
 import { listCatalogItems } from "../../services/catalog-service";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
@@ -303,8 +304,9 @@ export default function FlooringScreen() {
     }
 
     const unitPrice = result.totalCost / result.netArea;
+    const c = (compute(withCatalogCosts(form, tracked)) ?? result);
     const unitCost = budgetUnitCost(
-      (compute(withCatalogCosts(form, tracked)) ?? result).totalCost,
+      c.totalCost,
       result.netArea, unitPrice);
     const floorLabel =
       floorType === "ceramica" ? "Cerámica" : "Porcelanato";
@@ -321,6 +323,11 @@ export default function FlooringScreen() {
       unitCost,
       unitPrice,
       taxable: true,
+      materials: compactMaterials([
+        material(`Piso ${form.tileLengthCm} × ${form.tileWidthCm} cm`, c.boxesToBuy, "caja", c.flooringCost),
+        material("Adhesivo para piso", c.adhesiveBagsToBuy, "saco", c.adhesiveCost),
+        material("Boquilla", c.groutBagsToBuy, "bolsa", c.groutCost),
+      ]),
       notes:
         `${result.boxesToBuy} cajas · ` +
         `${result.adhesiveBagsToBuy} sacos de adhesivo · ` +

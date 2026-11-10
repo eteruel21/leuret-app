@@ -61,6 +61,7 @@ import {
 } from "@/types/budget";
 
 import { shareBudgetPdf } from "@/utils/budget-pdf";
+import { ShoppingListModal } from "@/components/ShoppingListModal";
 
 import { listCatalogItems } from "@/services/catalog-service";
 import type { CatalogItemWithDetails } from "@/types/catalog";
@@ -85,6 +86,8 @@ export default function BudgetDetailScreen() {
   const [modalVisible, setModalVisible] =
     useState(false);
   const [catalogModalVisible, setCatalogModalVisible] =
+    useState(false);
+  const [shoppingListVisible, setShoppingListVisible] =
     useState(false);
   const [sharingPdf, setSharingPdf] =
     useState(false);
@@ -405,6 +408,21 @@ export default function BudgetDetailScreen() {
           )}
         </View>
 
+        <Pressable
+          onPress={() => setShoppingListVisible(true)}
+          style={({ pressed }) => [
+            styles.shoppingButton,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Ionicons
+            name="cart-outline"
+            size={20}
+            color={colors.primary}
+          />
+          <Text style={styles.shoppingButtonText}>Lista de compras</Text>
+        </Pressable>
+
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
@@ -525,6 +543,14 @@ export default function BudgetDetailScreen() {
         sectionId={defaultSection?.id ?? null}
         onClose={() => setModalVisible(false)}
         onCreated={() => void loadBudget(true)}
+      />
+
+      <ShoppingListModal
+        visible={shoppingListVisible}
+        title={budget.budget_number}
+        items={budget.items}
+        currencyCode={budget.currency_code}
+        onClose={() => setShoppingListVisible(false)}
       />
 
       <AddCatalogItemModal
@@ -1516,6 +1542,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+  },
+
+  shoppingButton: {
+    minHeight: 50,
+    marginTop: 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+
+  shoppingButtonText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: "900",
   },
 
   pdfButtonText: {

@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../../constants/theme";
 import { useCompany } from "../../contexts/CompanyContext";
 import { addBudgetItem } from "../../services/budget-service";
+import { compactMaterials, material } from "../../services/budget-materials";
 import { listCatalogItems } from "../../services/catalog-service";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
@@ -195,13 +196,22 @@ export default function PvcCeilingScreen() {
     }
     const n = (value: number) => formatDecimal(value, 0, currency);
     const unitPrice = result.totalCost / result.netArea;
+    const c = (compute(withCatalogCosts(form, tracked)) ?? result);
     const unitCost = budgetUnitCost(
-      (compute(withCatalogCosts(form, tracked)) ?? result).totalCost,
+      c.totalCost,
       result.netArea, unitPrice);
     const response = await addBudgetItem({
       companyId: activeCompany.id, budgetId, itemType: "service",
       description: "Cielo raso PVC", unitName: "m²",
       quantity: result.netArea, unitCost, unitPrice, taxable: true,
+      materials: compactMaterials([
+        material("Lámina de cielo raso PVC", c.panelsToBuy, "und.", c.panelCost),
+        material("Track perimetral", c.trackPieces, "und.", c.trackCost),
+        material("Stud de soporte", c.supportPieces, "und.", c.supportCost),
+        material("Cargador", c.carrierPieces, "und.", c.carrierCost),
+        material("Suspensión", c.hangers, "und.", c.hangerCost),
+        material("Tornillos", c.screwBoxes, "caja", c.screwCost),
+      ]),
       notes: `${n(result.panelsToBuy)} láminas PVC · ${n(result.trackPieces)} tracks · ` +
         `${n(result.supportPieces)} studs · ${n(result.carrierPieces)} cargadores · ` +
         `${n(result.hangers)} suspensiones · ${n(result.screwBoxes)} cajas de tornillos`,
