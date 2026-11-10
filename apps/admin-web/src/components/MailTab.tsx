@@ -9,6 +9,7 @@ import {
   listThreads,
   listMessages,
   getMessage,
+  getAttachmentDownload,
   markRead,
   sendReply
 } from "../mail-api";
@@ -66,6 +67,7 @@ export function MailTab() {
   const [isLoadingMessage, setIsLoadingMessage] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [sending, setSending] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [refreshNumber, setRefreshNumber] = useState(0);
@@ -198,6 +200,33 @@ export function MailTab() {
       setError(errorMessage(cause));
     } finally {
       setIsLoadingMore(false);
+    }
+  }
+
+  async function openAttachment(attachmentId: string) {
+    if (!selectedThreadId || !message || downloading) return;
+    // Open a blank tab during the click event to avoid popup blockers.
+    const preview = window.open("about:blank", "_blank");
+    if (preview) preview.opener = null;
+    setDownloading(attachmentId);
+    setError(null);
+    try {
+      const link = await getAttachmentDownload(mailbox, selectedThreadId, message.id, attachmentId);
+      if (preview) preview.location.href = link.downloadUrl;
+      else {
+        const anchor = document.createElement("a");
+        anchor.href = link.downloadUrl;
+        anchor.target = "_blank";
+        anchor.rel = "noopener noreferrer";
+        document.body.append(anchor);
+        anchor.click();
+        anchor.remove();
+      }
+    } catch (cause) {
+      preview?.close();
+      setError(errorMessage(cause));
+    } finally {
+      setDownloading(null);
     }
   }
 
@@ -340,9 +369,14 @@ export function MailTab() {
                     <div className="mail-attachments">
                       <strong>Archivos adjuntos</strong>
                       {message.attachments?.map((attachment) => (
-                        <span key={attachment.id}><Paperclip size={14} /> {attachment.filename} {attachment.size ? `(${Math.ceil(attachment.size / 1024)} KB)` : ""}</span>
+                        <button className="mail-attachment-button" key={attachment.id} type="button"
+                          onClick={() => void openAttachment(attachment.id)} disabled={downloading !== null}>
+                          {downloading === attachment.id ? <Loader2 className="spin" size={14}/> : <Paperclip size={14}/>}
+                          <span>{attachment.filename} {attachment.size ? `(${Math.ceil(attachment.size / 1024)} KB)` : ""}</span>
+                          <small>Abrir adjunto</small>
+                        </button>
                       ))}
-                      <small>La descarga de archivos se habilitará tras validar el acceso seguro del proveedor.</small>
+                      <small>Abre archivos únicamente si conoces y confías en el remitente.</small>
                     </div>
                   )}
                   <form className="mail-reply-form" onSubmit={(event) => void handleReply(event)}>
