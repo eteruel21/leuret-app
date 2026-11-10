@@ -25,6 +25,8 @@ export type CompanyDashboard = {
   };
   projects: {
     activeCount: number;
+    /** Prospecto, inspección o cotizado. Puede faltar si la API es anterior. */
+    preparingCount?: number;
     lateCount: number;
     lateProjects: {
       id: string;
@@ -41,6 +43,18 @@ export type CompanyDashboard = {
 export function monthChange(thisMonth: number, lastMonth: number): number | null {
   if (!Number.isFinite(thisMonth) || !Number.isFinite(lastMonth) || lastMonth <= 0) return null;
   return Math.round(((thisMonth - lastMonth) / lastMonth) * 100);
+}
+
+/** Detalle de la tarjeta de obras: atrasos primero, luego lo que está por arrancar. */
+export function projectsKpiDetail(projects: CompanyDashboard["projects"]): { text: string; tone: "positive" | "negative" | "default" } {
+  if (projects.lateCount > 0) {
+    return { text: `${projects.lateCount} ${projects.lateCount === 1 ? "atrasada" : "atrasadas"}`, tone: "negative" };
+  }
+  const preparing = projects.preparingCount ?? 0;
+  if (preparing > 0) {
+    return { text: `${preparing} en preparación`, tone: "default" };
+  }
+  return { text: projects.activeCount > 0 ? "Todas a tiempo" : "Sin obras en curso", tone: projects.activeCount > 0 ? "positive" : "default" };
 }
 
 export type AttentionSeverity = "danger" | "warning" | "info";

@@ -121,6 +121,7 @@ const dashboardSql = `
   project_stats AS (
     SELECT
       count(*) FILTER (WHERE project.status IN ('approved', 'in_progress')) AS active_count,
+      count(*) FILTER (WHERE project.status IN ('lead', 'inspection', 'quoted')) AS preparing_count,
       count(*) FILTER (
         WHERE project.status NOT IN ('completed', 'cancelled')
           AND project.estimated_end_date IS NOT NULL
@@ -170,6 +171,7 @@ const dashboardSql = `
     budget_stats.approved_this_month_count::integer AS approved_budget_count,
     budget_stats.approved_this_month_amount::double precision AS approved_budget_amount,
     project_stats.active_count::integer AS active_project_count,
+    project_stats.preparing_count::integer AS preparing_project_count,
     project_stats.late_count::integer AS late_project_count,
     late_projects.items AS late_projects,
     task_stats.overdue_tasks::integer AS overdue_task_count
