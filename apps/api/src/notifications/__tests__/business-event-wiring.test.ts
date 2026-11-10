@@ -28,7 +28,7 @@ describe("conexión de push con eventos de negocio", () => {
       created_by: "contractor-1",
       status: "rejected"
     };
-    // Evitar consultar la base de datos real en esta prueba unitaria.
+    // Flujo del equipo (no es el cliente vinculado).
     vi.spyOn(budgetRepository, "isLinkedClientForBudgetRepo")
       .mockResolvedValue(false);
     vi.spyOn(budgetRepository, "approveBudgetRepo")
@@ -60,6 +60,23 @@ describe("conexión de push con eventos de negocio", () => {
       rejectedBudget,
       "rejected"
     );
+  });
+
+  it("el cliente vinculado responde por la función segura y también notifica", async () => {
+    const approvedBudget = { id: "budget-client", created_by: "contractor-1", status: "approved" };
+    vi.spyOn(budgetRepository, "isLinkedClientForBudgetRepo")
+      .mockResolvedValue(true);
+    const clientResponse = vi.spyOn(budgetRepository, "respondToBudgetAsClientRepo")
+      .mockResolvedValueOnce(approvedBudget);
+    const staffApprove = vi.spyOn(budgetRepository, "approveBudgetRepo");
+    const notifySpy = vi.spyOn(eventService, "notifyBudgetDecision")
+      .mockResolvedValue(undefined);
+
+    await expect(approveBudgetService("client-1", "budget-client")).resolves.toBe(approvedBudget);
+
+    expect(clientResponse).toHaveBeenCalledWith("client-1", "budget-client", "approved");
+    expect(staffApprove).not.toHaveBeenCalled();
+    expect(notifySpy).toHaveBeenCalledWith(approvedBudget, "approved");
   });
 
   it("conecta emisión de factura y registro de pago con el notificador", async () => {
