@@ -1,33 +1,41 @@
 #!/usr/bin/env bash
 set -e
 
-# Contractor App - Guardián de Protección para la Rama Main
-# Este script previene el 'git push' directo a la rama 'main' en entornos locales.
+# Leuret - Guardián de la rama main (hook pre-push).
+# Git envía por stdin una línea por cada ref que se va a empujar:
+#   <ref local> <sha local> <ref remoto> <sha remoto>
+# Solo se bloquea cuando el destino es refs/heads/main, así que se pueden
+# subir o borrar otras ramas aunque estés parado en main.
 
-current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-remote_ref="$1"
-remote_url="$2"
+remote_name="$1"
+blocked=0
 
-echo "🛡️  [Branch Protection] Verificando push hacia la rama objetivo..."
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -z "$remote_ref" ] && continue
+  if [ "$remote_ref" = "refs/heads/main" ]; then
+    blocked=1
+  fi
+done
 
-if [ "$current_branch" = "main" ] || [[ "$remote_ref" == *"refs/heads/main"* ]]; then
+if [ "$blocked" = "1" ]; then
   if [ "$ALLOW_DIRECT_PUSH_TO_MAIN" = "1" ] || [ "$ALLOW_DIRECT_PUSH_TO_MAIN" = "true" ]; then
     echo "⚠️  [Branch Protection] Push directo a 'main' autorizado explícitamente vía ALLOW_DIRECT_PUSH_TO_MAIN."
-  else
-    echo ""
-    echo "❌ [ERROR DE PROTECCIÓN DE RAMA MAIN]"
-    echo "------------------------------------------------------------------"
-    echo "El empuje (push) directo a la rama 'main' está protegido y restringido."
-    echo "Para integrar cambios en 'main':"
-    echo "  1. Cree una rama de función/fix: git checkout -b feat/mi-funcionalidad"
-    echo "  2. Envíe sus cambios a GitHub: git push origin feat/mi-funcionalidad"
-    echo "  3. Abra un Pull Request hacia 'main' para ejecutar las validaciones CI."
-    echo "------------------------------------------------------------------"
-    echo "Si requiere hacer bypass de emergencia en desarrollo local, ejecute:"
-    echo "  ALLOW_DIRECT_PUSH_TO_MAIN=1 git push origin main"
-    echo ""
-    exit 1
+    exit 0
   fi
+
+  echo ""
+  echo "❌ [ERROR DE PROTECCIÓN DE RAMA MAIN]"
+  echo "------------------------------------------------------------------"
+  echo "El empuje (push) directo a la rama 'main' de ${remote_name:-origin} está protegido."
+  echo "Para integrar cambios en 'main':"
+  echo "  1. Cree una rama de función/fix: git checkout -b feat/mi-funcionalidad"
+  echo "  2. Envíe sus cambios a GitHub: git push origin feat/mi-funcionalidad"
+  echo "  3. Abra un Pull Request hacia 'main' para ejecutar las validaciones CI."
+  echo "------------------------------------------------------------------"
+  echo "Si requiere hacer bypass de emergencia en desarrollo local, ejecute:"
+  echo "  ALLOW_DIRECT_PUSH_TO_MAIN=1 git push origin main"
+  echo ""
+  exit 1
 fi
 
-echo "✓ Verificación de protección de rama completada."
+exit 0
