@@ -164,3 +164,23 @@ export const adminSearchQuerySchema = z.object({
 export const revokeSessionsSchema = z.object({
   reason: z.string().trim().min(5, "Indica el motivo (mínimo 5 caracteres).").max(500)
 });
+
+export const PROJECT_STATUSES = [
+  "lead",
+  "inspection",
+  "quoted",
+  "approved",
+  "in_progress",
+  "paused",
+  "completed",
+  "cancelled"
+] as const;
+
+export const adminProjectStatusSchema = z.object({
+  status: z.enum(PROJECT_STATUSES),
+  reason: z.string().trim().min(5, "Indica el motivo (mínimo 5 caracteres).").max(500)
+});
+
+export const adminCancelInvoiceSchema = z.object({
+  reason: z.string().trim().min(5, "Indica el motivo (mínimo 5 caracteres).").max(500)
+});

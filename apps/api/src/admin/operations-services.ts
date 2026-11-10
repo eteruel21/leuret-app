@@ -426,3 +426,15 @@ export async function adminGlobalSearchService(userId: string, query: string) {
     clients: map(result.clients)
   };
 }
+
+/**
+ * Las funciones SQL de soporte avisan de reglas de negocio con RAISE EXCEPTION
+ * (código P0001). Esos mensajes los escribimos nosotros y se pueden mostrar.
+ */
+export function businessRuleMessage(error: unknown): string | null {
+  if (error && typeof error === "object" && "code" in error && (error as { code?: unknown }).code === "P0001") {
+    const message = (error as { message?: unknown }).message;
+    return typeof message === "string" && message ? message : null;
+  }
+  return null;
+}

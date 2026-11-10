@@ -77,6 +77,8 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   MEMBER_DEACTIVATED: "Miembro desactivado",
   MEMBER_ROLE_UPDATED: "Rol de miembro cambiado",
   MEMBER_REMOVED: "Miembro eliminado",
+  ADMIN_PROJECT_STATUS_CHANGED: "Estado de obra cambiado por admin",
+  ADMIN_INVOICE_CANCELLED: "Factura anulada por admin",
 };
 
 export const REMINDER_KIND: Record<string, string> = {
@@ -378,6 +380,20 @@ export const loadAuditLogs = (query: ListQuery) =>
 
 export const globalSearch = (q: string) =>
   authenticatedRequest<GlobalSearchResult>(`/admin/search?q=${encodeURIComponent(q.trim())}`);
+
+export async function setProjectStatus(projectId: string, status: string, reason: string): Promise<void> {
+  await authenticatedRequest(`/admin/projects/${encodeURIComponent(projectId)}/status`, {
+    method: "POST",
+    body: JSON.stringify({ status, reason }),
+  });
+}
+
+export async function cancelInvoice(invoiceId: string, reason: string): Promise<void> {
+  await authenticatedRequest(`/admin/invoices/${encodeURIComponent(invoiceId)}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
 
 export async function loadUserSessions(userId: string): Promise<UserSession[]> {
   const response = await authenticatedRequest<{ sessions: UserSession[] }>(

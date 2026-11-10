@@ -828,3 +828,16 @@ button.kpi-card:hover { transform: translateY(-2px); border-color: #2f4a67; }
 @media (prefers-reduced-motion: reduce) {
   .drawer, .drawer-backdrop, .palette-backdrop { animation: none; }
 }
+
+/* Acciones de soporte con motivo */
+.support-action { padding: 12px 14px; border: 1px solid #3a2a1a; border-radius: 12px; background: rgba(120, 53, 15, .12); }
+.support-action-head { display: flex; align-items: center; gap: 10px; color: #fbbf24; }
+.support-action-head > div { flex: 1; min-width: 0; }
+.support-action-head strong, .support-action-head small { display: block; }
+.support-action-head strong { color: #f8fafc; font-size: 13px; }
+.support-action-head small { margin-top: 3px; color: #a3a3a3; font-size: 12px; line-height: 1.4; }
+.support-action-form { margin-top: 12px; display: grid; gap: 10px; }
+.support-action-form textarea, .company-status-form textarea { width: 100%; padding: 10px 12px; border: 1px solid #2a3c52; border-radius: 10px; color: #f8fafc; background: #0b1728; font: inherit; resize: vertical; }
+.support-action-form .actions { justify-content: flex-end; }
+.support-action-error { margin: 0; font-size: 12px; }
+@media (max-width: 760px) { .support-action-head { flex-wrap: wrap; } .support-action-head .button { width: 100%; } }

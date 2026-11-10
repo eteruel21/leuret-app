@@ -80,6 +80,7 @@ jobs:
             --exclude src/auth/__tests__/auth.test.ts \
             --exclude src/auth/__tests__/authorization_rls.test.ts \
             --exclude src/admin/__tests__/admin-session-revocation.test.ts \
+            --exclude src/admin/__tests__/admin-support-actions.test.ts \
             --exclude src/db/__tests__/with-user-transaction.test.ts \
             --exclude src/budgets/__tests__/budgets.test.ts \
             --exclude src/invoices/__tests__/document_numbering.test.ts \
@@ -122,6 +123,7 @@ jobs:
             src/auth/__tests__/auth.test.ts \
             src/auth/__tests__/authorization_rls.test.ts \
             src/admin/__tests__/admin-session-revocation.test.ts \
+            src/admin/__tests__/admin-support-actions.test.ts \
             src/db/__tests__/with-user-transaction.test.ts \
             src/budgets/__tests__/budgets.test.ts \
             src/invoices/__tests__/document_numbering.test.ts \

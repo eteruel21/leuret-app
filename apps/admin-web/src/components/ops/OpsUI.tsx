@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, Loader2, RefreshCw, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Loader2, RefreshCw, Search, ShieldAlert, X } from "lucide-react";
 
 import type { Company } from "../../admin-data";
 import type { ListQuery, Page, Tone } from "../../operations-data";
@@ -71,11 +71,11 @@ export function useAdminList<P extends Page<unknown>>(
 export function useDetail<T>(loader: (id: string) => Promise<T>, id: string | null) {
   const [detail, setDetail] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     if (!id) return undefined;
     let active = true;
-    setDetail(null);
     setError(null);
     loader(id)
       .then((result) => active && setDetail(result))
@@ -83,9 +83,12 @@ export function useDetail<T>(loader: (id: string) => Promise<T>, id: string | nu
     return () => {
       active = false;
     };
-  }, [loader, id]);
+  }, [loader, id, version]);
 
-  return { detail, error };
+  useEffect(() => setDetail(null), [id]);
+
+  const reload = useCallback(() => setVersion((value) => value + 1), []);
+  return { detail, error, reload };
 }
 
 export interface ListToolbarProps {
@@ -358,5 +361,95 @@ export function MonthlyColumns({ data, format }: { data: Array<{ month: string; 
         })}
       </svg>
     </figure>
+  );
+}
+
+/**
+ * Acción de soporte del superadministrador: pide motivo y confirmación antes
+ * de ejecutar. El motivo queda en la auditoría y la empresa lo puede ver.
+ */
+export function SupportAction({
+  title,
+  description,
+  buttonLabel,
+  confirmLabel,
+  danger = false,
+  disabledReason,
+  children,
+  onConfirm,
+}: {
+  title: string;
+  description: string;
+  buttonLabel: string;
+  confirmLabel: string;
+  danger?: boolean;
+  /** Si se indica, la acción no está disponible y se explica por qué. */
+  disabledReason?: string | null;
+  /** Campos extra (por ejemplo, el nuevo estado). */
+  children?: ReactNode;
+  onConfirm: (reason: string) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    if (reason.trim().length < 5) {
+      setError("Indica el motivo (mínimo 5 caracteres). Queda en la auditoría y la empresa lo puede ver.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await onConfirm(reason.trim());
+      setOpen(false);
+      setReason("");
+    } catch (actionError) {
+      setError(errorMessage(actionError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="support-action">
+      <div className="support-action-head">
+        <ShieldAlert size={16} />
+        <div>
+          <strong>{title}</strong>
+          <small>{disabledReason ?? description}</small>
+        </div>
+        {!open && (
+          <button
+            type="button"
+            className={`button ${danger ? "button-danger" : "button-secondary"}`}
+            disabled={Boolean(disabledReason)}
+            onClick={() => setOpen(true)}
+          >
+            {buttonLabel}
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="support-action-form">
+          {children}
+          <label className="field">
+            <span>Motivo (queda en la auditoría y lo ve la empresa)</span>
+            <textarea value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} rows={2} autoFocus />
+          </label>
+          {error && <p className="text-danger support-action-error">{error}</p>}
+          <div className="actions">
+            <button type="button" className="button button-secondary" onClick={() => setOpen(false)} disabled={saving}>
+              Cancelar
+            </button>
+            <button type="button" className={`button ${danger ? "button-danger" : "button-primary"}`} onClick={() => void submit()} disabled={saving}>
+              {saving && <Loader2 className="spin" size={16} />}
+              {confirmLabel}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
