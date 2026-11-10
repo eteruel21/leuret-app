@@ -70,6 +70,7 @@ jobs:
         run: |
           npm --workspace apps/api run test -- \
             src/auth/__tests__/registration-schema.test.ts \
+            src/admin/__tests__/admin-companies-mapping.test.ts \
             src/auth/__tests__/turnstile-validation.test.ts \
             src/auth/__tests__/captcha-bypass.test.ts \
             src/auth/__tests__/password-reset-contract.test.ts \
