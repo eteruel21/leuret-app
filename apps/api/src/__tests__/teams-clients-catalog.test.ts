@@ -15,7 +15,8 @@ import {
 } from "../clients/schemas.js";
 
 import {
-  catalogItemQuerySchema
+  catalogItemQuerySchema,
+  priceRegionSchema
 } from "../catalog/schemas.js";
 
 const companyId = "00000000-0000-4000-8000-000000000001";
@@ -187,4 +188,11 @@ test("T-115 & T-116: valida la query del catálogo con paginación y búsqueda",
     assert.equal(parsed.data.q, "cemento");
     assert.equal(parsed.data.categoryName, "Materiales");
   }
+});
+
+test("valida el esquema de región de precios", () => {
+  assert.equal(priceRegionSchema.safeParse({ regionCode: "chiriqui" }).success, true);
+  assert.equal(priceRegionSchema.safeParse({ regionCode: null }).success, true);
+  assert.equal(priceRegionSchema.safeParse({ regionCode: "Chiriquí" }).success, false);
+  assert.equal(priceRegionSchema.safeParse({}).success, false);
 });

@@ -11,6 +11,8 @@ import {
   findCatalogYieldsRepo,
   createCatalogYieldRepo,
   deactivateCatalogYieldRepo,
+  findPriceRegionsRepo,
+  setUserPriceRegionRepo,
   type CreateItemInput,
   type CreateCategoryInput,
   type CreateYieldInput,
@@ -72,4 +74,12 @@ export async function createCatalogYieldService(userId: string, input: CreateYie
 
 export async function deactivateCatalogYieldService(userId: string, yieldId: string, companyId: string) {
   return deactivateCatalogYieldRepo(userId, yieldId, companyId);
+}
+
+export async function getPriceRegionsService(userId: string) {
+  return findPriceRegionsRepo(userId);
+}
+
+export async function setUserPriceRegionService(userId: string, regionCode: string | null) {
+  return setUserPriceRegionRepo(userId, regionCode);
 }

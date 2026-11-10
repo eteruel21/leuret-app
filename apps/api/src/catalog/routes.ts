@@ -23,7 +23,8 @@ import {
   deactivateCategorySchema,
   createYieldSchema,
   deactivateYieldSchema,
-  catalogItemQuerySchema
+  catalogItemQuerySchema,
+  priceRegionSchema
 } from "./schemas.js";
 
 import {
@@ -38,7 +39,9 @@ import {
   deactivateCatalogCategoryService,
   getCatalogYieldsService,
   createCatalogYieldService,
-  deactivateCatalogYieldService
+  deactivateCatalogYieldService,
+  getPriceRegionsService,
+  setUserPriceRegionService
 } from "./services.js";
 
 function authenticatedUserId(
@@ -324,4 +327,45 @@ export async function registerCatalogRoutes(
       return { success: true };
     }
   );
+
+  app.get(
+    "/catalog/regions",
+    {
+      preHandler: [authenticateRequest, requireActiveUser]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      return getPriceRegionsService(userId);
+    }
+  );
+
+  app.put(
+    "/catalog/region",
+    {
+      preHandler: [authenticateRequest, requireActiveUser]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedBody = priceRegionSchema.safeParse(request.body);
+      if (!parsedBody.success) {
+        return reply.status(400).send({
+          message: "La región no es válida."
+        });
+      }
+
+      const updated = await setUserPriceRegionService(userId, parsedBody.data.regionCode);
+      if (!updated) {
+        return reply.status(404).send({
+          message: "La región no existe o no está activa."
+        });
+      }
+
+      return { success: true, regionCode: parsedBody.data.regionCode ?? "panama_metro" };
+    }
+  );
+
 }
