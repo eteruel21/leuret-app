@@ -32,6 +32,7 @@ import {
   addBudgetItemService,
   deleteBudgetItemService,
   approveBudgetService,
+  clientBudgetResponseError,
   rejectBudgetService,
   getBudgetHistoryService
 } from "./services.js";
@@ -264,6 +265,8 @@ export async function registerBudgetRoutes(
         const budget = await approveBudgetService(userId, parsedParams.data.budgetId, parsedBody.data.companyId);
         return { budget };
       } catch (error) {
+        const known = clientBudgetResponseError(error);
+        if (known) return reply.status(known.status).send({ message: known.message });
         request.log.error(safeErrorDetails(error), "No se pudo aprobar el presupuesto.");
         return reply.status(400).send({ message: "Error al aprobar el presupuesto." });
       }
@@ -298,6 +301,8 @@ export async function registerBudgetRoutes(
         );
         return { budget };
       } catch (error) {
+        const known = clientBudgetResponseError(error);
+        if (known) return reply.status(known.status).send({ message: known.message });
         request.log.error(safeErrorDetails(error), "No se pudo rechazar el presupuesto.");
         return reply.status(400).send({ message: "Error al rechazar el presupuesto." });
       }
