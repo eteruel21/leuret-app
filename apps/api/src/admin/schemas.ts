@@ -136,3 +136,31 @@ export const priceAlertsQuerySchema = z.object({
   staleDays: z.coerce.number().int().min(30).max(1095).optional().default(180),
   minMargin: z.coerce.number().min(0).max(90).optional().default(5)
 });
+
+// ----- Centro de control: listados de obras, presupuestos, facturas, clientes y auditoría
+
+export const adminListQuerySchema = z.object({
+  search: z.string().trim().max(120).optional(),
+  status: z
+    .string()
+    .trim()
+    .max(60)
+    .regex(/^[A-Za-z_]*$/u, "Estado no válido.")
+    .optional()
+    .transform((value) => (value ? value : undefined)),
+  companyId: uuidSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).max(100000).default(0)
+});
+
+export const entityParamsSchema = z.object({
+  id: uuidSchema
+});
+
+export const adminSearchQuerySchema = z.object({
+  q: z.string().trim().min(2).max(120)
+});
+
+export const revokeSessionsSchema = z.object({
+  reason: z.string().trim().min(5, "Indica el motivo (mínimo 5 caracteres).").max(500)
+});

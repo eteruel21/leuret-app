@@ -1,6 +1,7 @@
 import { Buffer as NodeBuffer } from "node:buffer";
 import type { FastifyInstance } from "fastify";
 import { requireSuperAdmin } from "./authorize.js";
+import { registerAdminOperationsRoutes } from "./operations-routes.js";
 import { getAdminCompanyDetailService, listAdminCompaniesService, updateAdminCompanyStatusService } from "./companies-services.js";
 import {
   getContractorDocument,
@@ -493,4 +494,6 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
+  // 12. Centro de control: obras, presupuestos, facturación, clientes, auditoría y sesiones
+  await registerAdminOperationsRoutes(app);
 }
