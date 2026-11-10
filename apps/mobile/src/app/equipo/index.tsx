@@ -414,7 +414,7 @@ function InviteSheet({
   const [role, setRole] = useState<InvitableCompanyRole>("member");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [created, setCreated] = useState<{ email: string; role: InvitableCompanyRole; code: string } | null>(null);
+  const [created, setCreated] = useState<{ email: string; role: InvitableCompanyRole; code: string; emailSent: boolean } | null>(null);
 
   const reset = () => {
     setEmail("");
@@ -445,7 +445,12 @@ function InviteSheet({
     }
 
     onCreated(result.invitation);
-    setCreated({ email: cleanEmail, role, code: result.invitation.acceptanceToken ?? "" });
+    setCreated({
+      email: cleanEmail,
+      role,
+      code: result.invitation.acceptanceToken ?? "",
+      emailSent: result.invitation.emailSent === true,
+    });
   };
 
   const share = async () => {
@@ -480,8 +485,9 @@ function InviteSheet({
                 <Ionicons name="checkmark-circle" size={44} color={colors.success} />
               </View>
               <Text style={styles.successText}>
-                Envía este código a {created.email}. Debe entrar a Leuret con ese mismo correo para unirse como{" "}
-                {ROLE_LABELS[created.role]}.
+                {created.emailSent
+                  ? `Le enviamos un correo a ${created.email} con un enlace para unirse como ${ROLE_LABELS[created.role]}. Si no le llega, compártele también el código.`
+                  : `Envía este código a ${created.email}. Debe entrar a Leuret con ese mismo correo para unirse como ${ROLE_LABELS[created.role]}.`}
               </Text>
               {created.code ? (
                 <View style={styles.codeBox}>

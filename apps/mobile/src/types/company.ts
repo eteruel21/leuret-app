@@ -68,6 +68,8 @@ export type CompanyInvitation = {
   inviter_email?: string | null;
   /** Solo viene al crear la invitación; no se puede volver a consultar. */
   acceptanceToken?: string;
+  /** Si el servidor pudo enviar el correo de invitación. */
+  emailSent?: boolean;
 };
 
 export type AuditLogEntry = {

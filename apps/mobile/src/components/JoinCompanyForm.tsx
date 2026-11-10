@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { LeuretButton } from "@/components/LeuretButton";
@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { acceptCompanyInvitation } from "@/services/users-service";
 import { showAlert } from "@/utils/alert";
+import { clearPendingInvitation, readPendingInvitation } from "@/utils/pending-invitation";
 import { extractInvitationCode, isValidInvitationCode } from "@/utils/team";
 
 /** Formulario para unirse a una empresa con el código de invitación. */
@@ -18,6 +19,21 @@ export function JoinCompanyForm() {
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fromLink, setFromLink] = useState(false);
+
+  // Si llegó desde el enlace del correo, el código ya está listo.
+  useEffect(() => {
+    let active = true;
+    void readPendingInvitation().then((code) => {
+      if (active && code) {
+        setInput(code);
+        setFromLink(true);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const submit = async () => {
     const code = extractInvitationCode(input);
@@ -39,6 +55,7 @@ export function JoinCompanyForm() {
       return;
     }
 
+    await clearPendingInvitation();
     await refreshCompanies(result.companyId);
     setSubmitting(false);
     showAlert("¡Bienvenido!", "Ya formas parte de la empresa. Te llevamos al inicio.");
@@ -70,6 +87,13 @@ export function JoinCompanyForm() {
         style={styles.input}
       />
 
+      {fromLink ? (
+        <View style={styles.linkNotice}>
+          <Ionicons name="mail-open-outline" size={16} color={colors.success} />
+          <Text style={styles.linkNoticeText}>Código cargado desde tu correo de invitación.</Text>
+        </View>
+      ) : null}
+
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <LeuretButton
@@ -81,6 +105,20 @@ export function JoinCompanyForm() {
         onPress={() => void submit()}
         style={styles.button}
       />
+
+      {fromLink ? (
+        <LeuretButton
+          label="Descartar esta invitación"
+          variant="ghost"
+          fullWidth
+          onPress={() => {
+            void clearPendingInvitation();
+            setInput("");
+            setFromLink(false);
+          }}
+          style={styles.discard}
+        />
+      ) : null}
     </ScrollView>
   );
 }
@@ -112,4 +150,7 @@ const styles = StyleSheet.create({
   },
   error: { marginTop: 10, color: colors.danger, fontSize: 13, fontWeight: "700", lineHeight: 19 },
   button: { marginTop: 18 },
+  discard: { marginTop: 8 },
+  linkNotice: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 },
+  linkNoticeText: { flex: 1, color: colors.success, fontSize: 13, fontWeight: "700" },
 });

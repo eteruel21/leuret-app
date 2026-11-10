@@ -6,7 +6,9 @@ import {
   buildVerificationLinks,
   buildPasswordResetLinks,
   sendVerificationEmail,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  buildInvitationLinks,
+  sendCompanyInvitationEmail
 } from "../email.js";
 
 type MutableEmailEnvironment = {
@@ -64,7 +66,7 @@ test("buildVerificationLinks: genera enlaces profundos y web correctos", () => {
 
   assert.equal(
     deepLink,
-    "contractorpro://confirm-email?token=tok_test_verification_123"
+    "leuret://confirm-email?token=tok_test_verification_123"
   );
 
   assert.equal(
@@ -79,7 +81,7 @@ test("buildPasswordResetLinks: genera enlaces profundos y web de recuperación c
 
   assert.equal(
     deepLink,
-    "contractorpro://reset-password?token=tok_test_reset_456"
+    "leuret://reset-password?token=tok_test_reset_456"
   );
 
   assert.equal(
@@ -205,4 +207,46 @@ test("email: un error de red no filtra destinatario ni token", async () => {
 
   assert.equal(loggedOutput.includes(recipient), false);
   assert.equal(loggedOutput.includes(token), false);
+});
+test("buildInvitationLinks: abre la invitación en la app y en la web", () => {
+  const { deepLink, webLink } = buildInvitationLinks("abc_DEF-123");
+  assert.equal(deepLink, "leuret://invitacion?codigo=abc_DEF-123");
+  assert.equal(webLink, "https://app.leurettech.com/invitacion?codigo=abc_DEF-123");
+});
+
+test("email de invitación: incluye empresa, rol, enlaces y código, y escapa HTML", async () => {
+  configureResend();
+  fetchMock.mockResolvedValueOnce({ ok: true });
+
+  const result = await sendCompanyInvitationEmail({
+    to: "nuevo@example.test",
+    token: "invite_token_123",
+    companyName: "Obras <b>Sol</b>",
+    inviterName: "Ana & Luis",
+    roleLabel: "Supervisor"
+  });
+
+  assert.deepEqual(result, { sent: true });
+  const [, request] = fetchMock.mock.calls[0] as [string, { body: string }];
+  const payload = JSON.parse(request.body) as { to: string[]; subject: string; html: string; text: string };
+
+  assert.deepEqual(payload.to, ["nuevo@example.test"]);
+  assert.equal(payload.subject, "Te invitaron a Obras <b>Sol</b> en Leuret");
+  assert.ok(payload.html.includes("Obras &lt;b&gt;Sol&lt;/b&gt;"));
+  assert.ok(!payload.html.includes("<b>Sol</b>"));
+  assert.ok(payload.html.includes("Ana &amp; Luis"));
+  assert.ok(payload.html.includes("leuret://invitacion?codigo=invite_token_123"));
+  assert.ok(payload.text.includes("Supervisor"));
+  assert.ok(payload.text.includes("invite_token_123"));
+});
+
+test("email de invitación: sin Resend configurado no se envía", async () => {
+  const result = await sendCompanyInvitationEmail({
+    to: "nuevo@example.test",
+    token: "t",
+    companyName: "Sol",
+    roleLabel: "Ventas"
+  });
+  assert.deepEqual(result, { sent: false, reason: "not_configured" });
+  assert.equal(fetchMock.mock.calls.length, 0);
 });
