@@ -144,7 +144,10 @@ function RootNavigator() {
         },
       }}
     >
-      {/* Enlace del correo de invitación: accesible con o sin sesión. */}
+      {/* Índice raíz: destino seguro ante enlaces inválidos o rutas protegidas. */}
+      <Stack.Screen name="index" />
+
+      {/* Enlace del correo de invitación: solo se abre con /invitacion. */}
       <Stack.Screen name="invitacion" />
 
       <Stack.Protected guard={!isAuthenticated}>

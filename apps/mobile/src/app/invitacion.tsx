@@ -1,10 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { LeuretButton } from "@/components/LeuretButton";
 import { LeuretLoading } from "@/components/LeuretLoading";
 import { colors, radius } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
@@ -92,11 +91,34 @@ export default function InvitationLinkScreen() {
 
         {state === "login" ? (
           <>
-            <LeuretButton label="Iniciar sesión" icon="log-in-outline" fullWidth onPress={() => router.replace("/login" as Href)} style={styles.button} />
-            <LeuretButton label="Crear cuenta" variant="secondary" fullWidth onPress={() => router.replace("/registro" as Href)} style={styles.buttonSmall} />
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.replace("/login" as Href)}
+              style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+            >
+              <Text style={styles.buttonLabel}>Iniciar sesión</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.replace("/registro" as Href)}
+              style={({ pressed }) => [
+                styles.button,
+                styles.buttonSmall,
+                styles.buttonSecondary,
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <Text style={[styles.buttonLabel, styles.buttonSecondaryLabel]}>Crear cuenta</Text>
+            </Pressable>
           </>
         ) : (
-          <LeuretButton label="Ir a Leuret" fullWidth onPress={() => router.replace("/" as Href)} style={styles.button} />
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.replace("/" as Href)}
+            style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+          >
+            <Text style={styles.buttonLabel}>Ir a Leuret</Text>
+          </Pressable>
         )}
       </View>
     </SafeAreaView>
@@ -117,6 +139,24 @@ const styles = StyleSheet.create({
   },
   title: { color: colors.text, fontSize: 22, fontWeight: "900" },
   text: { marginTop: 8, color: colors.textSecondary, fontSize: 14, lineHeight: 21 },
-  button: { marginTop: 20 },
+  // Botones nativos con fondo explícito: buen contraste también en Safari/iOS.
+  button: {
+    minHeight: 52,
+    width: "100%",
+    marginTop: 20,
+    paddingHorizontal: 18,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buttonPressed: { opacity: 0.85 },
+  buttonLabel: { color: colors.textInverse, fontSize: 15, fontWeight: "800" },
   buttonSmall: { marginTop: 10 },
+  buttonSecondary: {
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+  },
+  buttonSecondaryLabel: { color: colors.primary },
 });
