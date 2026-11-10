@@ -1,8 +1,8 @@
 # Términos y Condiciones de Uso — Leuret App
 
-**Fecha de última actualización:** 9 de noviembre de 2026
+**Fecha de última actualización:** 10 de noviembre de 2026
 
-Estos Términos y Condiciones regulan el acceso y uso de **Leuret App** (la “Plataforma”), operada en la República de Panamá por **LEURET TECH** (el “Operador”). Al crear una cuenta o utilizar la Plataforma, la persona usuaria declara haber leído y aceptado estos Términos y la Política de Privacidad.
+Estos Términos y Condiciones regulan el acceso y uso de **Leuret App** (la “Plataforma”), operada en la República de Panamá por **LEURET TECH** (el “Operador”). La aceptación de estos Términos se solicita durante el registro. La Política de Privacidad está disponible para informar cómo se tratan los datos personales.
 
 ## 1. Servicio
 
@@ -42,19 +42,19 @@ Cada usuario responde por la licitud, exactitud y autorización del contenido qu
 
 ## 6. Cálculos, presupuestos y documentos
 
-Las calculadoras y estimaciones son herramientas de apoyo. Sus resultados dependen de los datos introducidos, precios, rendimientos, condiciones de obra y criterios profesionales. Deben ser revisados antes de usarse para comprar materiales, contratar trabajos, diseñar instalaciones o ejecutar una obra.
+Las calculadoras y estimaciones, incluido cualquier análisis de precios unitarios cuando se habilite, son herramientas de apoyo. Sus resultados dependen de los datos introducidos, precios, rendimientos, condiciones de obra y criterios profesionales. Deben ser revisados antes de usarse para comprar materiales, contratar trabajos, diseñar instalaciones o ejecutar una obra.
 
 Leuret App no sustituye la intervención de arquitectos, ingenieros, contadores, abogados u otros profesionales cuando la actividad requiera competencia o idoneidad especializada.
 
 ## 7. Planes, pagos y facturación
 
-Determinadas funciones pueden estar sujetas a planes, límites o cargos informados antes de la contratación. Los documentos comerciales generados entre usuarios son responsabilidad de quienes los emiten y reciben. LEURET TECH no garantiza el pago ni el cumplimiento de obligaciones entre terceros.
+Determinadas funciones pueden estar sujetas a planes, límites o cargos informados antes de la contratación. Los documentos comerciales generados entre usuarios son responsabilidad de quienes los emiten y reciben. Su generación en la Plataforma no implica por sí sola certificación, validación tributaria ni firma electrónica cualificada. LEURET TECH no garantiza el pago ni el cumplimiento de obligaciones entre terceros.
 
-Las condiciones particulares de precio, renovación, cancelación o reembolso que correspondan se mostrarán antes de contratar un servicio de pago.
+Si se ofrecen funciones de pago, antes de contratar se informarán claramente el precio total, impuestos aplicables, periodicidad de cobro, renovación, condiciones de cancelación y política de reembolso. No se presumirá la aceptación de renovaciones o cargos no informados. Se respetarán los derechos irrenunciables reconocidos a las personas consumidoras por la legislación aplicable.
 
 ## 8. Privacidad y protección de datos
 
-El tratamiento de datos personales se rige por la **Política de Privacidad de Leuret App**, la Ley 81 de 26 de marzo de 2019, el Decreto Ejecutivo 285 de 18 de mayo de 2021 y demás normas panameñas aplicables.
+El tratamiento de datos personales se rige por la **Política de Privacidad de Leuret App**, la Ley 81 de 26 de marzo de 2019, el Decreto Ejecutivo 285 de 28 de mayo de 2021 y demás normas panameñas aplicables.
 
 ## 9. Exportación, rectificación y eliminación
 
@@ -71,7 +71,7 @@ Las fotografías compartidas dentro de proyectos empresariales pueden mantenerse
 
 ## 10. Disponibilidad y servicios de terceros
 
-La Plataforma se presta según disponibilidad. Puede experimentar mantenimiento, interrupciones o cambios técnicos. Algunas funciones dependen de proveedores de infraestructura, almacenamiento, correo, notificaciones o distribución de aplicaciones.
+La Plataforma se presta según disponibilidad. El usuario deberá conservar copias propias de los documentos comerciales y respaldos necesarios para su actividad. Puede experimentar mantenimiento, interrupciones o cambios técnicos. Algunas funciones dependen de proveedores de infraestructura, almacenamiento, correo, notificaciones o distribución de aplicaciones.
 
 LEURET TECH adoptará medidas razonables para mantener la continuidad y seguridad, pero no garantiza disponibilidad ininterrumpida cuando existan causas fuera de su control.
 
