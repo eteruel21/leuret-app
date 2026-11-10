@@ -28,6 +28,8 @@ await writeFile(
     "RESEND_API_KEY=re_workerd_smoke_test",
     'EMAIL_FROM="Leuret <noreply@example.test>"',
     "TURNSTILE_ALLOWED_HOSTNAMES=localhost",
+
+    "NODE_ENV=production",
   ].join("\n") + "\n"
 );
 
@@ -54,6 +56,7 @@ const child = spawn(
     cwd: apiDir,
     env: {
       ...process.env,
+      NODE_ENV: "production",
       CI: "true",
       WRANGLER_SEND_METRICS: "false",
       // Hyperdrive local: el /health no consulta la base, pero el binding debe existir.
