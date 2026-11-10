@@ -52,11 +52,12 @@ function LeuretStartupMark() {
   return (
     <View style={styles.loadingLogo}>
       <Animated.View style={[styles.loadingPulseRing, haloStyle]} />
-      <Animated.View style={[styles.loadingMark, markStyle]}>
-        <View style={styles.loadingMarkVertical} />
-        <View style={styles.loadingMarkDiagonal} />
-        <View style={styles.loadingMarkHorizontal} />
-      </Animated.View>
+      <Animated.Image
+        source={require("../../assets/images/leuret-logo-header.png")}
+        style={[styles.loadingLogoImage, markStyle]}
+        resizeMode="contain"
+        accessibilityLabel="Logo oficial de LEURET"
+      />
     </View>
   );
 }
@@ -126,8 +127,6 @@ function RootNavigator() {
       <View style={styles.loading}>
         <View style={styles.loadingOrb} />
         <LeuretStartupMark />
-
-        <Text style={styles.loadingBrand}>LEURET</Text>
 
         <Text style={styles.loadingText}>
           Preparando tu espacio de trabajo
@@ -234,9 +233,9 @@ const styles = StyleSheet.create({
   },
 
   loadingLogo: {
-    width: 68,
-    height: 68,
-    borderRadius: 21,
+    width: 216,
+    height: 170,
+    borderRadius: 24,
     backgroundColor: colors.cream,
     alignItems: "center",
     justifyContent: "center",
@@ -244,63 +243,21 @@ const styles = StyleSheet.create({
 
   loadingPulseRing: {
     position: "absolute",
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 216,
+    height: 170,
+    borderRadius: 24,
     borderWidth: 2,
-    borderColor: colors.accent,
-    backgroundColor: colors.glowAccent,
+    borderColor: colors.primary,
+    backgroundColor: colors.glowBlue,
   },
 
-  loadingMark: {
-    position: "relative",
-    width: 40,
-    height: 40,
-  },
-
-  loadingMarkVertical: {
-    position: "absolute",
-    left: 9,
-    top: 4,
-    width: 8,
-    height: 29,
-    borderRadius: 5,
-    backgroundColor: colors.primary,
-    transform: [{ rotate: "-8deg" }],
-  },
-
-  loadingMarkDiagonal: {
-    position: "absolute",
-    left: 14,
-    top: 20,
-    width: 10,
-    height: 19,
-    borderRadius: 5,
-    backgroundColor: colors.primary,
-    transform: [{ rotate: "-42deg" }],
-  },
-
-  loadingMarkHorizontal: {
-    position: "absolute",
-    left: 18,
-    bottom: 5,
-    width: 20,
-    height: 8,
-    borderRadius: 5,
-    backgroundColor: colors.accent,
-    transform: [{ rotate: "-10deg" }],
-  },
-
-  loadingBrand: {
-    marginTop: 19,
-    color: colors.textLight,
-    fontSize: 13,
-    fontWeight: "900",
-    letterSpacing: 1.5,
+  loadingLogoImage: {
+    width: 196,
+    height: 138,
   },
 
   loadingText: {
-    marginTop: 9,
+    marginTop: 22,
     color: colors.textLightMuted,
     fontSize: 12,
     fontWeight: "600",
