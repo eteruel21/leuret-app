@@ -67,20 +67,17 @@ jobs:
       - name: 7. Run non-destructive API tests
         env:
           DATABASE_MODE: hyperdrive
+        # Corre todos los tests de la API salvo los que necesitan la base
+        # aislada (TEST_DATABASE_URL); esos se ejecutan en el paso 10.
+        # Así un test nuevo entra al CI sin agregarlo a una lista.
         run: |
           npm --workspace apps/api run test -- \
-            src/auth/__tests__/registration-schema.test.ts \
-            src/admin/__tests__/admin-companies-mapping.test.ts \
-            src/auth/__tests__/turnstile-validation.test.ts \
-            src/auth/__tests__/captcha-bypass.test.ts \
-            src/auth/__tests__/password-reset-contract.test.ts \
-            src/services/__tests__/email-delivery.test.ts \
-            src/security/__tests__/redaction.test.ts \
-            src/__tests__/account-legal.test.ts \
-            src/account/__tests__/storage-cleanup.test.ts \
-            src/storage/__tests__/storage-provider.test.ts \
-            src/projects/tasks/__tests__/my-tasks-schema.test.ts \
-            src/dashboard/__tests__/dashboard-mapping.test.ts
+            --exclude src/auth/__tests__/auth.test.ts \
+            --exclude src/auth/__tests__/authorization_rls.test.ts \
+            --exclude src/admin/__tests__/admin-session-revocation.test.ts \
+            --exclude src/db/__tests__/with-user-transaction.test.ts \
+            --exclude src/budgets/__tests__/budgets.test.ts \
+            --exclude src/invoices/__tests__/document_numbering.test.ts
 
       - name: 8. Prepare isolated authorization database
         env:
@@ -119,7 +116,9 @@ jobs:
             src/auth/__tests__/auth.test.ts \
             src/auth/__tests__/authorization_rls.test.ts \
             src/admin/__tests__/admin-session-revocation.test.ts \
-            src/db/__tests__/with-user-transaction.test.ts
+            src/db/__tests__/with-user-transaction.test.ts \
+            src/budgets/__tests__/budgets.test.ts \
+            src/invoices/__tests__/document_numbering.test.ts
 
       - name: 11. Test mobile app
         run: npm run test -w apps/mobile
