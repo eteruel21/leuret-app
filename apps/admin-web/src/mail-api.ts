@@ -27,6 +27,7 @@ export interface MailMessage {
   from?: string;
   to?: string[];
   cc?: string[];
+  reply_to?: string[];
   subject?: string;
   received_at?: string;
   read?: boolean;
