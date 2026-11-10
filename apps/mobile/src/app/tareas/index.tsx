@@ -2,7 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -22,7 +24,9 @@ import {
   type ProjectTaskPriority,
   type ProjectTaskStatus,
 } from "@/services/task-service";
+import { uploadProjectPhoto } from "@/services/photo-service";
 import { showAlert } from "@/utils/alert";
+import { prepareProjectPhoto, type ProjectPhotoSource } from "@/utils/project-photo-picker";
 import { formatShortDate } from "@/utils/format";
 
 type Filter = "open" | "all";
@@ -64,6 +68,9 @@ export default function MyTasksScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [offline, setOffline] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  // Fotos enviadas en esta sesión, por tarea, para dar confirmación visible.
+  const [sentPhotos, setSentPhotos] = useState<Record<string, number>>({});
 
   const loadTasks = useCallback(
     async (isRefresh = false) => {
@@ -85,6 +92,47 @@ export default function MyTasksScreen() {
       void loadTasks();
     }, [loadTasks])
   );
+
+  const uploadPhoto = async (task: MyTask, source: ProjectPhotoSource) => {
+    if (!companyId) return;
+    try {
+      setUploadingId(task.id);
+      const prepared = await prepareProjectPhoto(source);
+      if (!prepared) return;
+
+      await uploadProjectPhoto(companyId, task.project_id, {
+        fileName: prepared.fileName,
+        fileData: prepared.fileData,
+        mimeType: prepared.mimeType,
+        caption: `Avance: ${task.title}`,
+        taskId: task.id,
+        isPrivate: true,
+      });
+
+      setSentPhotos((current) => ({ ...current, [task.id]: (current[task.id] ?? 0) + 1 }));
+      showAlert("Foto enviada", `Quedó guardada en ${task.project.name}, vinculada a esta tarea.`);
+    } catch (error) {
+      showAlert(
+        "No se pudo subir la foto",
+        error instanceof Error ? error.message : "Revisa tu conexión e inténtalo de nuevo."
+      );
+    } finally {
+      setUploadingId(null);
+    }
+  };
+
+  /** En el teléfono pregunta si usar la cámara o la galería; en la web abre la galería. */
+  const askPhoto = (task: MyTask, title = "Foto de avance", message = "¿De dónde quieres tomar la foto?") => {
+    if (Platform.OS === "web") {
+      void uploadPhoto(task, "library");
+      return;
+    }
+    showAlert(title, message, [
+      { text: "Cámara", onPress: () => void uploadPhoto(task, "camera") },
+      { text: "Galería", onPress: () => void uploadPhoto(task, "library") },
+      { text: "Ahora no", style: "cancel" },
+    ]);
+  };
 
   const handleAdvance = async (task: MyTask) => {
     if (!companyId) return;
@@ -114,6 +162,11 @@ export default function MyTasksScreen() {
         ? next.filter((item) => item.status !== "completed")
         : next;
     });
+
+    // Al terminar una tarea, invitar a dejar evidencia del trabajo.
+    if (action.status === "completed" && Platform.OS !== "web") {
+      askPhoto(task, "¡Tarea completada!", "¿Quieres agregar una foto del trabajo terminado?");
+    }
   };
 
   if (!companyId || loading) {
@@ -169,6 +222,7 @@ export default function MyTasksScreen() {
           const action = nextAction(item.status);
           const overdue = isOverdue(item);
           const busy = updatingId === item.id;
+          const uploading = uploadingId === item.id;
 
           return (
             <Animated.View
@@ -209,30 +263,55 @@ export default function MyTasksScreen() {
                 ) : null}
               </View>
 
-              <Pressable
-                onPress={() => void handleAdvance(item)}
-                disabled={busy}
-                accessibilityRole="button"
-                style={({ pressed }) => [
-                  styles.actionButton,
-                  item.status === "completed" && styles.actionButtonSecondary,
-                  (pressed || busy) && styles.pressed,
-                ]}
-              >
-                <Ionicons
-                  name={action.status === "completed" ? "checkmark-circle-outline" : "play-circle-outline"}
-                  size={20}
-                  color={item.status === "completed" ? colors.primary : colors.textLight}
-                />
-                <Text
-                  style={[
-                    styles.actionText,
-                    item.status === "completed" && styles.actionTextSecondary,
+              <View style={styles.actions}>
+                <Pressable
+                  onPress={() => void handleAdvance(item)}
+                  disabled={busy}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [
+                    styles.actionButton,
+                    item.status === "completed" && styles.actionButtonSecondary,
+                    (pressed || busy) && styles.pressed,
                   ]}
                 >
-                  {busy ? "Guardando…" : action.label}
-                </Text>
-              </Pressable>
+                  <Ionicons
+                    name={action.status === "completed" ? "checkmark-circle-outline" : "play-circle-outline"}
+                    size={20}
+                    color={item.status === "completed" ? colors.primary : colors.textLight}
+                  />
+                  <Text
+                    style={[
+                      styles.actionText,
+                      item.status === "completed" && styles.actionTextSecondary,
+                    ]}
+                  >
+                    {busy ? "Guardando…" : action.label}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => askPhoto(item)}
+                  disabled={uploading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Agregar foto de avance"
+                  style={({ pressed }) => [styles.photoButton, (pressed || uploading) && styles.pressed]}
+                >
+                  {uploading ? (
+                    <ActivityIndicator color={colors.primary} />
+                  ) : (
+                    <Ionicons name="camera-outline" size={22} color={colors.primary} />
+                  )}
+                </Pressable>
+              </View>
+
+              {sentPhotos[item.id] ? (
+                <View style={styles.sentRow}>
+                  <Ionicons name="images-outline" size={14} color={colors.success} />
+                  <Text style={styles.sentText}>
+                    {sentPhotos[item.id] === 1 ? "1 foto enviada" : `${sentPhotos[item.id]} fotos enviadas`}
+                  </Text>
+                </View>
+              ) : null}
             </Animated.View>
           );
         }}
@@ -355,9 +434,35 @@ const styles = StyleSheet.create({
   overdue: {
     color: colors.danger,
   },
-  actionButton: {
-    minHeight: 50,
+  actions: {
+    flexDirection: "row",
+    gap: 10,
     marginTop: 14,
+  },
+  photoButton: {
+    width: 54,
+    minHeight: 50,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.steelSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+  },
+  sentText: {
+    color: colors.success,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  actionButton: {
+    flex: 1,
+    minHeight: 50,
     borderRadius: radius.lg,
     backgroundColor: colors.primary,
     flexDirection: "row",
