@@ -10,7 +10,7 @@ Este documento especifica la estrategia, procedimientos y comandos estandarizado
 graph TD
     A[Repositorio Git Local / CI] -->|npm run deploy:safe| B[Validación TypeScript + Tests]
     B -->|Previa Confirmación| C[Render: Backend API]
-    B -->|npm run deploy:admin| D[Cloudflare Pages: contractor-admin-web]
+    B -->|npm run deploy:admin| D[Cloudflare Pages: leuret-admin-web]
     B -->|npm run deploy:mobile| E[Cloudflare Pages: contractor-pro-web]
     B -->|EAS Build| F[App Stores / OTA Updates]
 
@@ -25,7 +25,7 @@ graph TD
 | Componente | Plataforma | Proyecto / Dominio Producción | Comando de Despliegue |
 | :--- | :--- | :--- | :--- |
 | **API Backend** | Render / Web Service | `https://api.contractor.com.pa` | Validar con `npm run deploy:safe` y push manual |
-| **Panel Admin Web** | Cloudflare Pages | `contractor-admin-web` | `npm run deploy:admin` |
+| **Panel Admin Web** | Cloudflare Pages | `leuret-admin-web` | `npm run deploy:admin` |
 | **App Móvil (Web)** | Cloudflare Pages | `contractor-pro-web` | `npm run deploy:mobile` |
 | **App Móvil (Nativa)** | Expo / EAS Build | iOS / Android Binaries | `npx eas build` |
 

@@ -98,7 +98,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: ./node_modules/.bin/wrangler pages deploy apps/admin-web/dist --project-name contractor-admin-web --branch main
+        run: ./node_modules/.bin/wrangler pages deploy apps/admin-web/dist --project-name leuret-admin-web --branch main
 
       - name: 14. Deploy Mobile User Web to Cloudflare Pages
         env:
