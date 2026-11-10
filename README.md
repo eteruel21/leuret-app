@@ -8,10 +8,10 @@ Plataforma integral de gestión para contratistas, empresas de construcción, pr
 
 Contractor Pro está construido sobre una arquitectura **Monorepo** moderna con npm workspaces:
 
-- [`apps/api`](file:///c:/Users/Eliel%20Teruel/CONTRACTOR-APP/apps/api): Backend REST de alto rendimiento en **Node.js 22**, **Fastify** y **TypeScript**.
-- [`apps/admin-web`](file:///c:/Users/Eliel%20Teruel/CONTRACTOR-APP/apps/admin-web): Panel administrativo web desarrollado con **React 19**, **Vite** y **TypeScript**.
-- [`apps/mobile`](file:///c:/Users/Eliel%20Teruel/CONTRACTOR-APP/apps/mobile): Aplicación móvil y web multiplataforma con **Expo 52**, **React Native** y **Expo Router**.
-- [`database`](file:///c:/Users/Eliel%20Teruel/CONTRACTOR-APP/database): Scripts de administración PostgreSQL con migraciones SQL seguras (checksums SHA-256) y catálogo oficial Panamá.
+- [`apps/api`](apps/api): Backend REST de alto rendimiento en **Node.js 22**, **Fastify** y **TypeScript**.
+- [`apps/admin-web`](apps/admin-web): Panel administrativo web desarrollado con **React 19**, **Vite** y **TypeScript**.
+- [`apps/mobile`](apps/mobile): Aplicación móvil y web multiplataforma con **Expo 52**, **React Native** y **Expo Router**.
+- [`database`](database): Scripts de administración PostgreSQL con migraciones SQL seguras (checksums SHA-256) y catálogo oficial Panamá.
 
 ---
 
@@ -29,18 +29,18 @@ Contractor Pro está construido sobre una arquitectura **Monorepo** moderna con 
 
 ## 📚 Documentación del Sistema
 
-- 🏛️ [**Arquitectura del Sistema**](file:///c:/Users/Eliel%20Teruel/CONTRACTOR-APP/docs/architecture.md)
-- 💻 [**Guía de Instalación Local**](file:///c:/Users/Eliel%20Teruel/CONTRACTOR-APP/docs/local-installation.md)
-- 🗄️ [**Migraciones y Semillas**](file:///c:/Users/Eliel%20Teruel/CONTRACTOR-APP/docs/migrations-and-seeds.md)
-- 🚢 [**Guía de Despliegue**](file:///c:/Users/Eliel%20Teruel/CONTRACTOR-APP/docs/deployment.md)
-- 📜 [**Términos de Uso**](file:///c:/Users/Eliel%20Teruel/CONTRACTOR-APP/docs/terms-of-service.md)
-- 🔒 [**Política de Privacidad**](file:///c:/Users/Eliel%20Teruel/CONTRACTOR-APP/docs/privacy-policy.md)
-- ⏱️ [**Política de Retención de Documentos**](file:///c:/Users/Eliel%20Teruel/CONTRACTOR-APP/docs/document-retention-policy.md)
-- 🛡️ [**Informe de Auditoría de Seguridad**](file:///c:/Users/Eliel%20Teruel/CONTRACTOR-APP/docs/security-audit-report.md)
-- 💾 [**Verificación de Backups**](file:///c:/Users/Eliel%20Teruel/CONTRACTOR-APP/docs/backup-restore-verification.md)
-- 🔄 [**Procedimiento de Rollback**](file:///c:/Users/Eliel%20Teruel/CONTRACTOR-APP/docs/rollback-procedure.md)
-- 🧪 [**Informe de Prueba Piloto**](file:///c:/Users/Eliel%20Teruel/CONTRACTOR-APP/docs/pilot-testing-report.md)
-- 📊 [**Monitoreo y Alertas**](file:///c:/Users/Eliel%20Teruel/CONTRACTOR-APP/docs/monitoring-and-alerts.md)
+- 🏛️ [**Arquitectura del Sistema**](docs/architecture.md)
+- 💻 [**Guía de Instalación Local**](docs/local-installation.md)
+- 🗄️ [**Migraciones y Semillas**](docs/migrations-and-seeds.md)
+- 🚢 [**Guía de Despliegue**](docs/deployment.md)
+- 📜 [**Términos de Uso**](docs/terms-of-service.md)
+- 🔒 [**Política de Privacidad**](docs/privacy-policy.md)
+- ⏱️ [**Política de Retención de Documentos**](docs/document-retention-policy.md)
+- 🛡️ [**Informe de Auditoría de Seguridad**](docs/security-audit-report.md)
+- 💾 [**Verificación de Backups**](docs/backup-restore-verification.md)
+- 🔄 [**Procedimiento de Rollback**](docs/rollback-procedure.md)
+- 🧪 [**Informe de Prueba Piloto**](docs/pilot-testing-report.md)
+- 📊 [**Monitoreo y Alertas**](docs/monitoring-and-alerts.md)
 
 ---
 
