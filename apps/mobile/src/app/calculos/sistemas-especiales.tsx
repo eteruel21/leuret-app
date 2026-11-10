@@ -18,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../../constants/theme";
 import { useCompany } from "../../contexts/CompanyContext";
 import { addBudgetItem } from "../../services/budget-service";
+import { compactMaterials, material } from "../../services/budget-materials";
 import { listCatalogItems } from "../../services/catalog-service";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
@@ -442,6 +443,7 @@ export default function SpecialSystemsScreen() {
       .map(({ label, quantity }) => `${quantity} ${label.toLowerCase()}`)
       .join(" · ");
 
+    const c = (compute(withCatalogCosts(form, tracked)) ?? result);
     const response = await addBudgetItem({
       companyId: activeCompany.id,
       budgetId,
@@ -450,12 +452,25 @@ export default function SpecialSystemsScreen() {
       unitName: "sistema",
       quantity: 1,
       unitCost: budgetUnitCost(
-        (compute(withCatalogCosts(form, tracked)) ?? result).totalCost,
+        c.totalCost,
         1,
         result.totalCost,
       ),
       unitPrice: result.totalCost,
       taxable: true,
+      materials: compactMaterials([
+        ...config.equipment.map(({ field, label }) =>
+          material(
+            label,
+            c[field],
+            "und.",
+            Number((c as unknown as Record<string, unknown>)[`${field}Cost`] ?? 0),
+          ),
+        ),
+        material("Cable", c.cableRollsToBuy, "rollo", c.cableCost),
+        material("Tubo conduit", c.conduitPieces, "und.", c.conduitCost),
+        material("Caja", c.boxes, "und.", c.boxCost),
+      ]),
       notes:
         `${equipmentNotes}` +
         (result.wiredPoints

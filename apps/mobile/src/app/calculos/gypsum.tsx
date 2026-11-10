@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../../constants/theme";
 import { useCompany } from "../../contexts/CompanyContext";
 import { addBudgetItem } from "../../services/budget-service";
+import { compactMaterials, material } from "../../services/budget-materials";
 import { listCatalogItems } from "../../services/catalog-service";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
@@ -209,14 +210,23 @@ export default function GypsumScreen() {
     }
     const f = (value: number) => formatDecimal(value, 0, currency);
     const unitPrice = result.totalCost / result.finishedArea;
+    const c = (compute(withCatalogCosts(form, tracked)) ?? result);
     const unitCost = budgetUnitCost(
-      (compute(withCatalogCosts(form, tracked)) ?? result).totalCost,
+      c.totalCost,
       result.finishedArea, unitPrice);
     const response = await addBudgetItem({
       companyId: activeCompany.id, budgetId, itemType: "service",
       description: `Muro de gypsum a ${sides} cara${sides === 1 ? "" : "s"}`,
       unitName: "m²", quantity: result.finishedArea,
       unitCost, unitPrice, taxable: true,
+      materials: compactMaterials([
+        material("Lámina de gypsum", c.boardsToBuy, "und.", c.boardCost),
+        material("Stud metálico", c.studPieces, "und.", c.studCost),
+        material("Track metálico", c.trackPieces, "und.", c.trackCost),
+        material("Tornillos para gypsum", c.screwBoxes, "caja", c.screwCost),
+        material("Cinta para juntas", c.tapeRolls, "rollo", c.tapeCost),
+        material("Compuesto para juntas", c.compoundPackages, "und.", c.compoundCost),
+      ]),
       notes: `${f(result.boardsToBuy)} láminas · ${f(result.studPieces)} studs · ` +
         `${f(result.trackPieces)} tracks · ${f(result.screwBoxes)} cajas de tornillos · ` +
         `${f(result.tapeRolls)} rollos de cinta · ${f(result.compoundPackages)} compuestos`,

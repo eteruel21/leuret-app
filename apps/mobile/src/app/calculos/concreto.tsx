@@ -25,6 +25,7 @@ import { colors, radius } from "../../constants/theme";
 import { useCompany } from "../../contexts/CompanyContext";
 import { useFormulaParameters } from "../../hooks/useFormulaParameters";
 import { addBudgetItem } from "../../services/budget-service";
+import { compactMaterials, material } from "../../services/budget-materials";
 import { listCatalogItems } from "../../services/catalog-service";
 import { filterCalculatorCatalogItems } from "../../services/calculators/catalog-picker";
 import {
@@ -680,8 +681,9 @@ function ConcreteCalculatorForm({
       result.volumeWithWaste > 0
         ? result.totalCost / result.volumeWithWaste
         : 0;
+    const c = computeConcrete(withCatalogCosts(form, trackedPrices));
     const unitCost = budgetUnitCost(
-      computeConcrete(withCatalogCosts(form, trackedPrices)).totalCost,
+      c.totalCost,
       result.volumeWithWaste,
       unitPrice,
     );
@@ -702,6 +704,15 @@ function ConcreteCalculatorForm({
       unitCost,
       unitPrice,
       taxable: true,
+      materials: compactMaterials([
+        material("Cemento", c.cementBagsToBuy, "saco", c.cementCost),
+        sandPriceMode === "bag"
+          ? material("Arena", c.sandBagsToBuy, "saco", c.sandCost)
+          : material("Arena", c.sandVolume, "m³", c.sandCost),
+        gravelPriceMode === "bag"
+          ? material("Gravilla", c.gravelBagsToBuy, "saco", c.gravelCost)
+          : material("Gravilla", c.gravelVolume, "m³", c.gravelCost),
+      ]),
       notes: details,
     });
 

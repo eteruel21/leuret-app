@@ -18,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../../constants/theme";
 import { useCompany } from "../../contexts/CompanyContext";
 import { addBudgetItem } from "../../services/budget-service";
+import { compactMaterials, material } from "../../services/budget-materials";
 import { listCatalogItems } from "../../services/catalog-service";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
@@ -344,8 +345,9 @@ export default function ElectricalScreen() {
 
     const unitPrice =
       result.totalCost / result.totalPoints;
+    const c = (compute(withCatalogCosts(form, tracked)) ?? result);
     const unitCost = budgetUnitCost(
-      (compute(withCatalogCosts(form, tracked)) ?? result).totalCost,
+      c.totalCost,
       result.totalPoints, unitPrice);
 
     const response = await addBudgetItem({
@@ -360,6 +362,15 @@ export default function ElectricalScreen() {
       unitCost,
       unitPrice,
       taxable: true,
+      materials: compactMaterials([
+        material("Cable de iluminación", c.lightingCableRollsToBuy, "rollo", c.lightingCableCost),
+        material("Cable de potencia", c.powerCableRollsToBuy, "rollo", c.powerCableCost),
+        material("Tubo conduit", c.conduitPieces, "und.", c.conduitCost),
+        material("Caja eléctrica", c.boxes, "und.", c.boxCost),
+        material("Tomacorriente", c.outletPoints, "und.", c.outletCost),
+        material("Interruptor", c.switchPoints, "und.", c.switchCost),
+        material("Breaker", c.totalBreakers, "und.", c.breakerCost),
+      ]),
       notes:
         `${result.lightingCableRollsToBuy} rollos de cable de iluminación · ` +
         `${result.powerCableRollsToBuy} rollos de cable de potencia · ` +
