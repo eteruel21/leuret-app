@@ -78,7 +78,8 @@ jobs:
             src/__tests__/account-legal.test.ts \
             src/account/__tests__/storage-cleanup.test.ts \
             src/storage/__tests__/storage-provider.test.ts \
-            src/projects/tasks/__tests__/my-tasks-schema.test.ts
+            src/projects/tasks/__tests__/my-tasks-schema.test.ts \
+            src/dashboard/__tests__/dashboard-mapping.test.ts
 
       - name: 8. Prepare isolated authorization database
         env:

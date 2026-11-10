@@ -32,6 +32,7 @@ import {
 } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { OwnerDashboard } from "@/components/OwnerDashboard";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   HOME_FOCUS,
@@ -183,6 +184,8 @@ export default function HomeScreen() {
   const showProjects = can("projects.view");
   // Los cobros solo se muestran a quien los gestiona (owner, admin, sales).
   const showFinances = can("invoices.payments.record");
+  // Owner/Admin ven el resumen completo del negocio en lugar de las filas simples.
+  const showOwnerDashboard = can("company.manage") && Boolean(activeCompany?.id);
 
   const firstName =
     profile?.full_name?.trim().split(/\s+/)[0] || "Profesional";
@@ -364,7 +367,9 @@ export default function HomeScreen() {
             })}
           </View>
 
-          {showProjects || showFinances ? (
+          {showOwnerDashboard && activeCompany ? (
+            <OwnerDashboard companyId={activeCompany.id} />
+          ) : showProjects || showFinances ? (
           <Animated.View
             entering={FadeInDown.delay(320).duration(480)}
           >
