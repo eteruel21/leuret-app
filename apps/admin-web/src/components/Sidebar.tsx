@@ -3,6 +3,7 @@ import {
   Briefcase,
   LogOut,
   LayoutDashboard,
+  Mail,
   Users,
   BookOpen,
   Calculator,
@@ -11,7 +12,7 @@ import {
   Building2,
 } from "lucide-react";
 
-export type Tab = "dashboard" | "users" | "companies" | "catalog" | "calculations" | "pricing" | "system";
+export type Tab = "dashboard" | "mail" | "users" | "companies" | "catalog" | "calculations" | "pricing" | "system";
 
 interface NavButtonProps {
   icon: ReactNode;
@@ -52,6 +53,7 @@ export function Sidebar({ activeTab, setActiveTab, pendingUsersCount, email, onS
       </div>
       <nav className="nav-links">
         <NavButton icon={<LayoutDashboard />} label="Resumen" tab="dashboard" active={activeTab} onClick={setActiveTab} />
+        <NavButton icon={<Mail />} label="Correos" tab="mail" active={activeTab} onClick={setActiveTab} />
         <NavButton icon={<Users />} label="Usuarios" tab="users" active={activeTab} onClick={setActiveTab} badge={pendingUsersCount} />
         <NavButton icon={<Building2 />} label="Empresas" tab="companies" active={activeTab} onClick={setActiveTab} />
         <NavButton icon={<BookOpen />} label="Catálogo" tab="catalog" active={activeTab} onClick={setActiveTab} />
