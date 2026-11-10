@@ -29,17 +29,24 @@ import { createAppLogger, defaultLogLevel } from "./observability/logger.js";
 import { getClientIp } from "./security/client-ip.js";
 
 export async function buildApp() {
+  // No usamos `loggerInstance`: en Cloudflare Workers Fastify intenta leer
+  // `pino.symbols`, que no existe en el paquete del Worker, y la API no
+  // arranca (error 1101). Fastify queda con logger: false y cada petición
+  // recibe nuestro logger propio en el primer hook.
+  const appLogger = createAppLogger({
+    level: defaultLogLevel(env.NODE_ENV, env.LOG_LEVEL)
+  });
+
   const app = Fastify({
-    // Registro propio: JSON con secretos ocultos, compatible con Node y Workers.
-    loggerInstance: createAppLogger({
-      level: defaultLogLevel(env.NODE_ENV, env.LOG_LEVEL)
-    }) as unknown as FastifyBaseLogger,
-    // Solo se registran errores y peticiones lentas, no cada petición.
-    disableRequestLogging: true,
+    logger: false,
     genReqId: (request) => {
       const ray = request.headers["cf-ray"];
       return typeof ray === "string" && ray ? ray : crypto.randomUUID();
     }
+  });
+
+  app.addHook("onRequest", async (request) => {
+    request.log = appLogger.child({ reqId: request.id }) as unknown as FastifyBaseLogger;
   });
 
   app.decorateRequest("authenticatedUser", null);

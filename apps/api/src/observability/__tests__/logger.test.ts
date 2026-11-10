@@ -74,3 +74,14 @@ describe("logger de la API", () => {
     expect(defaultLogLevel("production", "inventado")).toBe("info");
   });
 });
+
+describe("arranque en Cloudflare Workers", () => {
+  test("Fastify no recibe loggerInstance (rompe el Worker con error 1101)", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile(new URL("../../app.ts", import.meta.url), "utf8");
+    // En Workers, `loggerInstance` hace que Fastify lea pino.symbols, que no
+    // existe en el paquete, y la API no arranca. Ver incidente 2026-11-09.
+    expect(source).not.toMatch(/^\s*loggerInstance\s*:/m);
+    expect(source).toMatch(/logger:\s*false/);
+  });
+});
