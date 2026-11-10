@@ -395,3 +395,22 @@ export async function findAdminAuditLogsRepo(
   });
 }
 
+
+/** Nombre de la empresa y de quien invita, para el correo de invitación. */
+export async function findInvitationEmailContextRepo(userId: string, companyId: string) {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query<{ company_name: string; inviter_name: string | null }>(
+      `
+        SELECT
+          company.name AS company_name,
+          COALESCE(NULLIF(trim(profile.full_name), ''), auth_user.email) AS inviter_name
+        FROM public.companies AS company
+        LEFT JOIN app_auth.users AS auth_user ON auth_user.id = app.current_user_id()
+        LEFT JOIN public.profiles AS profile ON profile.id = auth_user.id
+        WHERE company.id = $1
+      `,
+      [companyId]
+    );
+    return result.rows[0] ?? null;
+  });
+}

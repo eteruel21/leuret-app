@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { type Href, Stack, router } from "expo-router";
 import {
   StyleSheet,
   Text,
@@ -18,12 +18,13 @@ import {
   useCompany,
 } from "@/contexts/CompanyContext";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   registerForPushNotificationsAsync,
   unregisterCurrentPushTokenAsync,
 } from "@/services/push-notification-service";
 import { processOfflineSyncQueue } from "@/services/offline-sync-service";
+import { readPendingInvitation } from "@/utils/pending-invitation";
 
 function LeuretStartupMark() {
   const pulse = useSharedValue(0);
@@ -102,6 +103,20 @@ function RootNavigator() {
   const hasActiveCompany = isContractorAuthenticated && Boolean(activeCompany);
   const needsCompanySetup = isContractorAuthenticated && !activeCompany;
 
+  // Si la persona llegó desde un correo de invitación antes de entrar,
+  // la llevamos a unirse en cuanto su cuenta pueda usar una empresa.
+  const pendingInvitationChecked = useRef(false);
+  const canUseCompany = (hasActiveCompany || needsCompanySetup) && !needsProfileSetup && !companyLoading;
+
+  useEffect(() => {
+    if (!canUseCompany || pendingInvitationChecked.current) return;
+    pendingInvitationChecked.current = true;
+    void readPendingInvitation().then((code) => {
+      if (!code) return;
+      router.push((hasActiveCompany ? "/equipo/unirme" : "/empresa/unirme") as Href);
+    });
+  }, [canUseCompany, hasActiveCompany]);
+
   const isInitialLoading = authLoading && !profile;
   const isCompanyInitialLoading =
     isContractorAuthenticated && companyLoading && !activeCompany;
@@ -130,6 +145,9 @@ function RootNavigator() {
         },
       }}
     >
+      {/* Enlace del correo de invitación: accesible con o sin sesión. */}
+      <Stack.Screen name="invitacion" />
+
       <Stack.Protected guard={!isAuthenticated}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>

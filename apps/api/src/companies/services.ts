@@ -1,10 +1,20 @@
 import { generateSecureToken, hashSecureToken } from "../auth/tokens.js";
+import { sendCompanyInvitationEmail } from "../services/email.js";
+
+const INVITATION_ROLE_LABELS: Record<string, string> = {
+  admin: "Administrador",
+  supervisor: "Supervisor",
+  sales: "Ventas",
+  estimator: "Presupuestista",
+  member: "Equipo de campo"
+};
 
 import {
   findUserCompanyMembershipsRepo,
   createCompanyRepo,
   updateCompanyBillingRepo,
   createCompanyInvitationRepo,
+  findInvitationEmailContextRepo,
   findCompanyInvitationsRepo,
   acceptCompanyInvitationRepo,
   revokeCompanyInvitationRepo,
@@ -57,9 +67,26 @@ export async function createCompanyInvitationService(
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 días
 
   const invitation = await createCompanyInvitationRepo(userId, companyId, email, role, tokenHash, expiresAt);
-  return invitation
-    ? { ...invitation, acceptanceToken: token }
-    : null;
+  if (!invitation) return null;
+
+  // El correo es una ayuda: si falla, la invitación sigue siendo válida y el
+  // código se puede compartir a mano desde la app.
+  let emailSent = false;
+  try {
+    const context = await findInvitationEmailContextRepo(userId, companyId);
+    const delivery = await sendCompanyInvitationEmail({
+      to: email,
+      token,
+      companyName: context?.company_name ?? "",
+      inviterName: context?.inviter_name ?? null,
+      roleLabel: INVITATION_ROLE_LABELS[role] ?? role
+    });
+    emailSent = delivery.sent;
+  } catch {
+    emailSent = false;
+  }
+
+  return { ...invitation, acceptanceToken: token, emailSent };
 }
 
 export async function getCompanyInvitationsService(userId: string, companyId: string) {

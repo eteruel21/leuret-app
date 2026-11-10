@@ -63,13 +63,13 @@ async function deliverWithResend({
 }
 
 export function buildVerificationLinks(token: string) {
-  const deepLink = `contractorpro://confirm-email?token=${encodeURIComponent(token)}`;
+  const deepLink = `leuret://confirm-email?token=${encodeURIComponent(token)}`;
   const webLink = `https://app.leurettech.com/confirm-email?token=${encodeURIComponent(token)}`;
   return { deepLink, webLink };
 }
 
 export function buildPasswordResetLinks(token: string) {
-  const deepLink = `contractorpro://reset-password?token=${encodeURIComponent(token)}`;
+  const deepLink = `leuret://reset-password?token=${encodeURIComponent(token)}`;
   const webLink = `https://app.leurettech.com/reset-password?token=${encodeURIComponent(token)}`;
   return { deepLink, webLink };
 }
@@ -327,6 +327,99 @@ LEURET TECH
   return deliverWithResend({
     to,
     subject: "Cambia tu contraseña | Leuret",
+    text,
+    html
+  });
+}
+
+type CompanyInvitationEmailInput = {
+  to: string;
+  token: string;
+  companyName: string;
+  inviterName?: string | null;
+  roleLabel: string;
+};
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export function buildInvitationLinks(token: string) {
+  const deepLink = `leuret://invitacion?codigo=${encodeURIComponent(token)}`;
+  const webLink = `https://app.leurettech.com/invitacion?codigo=${encodeURIComponent(token)}`;
+  return { deepLink, webLink };
+}
+
+export async function sendCompanyInvitationEmail({
+  to,
+  token,
+  companyName,
+  inviterName,
+  roleLabel
+}: CompanyInvitationEmailInput): Promise<EmailDeliveryResult> {
+  const { deepLink, webLink } = buildInvitationLinks(token);
+  const company = escapeHtml(companyName.trim() || "una empresa");
+  const inviter = inviterName?.trim() ? escapeHtml(inviterName.trim()) : null;
+  const role = escapeHtml(roleLabel);
+  const email = escapeHtml(to);
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Invitación a ${company} - Leuret</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f6f1e7; color: #1e2a3a; margin: 0; padding: 24px; }
+        .container { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #ddd8cf; padding: 32px; }
+        .brand { font-size: 22px; font-weight: 800; color: #1e2a3a; }
+        .title { font-size: 20px; font-weight: 700; margin: 24px 0 8px; }
+        .role { display: inline-block; background: #f9e5e3; color: #c83232; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
+        .btn-primary { display: inline-block; background-color: #e23d3d; color: #ffffff !important; font-weight: 700; padding: 14px 28px; border-radius: 8px; text-decoration: none; margin: 16px 0 8px; }
+        .btn-secondary { display: inline-block; color: #1e2a3a !important; font-weight: 600; padding: 8px 0; text-decoration: underline; }
+        .code-box { background-color: #efe9de; font-family: monospace; font-size: 13px; padding: 12px; border-radius: 6px; word-break: break-all; }
+        .footer { font-size: 12px; color: #5e6d7d; margin-top: 28px; border-top: 1px solid #e7e1d7; padding-top: 16px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="brand">Leuret</div>
+        <h2 class="title">Te invitaron a ${company}</h2>
+        <p>${inviter ? `<strong>${inviter}</strong> te invitó` : "Te invitaron"} a unirte al equipo de <strong>${company}</strong> como <span class="role">${role}</span>.</p>
+        <p>Entra a Leuret con este mismo correo (<strong>${email}</strong>). Si todavía no tienes cuenta, créala con ese correo y la invitación se aplicará al entrar.</p>
+        <div style="text-align: center;">
+          <a href="${deepLink}" class="btn-primary">Aceptar en la app</a><br />
+          <a href="${webLink}" class="btn-secondary">Aceptar desde el navegador</a>
+        </div>
+        <p>Si los botones no funcionan, abre Leuret, ve a <strong>Más → Unirme a una empresa</strong> y pega este código:</p>
+        <div class="code-box">${escapeHtml(token)}</div>
+        <p class="footer">La invitación vence en 7 días. Si no esperabas este correo, puedes ignorarlo.</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const text = `
+${inviterName?.trim() ? `${inviterName.trim()} te invitó` : "Te invitaron"} a unirte a ${companyName.trim() || "una empresa"} en Leuret como ${roleLabel}.
+
+Entra a Leuret con este mismo correo (${to}).
+
+Aceptar en la app: ${deepLink}
+Aceptar desde el navegador: ${webLink}
+
+O ve a Más → Unirme a una empresa y pega este código: ${token}
+
+La invitación vence en 7 días.
+  `.trim();
+
+  return deliverWithResend({
+    to,
+    subject: `Te invitaron a ${companyName.trim() || "una empresa"} en Leuret`,
     text,
     html
   });
