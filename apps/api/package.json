@@ -9,6 +9,7 @@
     "start": "node dist/server.js",
     "test": "vitest run --hookTimeout=30000",
     "test:worker-runtime": "node --disallow-code-generation-from-strings --import tsx scripts/worker-runtime-smoke.mjs",
+    "test:workerd": "node scripts/workerd-smoke.mjs",
     "typecheck:node": "tsc --noEmit -p tsconfig.json",
     "typecheck:worker": "tsc --noEmit -p tsconfig.worker.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:worker"

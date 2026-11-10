@@ -64,6 +64,11 @@ jobs:
       - name: 6. Smoke test API Worker runtime
         run: npm run test:worker-runtime -w apps/api
 
+      # Arranca el Worker real en workerd (runtime de Cloudflare). La prueba
+      # anterior corre en Node y no detecta incompatibilidades de Workers.
+      - name: 6b. Boot API Worker in workerd (Cloudflare runtime)
+        run: npm run test:workerd -w apps/api
+
       - name: 7. Run non-destructive API tests
         env:
           DATABASE_MODE: hyperdrive
