@@ -21,6 +21,10 @@ import { addBudgetItem } from "../../services/budget-service";
 import { listCatalogItems } from "../../services/catalog-service";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
+  budgetUnitCost, rankCalculatorCatalogItems, trackCatalogPrice, withCatalogCosts,
+  type TrackedPrice,
+} from "../../services/calculators/catalog-pricing";
+import {
   calculateSpecialSystems,
   type SpecialSystemsResult,
   type SpecialSystemType,
@@ -209,6 +213,8 @@ export default function SpecialSystemsScreen() {
   const [target, setTarget] = useState<Target | null>(null);
   const [selected, setSelected] =
     useState<Partial<Record<Target, string>>>({});
+  const [tracked, setTracked] =
+    useState<Partial<Record<keyof Form, TrackedPrice>>>({});
 
   const config = SYSTEMS[systemType];
   const totalEquipment =
@@ -331,10 +337,15 @@ export default function SpecialSystemsScreen() {
       programmingLabor: "programmingLaborPrice",
     };
 
-    const price =
-      item.sale_price > 0 ? item.sale_price : item.unit_cost;
-
-    update(fields[target], String(price));
+    const priced = trackCatalogPrice(item);
+    if (priced.price <= 0) {
+      Alert.alert("Precio pendiente",
+        "Este concepto aún no tiene precio. Escríbelo manualmente en la calculadora.");
+      setTarget(null);
+      return;
+    }
+    update(fields[target], String(priced.price));
+    setTracked((current) => ({ ...current, [fields[target]]: priced }));
     setSelected((current) => ({
       ...current,
       [target]: item.name,
@@ -342,56 +353,60 @@ export default function SpecialSystemsScreen() {
     setTarget(null);
   }
 
-  function calculate() {
+  function compute(source: Form): SpecialSystemsResult | null {
     if (!totalEquipment) {
       setError("Introduce al menos un equipo o dispositivo.");
-      return;
+      return null;
     }
 
     if (
-      num(form.wiredPoints) > 0 &&
-      (!num(form.averageRouteLength) ||
-        !num(form.cableRunsPerPoint) ||
-        !num(form.cableRollLength) ||
-        !num(form.conduitPieceLength))
+      num(source.wiredPoints) > 0 &&
+      (!num(source.averageRouteLength) ||
+        !num(source.cableRunsPerPoint) ||
+        !num(source.cableRollLength) ||
+        !num(source.conduitPieceLength))
     ) {
       setError(
         "Revisa los puntos cableados y las longitudes de instalación.",
       );
-      return;
+      return null;
     }
 
-    setResult(
-      calculateSpecialSystems(
+    return calculateSpecialSystems(
         {
           systemType,
-          deviceA: num(form.deviceA),
-          deviceB: num(form.deviceB),
-          deviceC: num(form.deviceC),
-          deviceD: num(form.deviceD),
-          deviceE: num(form.deviceE),
-          wiredPoints: num(form.wiredPoints),
-          averageRouteLength: num(form.averageRouteLength),
-          cableRunsPerPoint: num(form.cableRunsPerPoint),
-          wastePercentage: num(form.waste),
-          cableRollLength: num(form.cableRollLength),
-          conduitPieceLength: num(form.conduitPieceLength),
+          deviceA: num(source.deviceA),
+          deviceB: num(source.deviceB),
+          deviceC: num(source.deviceC),
+          deviceD: num(source.deviceD),
+          deviceE: num(source.deviceE),
+          wiredPoints: num(source.wiredPoints),
+          averageRouteLength: num(source.averageRouteLength),
+          cableRunsPerPoint: num(source.cableRunsPerPoint),
+          wastePercentage: num(source.waste),
+          cableRollLength: num(source.cableRollLength),
+          conduitPieceLength: num(source.conduitPieceLength),
         },
         {
-          deviceAUnit: num(form.deviceAPrice),
-          deviceBUnit: num(form.deviceBPrice),
-          deviceCUnit: num(form.deviceCPrice),
-          deviceDUnit: num(form.deviceDPrice),
-          deviceEUnit: num(form.deviceEPrice),
-          cableRoll: num(form.cableRollPrice),
-          conduitPiece: num(form.conduitPiecePrice),
-          boxUnit: num(form.boxUnitPrice),
-          supplies: num(form.suppliesPrice),
-          laborWiredPoint: num(form.installationLaborPrice),
-          programming: num(form.programmingLaborPrice),
+          deviceAUnit: num(source.deviceAPrice),
+          deviceBUnit: num(source.deviceBPrice),
+          deviceCUnit: num(source.deviceCPrice),
+          deviceDUnit: num(source.deviceDPrice),
+          deviceEUnit: num(source.deviceEPrice),
+          cableRoll: num(source.cableRollPrice),
+          conduitPiece: num(source.conduitPiecePrice),
+          boxUnit: num(source.boxUnitPrice),
+          supplies: num(source.suppliesPrice),
+          laborWiredPoint: num(source.installationLaborPrice),
+          programming: num(source.programmingLaborPrice),
         },
-      ),
-    );
+      );
+  }
+
+  function calculate() {
+    const next = compute(form);
+    if (!next) return;
+    setResult(next);
 
     setError("");
     setMessage("");
@@ -434,7 +449,11 @@ export default function SpecialSystemsScreen() {
       description: `Instalación de ${config.title.toLowerCase()}`,
       unitName: "sistema",
       quantity: 1,
-      unitCost: result.totalCost,
+      unitCost: budgetUnitCost(
+        (compute(withCatalogCosts(form, tracked)) ?? result).totalCost,
+        1,
+        result.totalCost,
+      ),
       unitPrice: result.totalCost,
       taxable: true,
       notes:
@@ -808,6 +827,21 @@ function CatalogButton({
   );
 }
 
+
+const PICKER_KEYWORDS: Record<Target, RegExp> = {
+  deviceA: /camara|sensor|detector|parlante|lector|equipo/,
+  deviceB: /camara|sensor|detector|parlante|lector|equipo/,
+  deviceC: /camara|sensor|detector|parlante|lector|equipo/,
+  deviceD: /camara|sensor|detector|parlante|lector|equipo/,
+  deviceE: /camara|sensor|detector|parlante|lector|equipo/,
+  cable: /cable|utp|cat ?6|coaxial|alambre/,
+  conduit: /conduit|emt|tubo|tuberia|canaleta/,
+  box: /caja|registro/,
+  supplies: /conector|rj45|cinta|grapa|tornillo/,
+  installationLabor: /electric|tecnico|instalador/,
+  programmingLabor: /program|tecnico|configur/,
+};
+
 function Picker({
   visible,
   target,
@@ -829,15 +863,18 @@ function Picker({
     target === "installationLabor" ||
     target === "programmingLabor";
 
+  const [search, setSearch] = useState("");
   const filtered = useMemo(
     () =>
-      items.filter((item) =>
-        laborTarget
-          ? item.item_type === "labor" ||
-            item.item_type === "service"
-          : item.item_type === "material",
-      ),
-    [items, laborTarget],
+      target
+        ? rankCalculatorCatalogItems(
+            items,
+            laborTarget ? "labor" : "material",
+            PICKER_KEYWORDS[target],
+            search,
+          )
+        : [],
+    [items, target, search],
   );
 
   return (
@@ -850,6 +887,12 @@ function Picker({
         <Pressable onPress={onClose}>
           <Text style={styles.close}>Cerrar</Text>
         </Pressable>
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Buscar en el catálogo"
+          style={styles.search}
+        />
 
         {loading ? (
           <ActivityIndicator
@@ -859,6 +902,11 @@ function Picker({
         ) : (
           <FlatList
             data={filtered}
+            ListEmptyComponent={
+              <Text style={styles.searchEmpty}>
+                No hay conceptos de este tipo en el catálogo. Cierra y escribe el precio manualmente.
+              </Text>
+            }
             keyExtractor={(item: CatalogItemWithDetails) => item.id}
             renderItem={({
               item,
@@ -1142,5 +1190,20 @@ const styles = StyleSheet.create({
   price: {
     color: colors.accent,
     fontWeight: "900",
+  },
+  search: {
+    height: 48,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.text,
+  },
+  searchEmpty: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    padding: 12,
   },
 });

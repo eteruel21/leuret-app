@@ -21,6 +21,10 @@ import { addBudgetItem } from "../../services/budget-service";
 import { listCatalogItems } from "../../services/catalog-service";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
+  budgetUnitCost, rankCalculatorCatalogItems, trackCatalogPrice, withCatalogCosts,
+  type TrackedPrice,
+} from "../../services/calculators/catalog-pricing";
+import {
   calculateElectrical,
   type ElectricalResult,
 } from "../../services/calculators/electricidad";
@@ -127,6 +131,8 @@ export default function ElectricalScreen() {
   const [target, setTarget] = useState<Target | null>(null);
   const [selected, setSelected] =
     useState<Partial<Record<Target, string>>>({});
+  const [tracked, setTracked] =
+    useState<Partial<Record<keyof Form, TrackedPrice>>>({});
 
   const totalPoints =
     num(form.lightPoints) +
@@ -211,10 +217,15 @@ export default function ElectricalScreen() {
       dedicatedLabor: "dedicatedLaborPrice",
     };
 
-    const price =
-      item.sale_price > 0 ? item.sale_price : item.unit_cost;
-
-    update(fields[target], String(price));
+    const priced = trackCatalogPrice(item);
+    if (priced.price <= 0) {
+      Alert.alert("Precio pendiente",
+        "Este concepto aún no tiene precio. Escríbelo manualmente en la calculadora.");
+      setTarget(null);
+      return;
+    }
+    update(fields[target], String(priced.price));
+    setTracked((current) => ({ ...current, [fields[target]]: priced }));
     setSelected((current) => ({
       ...current,
       [target]: item.name,
@@ -222,85 +233,89 @@ export default function ElectricalScreen() {
     setTarget(null);
   }
 
-  function calculate() {
+  function compute(source: Form): ElectricalResult | null {
     if (!totalPoints) {
       setError("Introduce al menos un punto eléctrico.");
-      return;
+      return null;
     }
 
     if (
-      !num(form.averageRouteLength) ||
-      !num(form.cableRollLength) ||
-      !num(form.conduitPieceLength)
+      !num(source.averageRouteLength) ||
+      !num(source.cableRollLength) ||
+      !num(source.conduitPieceLength)
     ) {
       setError(
         "Revisa las longitudes de recorrido, rollo y tubería.",
       );
-      return;
+      return null;
     }
 
     if (
-      !num(form.lightingConductors) ||
-      !num(form.powerConductors) ||
-      !num(form.lightingPointsPerCircuit) ||
-      !num(form.outletPointsPerCircuit)
+      !num(source.lightingConductors) ||
+      !num(source.powerConductors) ||
+      !num(source.lightingPointsPerCircuit) ||
+      !num(source.outletPointsPerCircuit)
     ) {
       setError(
         "Revisa los conductores y la capacidad por circuito.",
       );
-      return;
+      return null;
     }
 
-    setResult(
-      calculateElectrical(
+    return calculateElectrical(
         {
-          lightPoints: num(form.lightPoints),
-          switchPoints: num(form.switchPoints),
-          outletPoints: num(form.outletPoints),
-          dedicatedPoints: num(form.dedicatedPoints),
+          lightPoints: num(source.lightPoints),
+          switchPoints: num(source.switchPoints),
+          outletPoints: num(source.outletPoints),
+          dedicatedPoints: num(source.dedicatedPoints),
           averageRouteLength: num(
-            form.averageRouteLength,
+            source.averageRouteLength,
           ),
           lightingConductors: num(
-            form.lightingConductors,
+            source.lightingConductors,
           ),
           powerConductors: num(
-            form.powerConductors,
+            source.powerConductors,
           ),
-          wastePercentage: num(form.waste),
-          cableRollLength: num(form.cableRollLength),
+          wastePercentage: num(source.waste),
+          cableRollLength: num(source.cableRollLength),
           conduitPieceLength: num(
-            form.conduitPieceLength,
+            source.conduitPieceLength,
           ),
           lightingPointsPerCircuit: num(
-            form.lightingPointsPerCircuit,
+            source.lightingPointsPerCircuit,
           ),
           outletPointsPerCircuit: num(
-            form.outletPointsPerCircuit,
+            source.outletPointsPerCircuit,
           ),
         },
         {
           lightingCableRoll: num(
-            form.lightingCableRollPrice,
+            source.lightingCableRollPrice,
           ),
           powerCableRoll: num(
-            form.powerCableRollPrice,
+            source.powerCableRollPrice,
           ),
-          conduitPiece: num(form.conduitPiecePrice),
-          boxUnit: num(form.boxUnitPrice),
-          outletUnit: num(form.outletUnitPrice),
-          switchUnit: num(form.switchUnitPrice),
-          breakerUnit: num(form.breakerUnitPrice),
-          supplies: num(form.suppliesPrice),
+          conduitPiece: num(source.conduitPiecePrice),
+          boxUnit: num(source.boxUnitPrice),
+          outletUnit: num(source.outletUnitPrice),
+          switchUnit: num(source.switchUnitPrice),
+          breakerUnit: num(source.breakerUnitPrice),
+          supplies: num(source.suppliesPrice),
           laborStandardPoint: num(
-            form.standardLaborPrice,
+            source.standardLaborPrice,
           ),
           laborDedicatedPoint: num(
-            form.dedicatedLaborPrice,
+            source.dedicatedLaborPrice,
           ),
         },
-      ),
-    );
+      );
+  }
+
+  function calculate() {
+    const next = compute(form);
+    if (!next) return;
+    setResult(next);
 
     setError("");
     setMessage("");
@@ -329,6 +344,9 @@ export default function ElectricalScreen() {
 
     const unitPrice =
       result.totalCost / result.totalPoints;
+    const unitCost = budgetUnitCost(
+      (compute(withCatalogCosts(form, tracked)) ?? result).totalCost,
+      result.totalPoints, unitPrice);
 
     const response = await addBudgetItem({
       companyId: activeCompany.id,
@@ -339,7 +357,7 @@ export default function ElectricalScreen() {
         `${result.totalPoints} puntos)`,
       unitName: "punto",
       quantity: result.totalPoints,
-      unitCost: unitPrice,
+      unitCost,
       unitPrice,
       taxable: true,
       notes:
@@ -740,6 +758,20 @@ function CatalogButton({
   );
 }
 
+
+const PICKER_KEYWORDS: Record<Target, RegExp> = {
+  lightingCable: /cable|thhn|alambre|conductor/,
+  powerCable: /cable|thhn|alambre|conductor/,
+  conduit: /conduit|emt|tubo|tuberia|pvc/,
+  box: /caja|octogonal|cuadrada/,
+  outlet: /tomacorriente|receptaculo|toma/,
+  switch: /interruptor|apagador|switch/,
+  breaker: /breaker|interruptor termomagnetico|disyuntor/,
+  supplies: /cinta|conector|grapa|abrazadera|tornillo/,
+  standardLabor: /electric/,
+  dedicatedLabor: /electric/,
+};
+
 function Picker({
   visible,
   target,
@@ -761,15 +793,18 @@ function Picker({
     target === "standardLabor" ||
     target === "dedicatedLabor";
 
+  const [search, setSearch] = useState("");
   const filtered = useMemo(
     () =>
-      items.filter((item) =>
-        laborTarget
-          ? item.item_type === "labor" ||
-            item.item_type === "service"
-          : item.item_type === "material",
-      ),
-    [items, laborTarget],
+      target
+        ? rankCalculatorCatalogItems(
+            items,
+            laborTarget ? "labor" : "material",
+            PICKER_KEYWORDS[target],
+            search,
+          )
+        : [],
+    [items, target, search],
   );
 
   return (
@@ -782,6 +817,12 @@ function Picker({
         <Pressable onPress={onClose}>
           <Text style={styles.close}>Cerrar</Text>
         </Pressable>
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Buscar en el catálogo"
+          style={styles.search}
+        />
 
         {loading ? (
           <ActivityIndicator
@@ -791,6 +832,11 @@ function Picker({
         ) : (
           <FlatList
             data={filtered}
+            ListEmptyComponent={
+              <Text style={styles.searchEmpty}>
+                No hay conceptos de este tipo en el catálogo. Cierra y escribe el precio manualmente.
+              </Text>
+            }
             keyExtractor={(item: CatalogItemWithDetails) =>
               item.id}
             renderItem={({
@@ -1070,5 +1116,20 @@ const styles = StyleSheet.create({
   price: {
     color: colors.accent,
     fontWeight: "900",
+  },
+  search: {
+    height: 48,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.text,
+  },
+  searchEmpty: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    padding: 12,
   },
 });

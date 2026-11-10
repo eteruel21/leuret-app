@@ -21,6 +21,10 @@ import { addBudgetItem } from "../../services/budget-service";
 import { listCatalogItems } from "../../services/catalog-service";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
+  budgetUnitCost, rankCalculatorCatalogItems, trackCatalogPrice, withCatalogCosts,
+  type TrackedPrice,
+} from "../../services/calculators/catalog-pricing";
+import {
   calculateMdfFurniture,
   type MdfFurnitureResult,
 } from "../../services/calculators/muebles-mdf";
@@ -146,6 +150,8 @@ export default function MdfFurnitureScreen() {
   const [target, setTarget] = useState<Target | null>(null);
   const [selected, setSelected] =
     useState<Partial<Record<Target, string>>>({});
+  const [tracked, setTracked] =
+    useState<Partial<Record<keyof Form, TrackedPrice>>>({});
 
   const bodyArea =
     Math.max(num(form.quantity), 1) *
@@ -218,70 +224,83 @@ export default function MdfFurnitureScreen() {
       labor: "laborPrice",
       installation: "installationPrice",
     };
-    const price = item.sale_price > 0 ? item.sale_price : item.unit_cost;
-    update(fields[target], String(price));
+    const priced = trackCatalogPrice(item);
+    if (priced.price <= 0) {
+      Alert.alert("Precio pendiente",
+        "Este concepto aún no tiene precio. Escríbelo manualmente en la calculadora.");
+      setTarget(null);
+      return;
+    }
+    update(fields[target], String(priced.price));
+    setTracked((current) => ({ ...current, [fields[target]]: priced }));
     setSelected((current) => ({ ...current, [target]: item.name }));
     setTarget(null);
   }
 
-  function calculate() {
-    if (!num(form.width) || !num(form.height) || !num(form.depth)) {
+  function compute(source: Form): MdfFurnitureResult | null {
+    if (!num(source.width) || !num(source.height) || !num(source.depth)) {
       setError("Introduce el ancho, alto y profundidad del mueble.");
-      return;
+      return null;
     }
-    if (!num(form.boardWidth) || !num(form.boardLength)) {
+    if (!num(source.boardWidth) || !num(source.boardLength)) {
       setError("Revisa las medidas del tablero MDF.");
-      return;
+      return null;
     }
     if (
-      num(form.backArea) > 0 &&
-      (!num(form.backBoardWidth) || !num(form.backBoardLength))
+      num(source.backArea) > 0 &&
+      (!num(source.backBoardWidth) || !num(source.backBoardLength))
     ) {
       setError("Revisa las medidas del tablero de fondo.");
-      return;
+      return null;
     }
 
     const calculated = calculateMdfFurniture(
       {
-        width: num(form.width),
-        height: num(form.height),
-        depth: num(form.depth),
-        quantity: num(form.quantity),
-        verticalPanels: num(form.verticalPanels),
-        horizontalPanels: num(form.horizontalPanels),
-        shelves: num(form.shelves),
-        frontArea: num(form.frontArea),
-        backArea: num(form.backArea),
-        extraMdfArea: num(form.extraMdfArea),
-        wastePercentage: num(form.waste),
-        boardWidth: num(form.boardWidth),
-        boardLength: num(form.boardLength),
-        backBoardWidth: num(form.backBoardWidth),
-        backBoardLength: num(form.backBoardLength),
-        extraEdgeMeters: num(form.extraEdgeMeters),
-        edgeRollLength: num(form.edgeRollLength),
-        doors: num(form.doors),
-        hingesPerDoor: num(form.hingesPerDoor),
-        drawers: num(form.drawers),
-        slidesPerDrawer: num(form.slidesPerDrawer),
-        handles: num(form.handles),
-        legs: num(form.legs),
+        width: num(source.width),
+        height: num(source.height),
+        depth: num(source.depth),
+        quantity: num(source.quantity),
+        verticalPanels: num(source.verticalPanels),
+        horizontalPanels: num(source.horizontalPanels),
+        shelves: num(source.shelves),
+        frontArea: num(source.frontArea),
+        backArea: num(source.backArea),
+        extraMdfArea: num(source.extraMdfArea),
+        wastePercentage: num(source.waste),
+        boardWidth: num(source.boardWidth),
+        boardLength: num(source.boardLength),
+        backBoardWidth: num(source.backBoardWidth),
+        backBoardLength: num(source.backBoardLength),
+        extraEdgeMeters: num(source.extraEdgeMeters),
+        edgeRollLength: num(source.edgeRollLength),
+        doors: num(source.doors),
+        hingesPerDoor: num(source.hingesPerDoor),
+        drawers: num(source.drawers),
+        slidesPerDrawer: num(source.slidesPerDrawer),
+        handles: num(source.handles),
+        legs: num(source.legs),
       },
       {
-        mdfBoard: num(form.mdfPrice),
-        backBoard: num(form.backPrice),
-        edgeRoll: num(form.edgePrice),
-        hingeUnit: num(form.hingePrice),
-        slidePair: num(form.slidePrice),
-        handleUnit: num(form.handlePrice),
-        legUnit: num(form.legPrice),
-        supplies: num(form.suppliesPrice),
-        laborSquareMeter: num(form.laborPrice),
-        installationUnit: num(form.installationPrice),
+        mdfBoard: num(source.mdfPrice),
+        backBoard: num(source.backPrice),
+        edgeRoll: num(source.edgePrice),
+        hingeUnit: num(source.hingePrice),
+        slidePair: num(source.slidePrice),
+        handleUnit: num(source.handlePrice),
+        legUnit: num(source.legPrice),
+        supplies: num(source.suppliesPrice),
+        laborSquareMeter: num(source.laborPrice),
+        installationUnit: num(source.installationPrice),
       },
     );
 
-    setResult(calculated);
+    return calculated;
+  }
+
+  function calculate() {
+    const next = compute(form);
+    if (!next) return;
+    setResult(next);
     setError("");
     setMessage("");
   }
@@ -305,6 +324,9 @@ export default function MdfFurnitureScreen() {
 
     const quantity = Math.max(result.quantity, 1);
     const unitPrice = result.totalCost / quantity;
+    const unitCost = budgetUnitCost(
+      (compute(withCatalogCosts(form, tracked)) ?? result).totalCost,
+      quantity, unitPrice);
     const response = await addBudgetItem({
       companyId: activeCompany.id,
       budgetId,
@@ -312,7 +334,7 @@ export default function MdfFurnitureScreen() {
       description: `Fabricación de mueble MDF (${quantity} und.)`,
       unitName: "und.",
       quantity,
-      unitCost: unitPrice,
+      unitCost,
       unitPrice,
       taxable: true,
       notes:
@@ -563,6 +585,20 @@ function CatalogButton({
   );
 }
 
+
+const PICKER_KEYWORDS: Record<Target, RegExp> = {
+  mdf: /mdf|melamina|aglomerado|tablero/,
+  back: /fondo|hdf|mdf 3|masonite/,
+  edge: /canto|tapacanto|pvc/,
+  hinge: /bisagra/,
+  slide: /corredera|riel|telescop/,
+  handle: /halador|jaladera|manija|tirador/,
+  leg: /pata|nivelador/,
+  supplies: /tornillo|pegamento|cola|minifix|tarugo/,
+  labor: /carpint|ebanist/,
+  installation: /carpint|instalador|ebanist/,
+};
+
 function Picker({
   visible,
   target,
@@ -580,14 +616,18 @@ function Picker({
   onClose: () => void;
   onSelect: (item: CatalogItemWithDetails) => void;
 }) {
+  const [search, setSearch] = useState("");
   const filtered = useMemo(
     () =>
-      items.filter((item) =>
-        target === "labor" || target === "installation"
-          ? item.item_type === "labor" || item.item_type === "service"
-          : item.item_type === "material",
-      ),
-    [items, target],
+      target
+        ? rankCalculatorCatalogItems(
+            items,
+            target === "labor" || target === "installation" ? "labor" : "material",
+            PICKER_KEYWORDS[target],
+            search,
+          )
+        : [],
+    [items, target, search],
   );
 
   return (
@@ -596,11 +636,22 @@ function Picker({
         <Pressable onPress={onClose}>
           <Text style={styles.close}>Cerrar</Text>
         </Pressable>
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Buscar en el catálogo"
+          style={styles.search}
+        />
         {loading ? (
           <ActivityIndicator size="large" color={colors.primary} />
         ) : (
           <FlatList
             data={filtered}
+            ListEmptyComponent={
+              <Text style={styles.searchEmpty}>
+                No hay conceptos de este tipo en el catálogo. Cierra y escribe el precio manualmente.
+              </Text>
+            }
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <Pressable onPress={() => onSelect(item)} style={styles.item}>
@@ -745,4 +796,19 @@ const styles = StyleSheet.create({
   },
   itemName: { color: colors.text, fontWeight: "800", flex: 1 },
   price: { color: colors.accent, fontWeight: "900", marginLeft: 12 },
+  search: {
+    height: 48,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.text,
+  },
+  searchEmpty: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    padding: 12,
+  },
 });

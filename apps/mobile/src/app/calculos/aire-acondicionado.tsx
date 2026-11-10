@@ -21,6 +21,10 @@ import { addBudgetItem } from "../../services/budget-service";
 import { listCatalogItems } from "../../services/catalog-service";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
+  budgetUnitCost, rankCalculatorCatalogItems, trackCatalogPrice, withCatalogCosts,
+  type TrackedPrice,
+} from "../../services/calculators/catalog-pricing";
+import {
   calculateAirConditioning,
   type AirConditioningResult,
 } from "../../services/calculators/aire-acondicionado";
@@ -136,6 +140,8 @@ export default function AirConditioningScreen() {
   const [target, setTarget] = useState<Target | null>(null);
   const [selected, setSelected] =
     useState<Partial<Record<Target, string>>>({});
+  const [tracked, setTracked] =
+    useState<Partial<Record<keyof Form, TrackedPrice>>>({});
 
   const grossArea =
     num(form.directArea) || num(form.length) * num(form.width);
@@ -221,10 +227,15 @@ export default function AirConditioningScreen() {
       coreDrilling: "coreDrillingPrice",
     };
 
-    const price =
-      item.sale_price > 0 ? item.sale_price : item.unit_cost;
-
-    update(fields[target], String(price));
+    const priced = trackCatalogPrice(item);
+    if (priced.price <= 0) {
+      Alert.alert("Precio pendiente",
+        "Este concepto aún no tiene precio. Escríbelo manualmente en la calculadora.");
+      setTarget(null);
+      return;
+    }
+    update(fields[target], String(priced.price));
+    setTracked((current) => ({ ...current, [fields[target]]: priced }));
     setSelected((current) => ({
       ...current,
       [target]: item.name,
@@ -232,63 +243,67 @@ export default function AirConditioningScreen() {
     setTarget(null);
   }
 
-  function calculate() {
+  function compute(source: Form): AirConditioningResult | null {
     if (!grossArea) {
       setError("Introduce las medidas o el área directa.");
-      return;
+      return null;
     }
 
-    if (num(form.excludedArea) >= grossArea) {
+    if (num(source.excludedArea) >= grossArea) {
       setError("El área excluida debe ser menor que el área total.");
-      return;
+      return null;
     }
 
-    if (!num(form.units) || !num(form.btuPerSquareMeter)) {
+    if (!num(source.units) || !num(source.btuPerSquareMeter)) {
       setError("Revisa la cantidad de equipos y el rendimiento en BTU.");
-      return;
+      return null;
     }
 
-    if (num(form.drainRoute) > 0 && !num(form.drainPieceLength)) {
+    if (num(source.drainRoute) > 0 && !num(source.drainPieceLength)) {
       setError("Introduce la longitud comercial de la tubería de drenaje.");
-      return;
+      return null;
     }
 
-    setResult(
-      calculateAirConditioning(
+    return calculateAirConditioning(
         {
           grossArea,
-          excludedArea: num(form.excludedArea),
-          unitCount: num(form.units),
-          occupants: num(form.occupants),
-          btuPerSquareMeter: num(form.btuPerSquareMeter),
-          extraBtuPerPerson: num(form.extraBtuPerPerson),
-          heatLoadPercentage: num(form.heatLoad),
-          selectedCapacityBtu: num(form.selectedCapacity),
-          copperRoutePerUnit: num(form.copperRoute),
-          includedCopperPerUnit: num(form.includedCopper),
-          cableRoutePerUnit: num(form.cableRoute),
-          drainRoutePerUnit: num(form.drainRoute),
-          wastePercentage: num(form.waste),
-          drainPieceLength: num(form.drainPieceLength),
+          excludedArea: num(source.excludedArea),
+          unitCount: num(source.units),
+          occupants: num(source.occupants),
+          btuPerSquareMeter: num(source.btuPerSquareMeter),
+          extraBtuPerPerson: num(source.extraBtuPerPerson),
+          heatLoadPercentage: num(source.heatLoad),
+          selectedCapacityBtu: num(source.selectedCapacity),
+          copperRoutePerUnit: num(source.copperRoute),
+          includedCopperPerUnit: num(source.includedCopper),
+          cableRoutePerUnit: num(source.cableRoute),
+          drainRoutePerUnit: num(source.drainRoute),
+          wastePercentage: num(source.waste),
+          drainPieceLength: num(source.drainPieceLength),
           refrigerantKgPerExtraMeter: num(
-            form.refrigerantPerExtraMeter,
+            source.refrigerantPerExtraMeter,
           ),
         },
         {
-          equipmentUnit: num(form.equipmentPrice),
-          copperPairMeter: num(form.copperMeterPrice),
-          cableMeter: num(form.cableMeterPrice),
-          drainPiece: num(form.drainPiecePrice),
-          bracketSet: num(form.bracketPrice),
-          breakerUnit: num(form.breakerPrice),
-          disconnectUnit: num(form.disconnectPrice),
-          refrigerantKilogram: num(form.refrigerantKgPrice),
-          supplies: num(form.suppliesPrice),
-          laborUnit: num(form.laborUnitPrice),
-          coreDrillingUnit: num(form.coreDrillingPrice),
+          equipmentUnit: num(source.equipmentPrice),
+          copperPairMeter: num(source.copperMeterPrice),
+          cableMeter: num(source.cableMeterPrice),
+          drainPiece: num(source.drainPiecePrice),
+          bracketSet: num(source.bracketPrice),
+          breakerUnit: num(source.breakerPrice),
+          disconnectUnit: num(source.disconnectPrice),
+          refrigerantKilogram: num(source.refrigerantKgPrice),
+          supplies: num(source.suppliesPrice),
+          laborUnit: num(source.laborUnitPrice),
+          coreDrillingUnit: num(source.coreDrillingPrice),
         },
-      ),
-    );
+      );
+  }
+
+  function calculate() {
+    const next = compute(form);
+    if (!next) return;
+    setResult(next);
 
     setError("");
     setMessage("");
@@ -316,6 +331,9 @@ export default function AirConditioningScreen() {
     }
 
     const unitPrice = result.totalCost / result.unitCount;
+    const unitCost = budgetUnitCost(
+      (compute(withCatalogCosts(form, tracked)) ?? result).totalCost,
+      result.unitCount, unitPrice);
     const capacity = formatDecimal(
       result.selectedCapacityPerUnit,
       0,
@@ -331,7 +349,7 @@ export default function AirConditioningScreen() {
         `de ${capacity} BTU`,
       unitName: "und.",
       quantity: result.unitCount,
-      unitCost: unitPrice,
+      unitCost,
       unitPrice,
       taxable: true,
       notes:
@@ -636,6 +654,21 @@ function CatalogButton({
   );
 }
 
+
+const PICKER_KEYWORDS: Record<Target, RegExp> = {
+  equipment: /aire acondicionado|split|inverter|btu|minisplit/,
+  copper: /cobre|tuberia de cobre|linea/,
+  cable: /cable|thhn|alambre|conductor/,
+  drain: /drenaje|pvc|manguera|tubo/,
+  bracket: /soporte|base|bracket|rack/,
+  breaker: /breaker|disyuntor|termomagnetico/,
+  disconnect: /desconectador|disconnect|cuchilla/,
+  refrigerant: /refrigerante|gas|r-?410|r-?32/,
+  supplies: /cinta|aislante|armaflex|tornillo|silicon/,
+  labor: /refrigeracion|aire|tecnico|electric/,
+  coreDrilling: /perfor|core|boquete/,
+};
+
 function Picker({
   visible,
   target,
@@ -653,15 +686,18 @@ function Picker({
   onClose: () => void;
   onSelect: (item: CatalogItemWithDetails) => void;
 }) {
+  const [search, setSearch] = useState("");
   const filtered = useMemo(
     () =>
-      items.filter((item) =>
-        target === "labor" || target === "coreDrilling"
-          ? item.item_type === "labor" ||
-            item.item_type === "service"
-          : item.item_type === "material",
-      ),
-    [items, target],
+      target
+        ? rankCalculatorCatalogItems(
+            items,
+            target === "labor" || target === "coreDrilling" ? "labor" : "material",
+            PICKER_KEYWORDS[target],
+            search,
+          )
+        : [],
+    [items, target, search],
   );
 
   return (
@@ -674,6 +710,12 @@ function Picker({
         <Pressable onPress={onClose}>
           <Text style={styles.close}>Cerrar</Text>
         </Pressable>
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Buscar en el catálogo"
+          style={styles.search}
+        />
 
         {loading ? (
           <ActivityIndicator
@@ -683,6 +725,11 @@ function Picker({
         ) : (
           <FlatList
             data={filtered}
+            ListEmptyComponent={
+              <Text style={styles.searchEmpty}>
+                No hay conceptos de este tipo en el catálogo. Cierra y escribe el precio manualmente.
+              </Text>
+            }
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <Pressable
@@ -934,5 +981,20 @@ const styles = StyleSheet.create({
   price: {
     color: colors.accent,
     fontWeight: "900",
+  },
+  search: {
+    height: 48,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.text,
+  },
+  searchEmpty: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    padding: 12,
   },
 });

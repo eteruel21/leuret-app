@@ -14,6 +14,10 @@ import { addBudgetItem } from "../../services/budget-service";
 import { listCatalogItems } from "../../services/catalog-service";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
+  budgetUnitCost, rankCalculatorCatalogItems, trackCatalogPrice, withCatalogCosts,
+  type TrackedPrice,
+} from "../../services/calculators/catalog-pricing";
+import {
   calculateGypsum, type GypsumBoardSides, type GypsumResult,
 } from "../../services/calculators/gypsum";
 import { formatDecimal, formatMoney } from "../../utils/format";
@@ -73,6 +77,8 @@ export default function GypsumScreen() {
   const [target, setTarget] = useState<Target | null>(null);
   const [selected, setSelected] =
     useState<Partial<Record<Target, string>>>({});
+  const [tracked, setTracked] =
+    useState<Partial<Record<keyof Form, TrackedPrice>>>({});
 
   useEffect(() => {
     async function restore() {
@@ -122,23 +128,30 @@ export default function GypsumScreen() {
       screw: "screwPrice", tape: "tapePrice",
       compound: "compoundPrice", labor: "laborPrice",
     };
-    const price = item.sale_price > 0 ? item.sale_price : item.unit_cost;
-    update(fields[target], String(price));
+    const priced = trackCatalogPrice(item);
+    if (priced.price <= 0) {
+      Alert.alert("Precio pendiente",
+        "Este concepto aún no tiene precio. Escríbelo manualmente en la calculadora.");
+      setTarget(null);
+      return;
+    }
+    update(fields[target], String(priced.price));
+    setTracked((current) => ({ ...current, [fields[target]]: priced }));
     setSelected((current) => ({ ...current, [target]: item.name }));
     setTarget(null);
   }
 
-  function calculate() {
-    const length = number(form.wallLength);
-    const height = number(form.wallHeight);
-    const openings = number(form.openingsArea);
+  function compute(source: Form): GypsumResult | null {
+    const length = number(source.wallLength);
+    const height = number(source.wallHeight);
+    const openings = number(source.openingsArea);
     if (!length || !height) {
       setError("Introduce un largo y una altura mayores que cero.");
-      return;
+      return null;
     }
     if (openings < 0 || openings >= length * height) {
       setError("El área de puertas y ventanas debe ser menor que el muro.");
-      return;
+      return null;
     }
     const positive: [keyof Form, string][] = [
       ["boardWidth", "ancho de lámina"], ["boardHeight", "alto de lámina"],
@@ -147,33 +160,39 @@ export default function GypsumScreen() {
       ["tapeRollLength", "largo del rollo"],
       ["compoundPackageKg", "peso del compuesto"],
     ];
-    const invalid = positive.find(([field]) => number(form[field]) <= 0);
+    const invalid = positive.find(([field]) => number(source[field]) <= 0);
     if (invalid) {
       setError(`Revisa el ${invalid[1]}.`);
-      return;
+      return null;
     }
 
-    setResult(calculateGypsum({
+    return calculateGypsum({
       wallLength: length, wallHeight: height, openingsArea: openings,
-      boardSides: sides, boardWidth: number(form.boardWidth),
-      boardHeight: number(form.boardHeight),
-      wastePercentage: number(form.waste),
-      studSpacing: number(form.studSpacing),
-      studPieceLength: number(form.studLength),
-      trackPieceLength: number(form.trackLength),
-      screwsPerBoard: number(form.screwsPerBoard),
-      screwsPerBox: number(form.screwsPerBox),
-      tapePerSquareMeter: number(form.tapePerM2),
-      tapeRollLength: number(form.tapeRollLength),
-      compoundKgPerSquareMeter: number(form.compoundPerM2),
-      compoundPackageKg: number(form.compoundPackageKg),
+      boardSides: sides, boardWidth: number(source.boardWidth),
+      boardHeight: number(source.boardHeight),
+      wastePercentage: number(source.waste),
+      studSpacing: number(source.studSpacing),
+      studPieceLength: number(source.studLength),
+      trackPieceLength: number(source.trackLength),
+      screwsPerBoard: number(source.screwsPerBoard),
+      screwsPerBox: number(source.screwsPerBox),
+      tapePerSquareMeter: number(source.tapePerM2),
+      tapeRollLength: number(source.tapeRollLength),
+      compoundKgPerSquareMeter: number(source.compoundPerM2),
+      compoundPackageKg: number(source.compoundPackageKg),
     }, {
-      boardUnit: number(form.boardPrice), studPiece: number(form.studPrice),
-      trackPiece: number(form.trackPrice), screwBox: number(form.screwPrice),
-      tapeRoll: number(form.tapePrice),
-      compoundPackage: number(form.compoundPrice),
-      laborSquareMeter: number(form.laborPrice),
-    }));
+      boardUnit: number(source.boardPrice), studPiece: number(source.studPrice),
+      trackPiece: number(source.trackPrice), screwBox: number(source.screwPrice),
+      tapeRoll: number(source.tapePrice),
+      compoundPackage: number(source.compoundPrice),
+      laborSquareMeter: number(source.laborPrice),
+    });
+  }
+
+  function calculate() {
+    const next = compute(form);
+    if (!next) return;
+    setResult(next);
     setError("");
     setSuccess("");
   }
@@ -190,11 +209,14 @@ export default function GypsumScreen() {
     }
     const f = (value: number) => formatDecimal(value, 0, currency);
     const unitPrice = result.totalCost / result.finishedArea;
+    const unitCost = budgetUnitCost(
+      (compute(withCatalogCosts(form, tracked)) ?? result).totalCost,
+      result.finishedArea, unitPrice);
     const response = await addBudgetItem({
       companyId: activeCompany.id, budgetId, itemType: "service",
       description: `Muro de gypsum a ${sides} cara${sides === 1 ? "" : "s"}`,
       unitName: "m²", quantity: result.finishedArea,
-      unitCost: unitPrice, unitPrice, taxable: true,
+      unitCost, unitPrice, taxable: true,
       notes: `${f(result.boardsToBuy)} láminas · ${f(result.studPieces)} studs · ` +
         `${f(result.trackPieces)} tracks · ${f(result.screwBoxes)} cajas de tornillos · ` +
         `${f(result.tapeRolls)} rollos de cinta · ${f(result.compoundPackages)} compuestos`,
@@ -360,20 +382,25 @@ function CatalogButton({ label, value, onPress }: {
   </Pressable>;
 }
 
+const PICKER_KEYWORDS: Record<Target, RegExp> = {
+  board: /gypsum|yeso|drywall|panel/,
+  stud: /stud|parral|montante/,
+  track: /track|canal|riel/,
+  screw: /tornillo|screw/,
+  tape: /cinta|malla|tape/,
+  compound: /compuesto|masilla|pasta|joint/,
+  labor: /gyps|cimbr|tablaroca/,
+};
+
 function CatalogPicker({ visible, target, items, loading, currency, onClose, onSelect }: {
   visible: boolean; target: Target | null; items: CatalogItemWithDetails[];
   loading: boolean; currency?: string; onClose: () => void;
   onSelect: (item: CatalogItemWithDetails) => void;
 }) {
   const [search, setSearch] = useState("");
-  const filtered = useMemo(() => items.filter((item) => {
-    const typeOk = target === "labor"
-      ? item.item_type === "labor" || item.item_type === "service"
-      : item.item_type === "material";
-    const q = search.trim().toLowerCase();
-    return typeOk && (!q || item.name.toLowerCase().includes(q) ||
-      (item.category?.name.toLowerCase().includes(q) ?? false));
-  }), [items, search, target]);
+  const filtered = useMemo(() => target ? rankCalculatorCatalogItems(items,
+    target === "labor" ? "labor" : "material", PICKER_KEYWORDS[target], search) : [],
+  [items, search, target]);
   return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet"
     onRequestClose={onClose}><SafeAreaView style={styles.modal}>
       <View style={styles.modalHeader}><Pressable onPress={onClose}>
@@ -384,6 +411,7 @@ function CatalogPicker({ visible, target, items, loading, currency, onClose, onS
         placeholder="Buscar por nombre o categoría" style={styles.search} />
         {loading ? <ActivityIndicator size="large" color={colors.primary} /> :
           <FlatList data={filtered} keyExtractor={(item) => item.id}
+            ListEmptyComponent={<Text style={styles.itemMeta}>No hay conceptos de este tipo en el catálogo. Cierra y escribe el precio manualmente.</Text>}
             renderItem={({ item }) => {
               const price = item.sale_price > 0 ? item.sale_price : item.unit_cost;
               return <Pressable onPress={() => onSelect(item)} style={styles.catalogItem}>
