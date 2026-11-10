@@ -19,6 +19,8 @@ import { MotionPressable } from "@/components/MotionPressable";
 
 import { colors, radius, shadows, typography } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
+import { ROLE_LABELS, type Capability } from "@/permissions/permissions";
 
 type OptionItem = {
   id: string;
@@ -26,6 +28,8 @@ type OptionItem = {
   description: string;
   icon: ComponentProps<typeof Ionicons>["name"];
   onPress: () => void;
+  /** Si se indica, la opción solo aparece para los roles con esta capacidad. */
+  capability?: Capability;
 };
 
 const baseOptions: OptionItem[] = [
@@ -36,6 +40,7 @@ const baseOptions: OptionItem[] = [
       "Partidas, descuentos, ITBMS y totales.",
     icon: "document-text-outline" as const,
     onPress: () => router.push("/presupuestos" as Href),
+    capability: "budgets.view",
   },
   {
     id: "projects",
@@ -44,6 +49,7 @@ const baseOptions: OptionItem[] = [
       "Programación y seguimiento de trabajos.",
     icon: "business-outline" as const,
     onPress: () => router.push("/proyectos" as Href),
+    capability: "projects.view",
   },
   {
     id: "invoices",
@@ -52,6 +58,7 @@ const baseOptions: OptionItem[] = [
       "Facturas, abonos y saldos pendientes.",
     icon: "receipt-outline" as const,
     onPress: () => router.push("/facturas" as Href),
+    capability: "invoices.view",
   },
   {
     id: "catalog",
@@ -60,11 +67,13 @@ const baseOptions: OptionItem[] = [
       "Consultar materiales, mano de obra y servicios.",
     icon: "cube-outline" as const,
     onPress: () => router.push("/catalogo" as Href),
+    capability: "catalog.view",
   },
 ];
 
 export default function MoreScreen() {
   const { signOut } = useAuth();
+  const { role, can } = usePermissions();
 
   const performLogout = async () => {
     const { error } = await signOut();
@@ -100,7 +109,9 @@ export default function MoreScreen() {
   };
 
   const options = [
-    ...baseOptions,
+    ...baseOptions.filter(
+      (option) => !option.capability || can(option.capability)
+    ),
     {
       id: "logout",
       title: "Cerrar sesión",
@@ -121,7 +132,9 @@ export default function MoreScreen() {
           </Text>
 
           <Text style={styles.subtitle}>
-            Administración general de la empresa.
+            {role
+              ? `Herramientas disponibles para tu rol: ${ROLE_LABELS[role]}.`
+              : "Administración general de la empresa."}
           </Text>
         </Animated.View>
 

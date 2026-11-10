@@ -32,6 +32,13 @@ import {
 } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { usePermissions } from "@/hooks/usePermissions";
+import {
+  HOME_FOCUS,
+  ROLE_LABELS,
+  quickActionsFor,
+  type QuickActionId,
+} from "@/permissions/permissions";
 import { fetchCompanyActivities } from "@/services/activity-service";
 import { listClients } from "@/services/client-service";
 import { listInvoices } from "@/services/invoice-service";
@@ -46,6 +53,18 @@ type QuickActionProps = {
   subtitle: string;
   onPress: () => void;
   delay?: number;
+};
+
+const QUICK_ACTIONS: Record<
+  QuickActionId,
+  { icon: IconName; title: string; subtitle: string; href: Href }
+> = {
+  calculate: { icon: "calculator-outline", title: "Calcular", subtitle: "Materiales y mano de obra", href: "/calculos" as Href },
+  budget: { icon: "document-text-outline", title: "Presupuesto", subtitle: "Crear una cotización", href: "/presupuestos" as Href },
+  project: { icon: "business-outline", title: "Proyectos", subtitle: "Obras, tareas y avances", href: "/proyectos" as Href },
+  client: { icon: "person-add-outline", title: "Clientes", subtitle: "Gestionar contactos", href: "/(tabs)/clientes" as Href },
+  agenda: { icon: "calendar-outline", title: "Agenda", subtitle: "Visitas y trabajos", href: "/(tabs)/agenda" as Href },
+  invoices: { icon: "receipt-outline", title: "Facturas", subtitle: "Cobros y saldos", href: "/facturas" as Href },
 };
 
 function QuickAction({
@@ -158,6 +177,11 @@ function formatActivityDate(date: string): string { const value = new Date(`${da
 export default function HomeScreen() {
   const { profile } = useAuth();
   const { activeCompany } = useCompany();
+  const { role, can } = usePermissions();
+  const quickActions = quickActionsFor(role);
+  const showProjects = can("projects.view");
+  // Los cobros solo se muestran a quien los gestiona (owner, admin, sales).
+  const showFinances = can("invoices.payments.record");
 
   const firstName =
     profile?.full_name?.trim().split(/\s+/)[0] || "Profesional";
@@ -254,8 +278,9 @@ export default function HomeScreen() {
             </Text>
 
             <Text style={styles.heroDescription}>
-              Proyectos, cálculos, presupuestos y clientes
-              organizados desde un solo lugar.
+              {role
+                ? HOME_FOCUS[role]
+                : "Proyectos, cálculos, presupuestos y clientes organizados desde un solo lugar."}
             </Text>
           </Animated.View>
 
@@ -271,7 +296,9 @@ export default function HomeScreen() {
 
                 <View style={styles.companyCopy}>
                   <Text style={styles.companyLabel}>
-                    ESPACIO ACTIVO
+                    {role
+                      ? `ESPACIO ACTIVO · ${ROLE_LABELS[role].toUpperCase()}`
+                      : "ESPACIO ACTIVO"}
                   </Text>
 
                   <Text
@@ -320,47 +347,23 @@ export default function HomeScreen() {
           />
 
           <View style={styles.quickGrid}>
-            <QuickAction
-              icon="calculator-outline"
-              title="Calcular"
-              subtitle="Materiales y mano de obra"
-              delay={80}
-              onPress={() =>
-                router.push("/calculos" as Href)
-              }
-            />
+            {quickActions.map((id, index) => {
+              const action = QUICK_ACTIONS[id];
 
-            <QuickAction
-              icon="document-text-outline"
-              title="Presupuesto"
-              subtitle="Crear una cotización"
-              delay={140}
-              onPress={() =>
-                router.push("/presupuestos" as Href)
-              }
-            />
-
-            <QuickAction
-              icon="business-outline"
-              title="Proyecto"
-              subtitle="Organizar una obra"
-              delay={200}
-              onPress={() =>
-                router.push("/proyectos" as Href)
-              }
-            />
-
-            <QuickAction
-              icon="person-add-outline"
-              title="Cliente"
-              subtitle="Gestionar contactos"
-              delay={260}
-              onPress={() =>
-                router.push("/(tabs)/clientes" as Href)
-              }
-            />
+              return (
+                <QuickAction
+                  key={id}
+                  icon={action.icon}
+                  title={action.title}
+                  subtitle={action.subtitle}
+                  delay={80 + index * 60}
+                  onPress={() => router.push(action.href)}
+                />
+              );
+            })}
           </View>
 
+          {showProjects || showFinances ? (
           <Animated.View
             entering={FadeInDown.delay(320).duration(480)}
           >
@@ -370,6 +373,7 @@ export default function HomeScreen() {
             />
 
             <View style={styles.operationCard}>
+              {showProjects ? (
               <Pressable
                 onPress={() =>
                   router.push("/proyectos" as Href)
@@ -407,9 +411,13 @@ export default function HomeScreen() {
                   color={colors.textMuted}
                 />
               </Pressable>
+              ) : null}
 
-              <View style={styles.rowDivider} />
+              {showProjects && showFinances ? (
+                <View style={styles.rowDivider} />
+              ) : null}
 
+              {showFinances ? (
               <Pressable
                 onPress={handleInvoices}
                 style={({ pressed }) => [
@@ -440,8 +448,10 @@ export default function HomeScreen() {
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
               </Pressable>
+              ) : null}
             </View>
           </Animated.View>
+          ) : null}
 
           <Animated.View
             entering={FadeInDown.delay(390).duration(480)}

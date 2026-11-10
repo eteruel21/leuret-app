@@ -13,12 +13,14 @@ import { colors, radius } from "@/constants/theme";
 type AdminPlaceholderProps = {
   title: string;
   description?: string;
+  icon?: React.ComponentProps<typeof Ionicons>["name"];
 };
 
 export function AdminPlaceholder({
   title,
   description =
     "La ruta ya está preparada. Su contenido se conectará en el siguiente bloque.",
+  icon = "construct-outline",
 }: AdminPlaceholderProps) {
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -41,7 +43,7 @@ export function AdminPlaceholder({
         <View style={styles.card}>
           <View style={styles.iconContainer}>
             <Ionicons
-              name="construct-outline"
+              name={icon}
               size={30}
               color={colors.primary}
             />

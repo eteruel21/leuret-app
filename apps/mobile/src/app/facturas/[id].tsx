@@ -49,6 +49,7 @@ import { getClientDisplayName } from "@/types/client";
 import { shareInvoicePdf } from "@/utils/invoice-pdf";
 import { shareCreditNotePdf } from "@/utils/credit-note-pdf";
 import { shareReceiptPdf } from "@/utils/receipt-pdf";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const paymentMethods: InvoicePaymentMethod[] = [
   "cash",
@@ -61,7 +62,8 @@ const paymentMethods: InvoicePaymentMethod[] = [
 export default function InvoiceDetailScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const invoiceId = Array.isArray(params.id) ? params.id[0] : params.id;
-  const { activeCompany, activeMembership } = useCompany();
+  const { activeCompany } = useCompany();
+  const { can } = usePermissions();
 
   const [invoice, setInvoice] = useState<InvoiceWithDetails | null>(null);
   const [payments, setPayments] = useState<InvoicePayment[]>([]);
@@ -552,9 +554,9 @@ export default function InvoiceDetailScreen() {
   const balanceDue = invoice.balance_due ?? Math.max(adjustedTotal - totalPaid, 0);
   const customerCredit = invoice.customer_credit ?? 0;
   const creditRemaining = Math.max(total - totalCredit, 0);
-  const canManageFinancial =
-    activeMembership?.role === "owner" || activeMembership?.role === "admin";
+  const canManageFinancial = can("invoices.manageFinancial");
   const canRecordPayment =
+    can("invoices.payments.record") &&
     ["issued", "partially_paid", "overdue"].includes(invoice.status) &&
     balanceDue > 0;
   const canReversePayments = canManageFinancial;
@@ -647,16 +649,18 @@ export default function InvoiceDetailScreen() {
             )}
           </Pressable>
 
-          <Pressable
-            onPress={() => router.push("/facturas/settings" as Href)}
-            style={({ pressed }) => [
-              styles.settingsButton,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Ionicons name="options-outline" size={20} color={colors.primary} />
-            <Text style={styles.settingsButtonText}>Diseño</Text>
-          </Pressable>
+          {can("company.manage") ? (
+            <Pressable
+              onPress={() => router.push("/facturas/settings" as Href)}
+              style={({ pressed }) => [
+                styles.settingsButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons name="options-outline" size={20} color={colors.primary} />
+              <Text style={styles.settingsButtonText}>Diseño</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {/* Cliente y Detalles */}

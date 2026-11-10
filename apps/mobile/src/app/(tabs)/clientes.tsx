@@ -37,6 +37,7 @@ import {
   typography,
 } from "@/constants/theme";
 import { useCompany } from "@/contexts/CompanyContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   createClient,
   deactivateClient,
@@ -51,6 +52,8 @@ import { validateClientAddress, validateClientIdentity } from "@/utils/client-va
 
 export default function ClientsScreen() {
   const { activeCompany } = useCompany();
+  const { can } = usePermissions();
+  const canEditClients = can("clients.edit");
 
   const [clients, setClients] = useState<
     ClientWithDetails[]
@@ -193,7 +196,7 @@ export default function ClientsScreen() {
             icon={search.trim() ? "search-outline" : "people-outline"}
             title={search.trim() ? "Sin coincidencias" : "No hay clientes"}
             description={search.trim() ? "Prueba con otro nombre, teléfono, correo o documento." : "Crea tu primer cliente para iniciar proyectos, visitas y presupuestos."}
-            actionLabel={search.trim() ? "Limpiar búsqueda" : "Agregar cliente"}
+            actionLabel={search.trim() ? "Limpiar búsqueda" : canEditClients ? "Agregar cliente" : undefined}
             actionIcon={search.trim() ? "close-outline" : "add"}
             onAction={() => search.trim() ? setSearch("") : setModalVisible(true)}
             style={styles.emptySpacing}
@@ -240,21 +243,23 @@ export default function ClientsScreen() {
                 </Text>
               </View>
 
-              <Pressable
-                onPress={() =>
-                  setModalVisible(true)
-                }
-                style={({ pressed }) => [
-                  styles.addButton,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Ionicons
-                  name="add"
-                  size={24}
-                  color={colors.textLight}
-                />
-              </Pressable>
+              {canEditClients ? (
+                <Pressable
+                  onPress={() =>
+                    setModalVisible(true)
+                  }
+                  style={({ pressed }) => [
+                    styles.addButton,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Ionicons
+                    name="add"
+                    size={24}
+                    color={colors.textLight}
+                  />
+                </Pressable>
+              ) : null}
             </View>
 
             <View style={styles.searchBox}>

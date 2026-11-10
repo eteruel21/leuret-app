@@ -24,9 +24,12 @@ import { getInvoiceStatusLabel } from "@/types/invoice";
 import { formatMoney } from "@/types/budget";
 import { formatShortDate } from "@/utils/format";
 import { getClientDisplayName } from "@/types/client";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function InvoicesListScreen() {
   const { activeCompany } = useCompany();
+  const { can } = usePermissions();
+  const canOpenBudgets = can("budgets.view");
   const [invoices, setInvoices] = useState<InvoiceWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -114,16 +117,18 @@ export default function InvoicesListScreen() {
           />
         </View>
 
-        <Pressable
-          onPress={() => router.push("/facturas/settings" as Href)}
-          style={({ pressed }) => [
-            styles.settingsButton,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Ionicons name="create-outline" size={20} color={colors.primary} />
-          <Text style={styles.settingsButtonText}>Diseño</Text>
-        </Pressable>
+        {can("company.manage") ? (
+          <Pressable
+            onPress={() => router.push("/facturas/settings" as Href)}
+            style={({ pressed }) => [
+              styles.settingsButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Ionicons name="create-outline" size={20} color={colors.primary} />
+            <Text style={styles.settingsButtonText}>Diseño</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <FlatList
@@ -142,7 +147,7 @@ export default function InvoicesListScreen() {
             icon={search.trim() ? "search-outline" : "receipt-outline"}
             title={search.trim() ? "Sin coincidencias" : "No hay facturas"}
             description={search.trim() ? "Prueba con otro número o nombre de cliente." : "Las facturas se generan desde presupuestos aprobados cuando seleccionas Generar factura."}
-            actionLabel={search.trim() ? "Limpiar búsqueda" : "Ir a presupuestos"}
+            actionLabel={search.trim() ? "Limpiar búsqueda" : canOpenBudgets ? "Ir a presupuestos" : undefined}
             actionIcon={search.trim() ? "close-outline" : "document-text-outline"}
             onAction={() => search.trim() ? setSearch("") : router.push("/presupuestos" as Href)}
             style={styles.emptySpacing}
