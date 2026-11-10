@@ -57,6 +57,7 @@ import { SystemTab } from "./components/SystemTab";
 import { EditorModal, type Editor } from "./components/EditorModal";
 import { UserProfileModal } from "./components/UserProfileModal";
 import { CompaniesTab } from "./components/CompaniesTab";
+import { MailTab } from "./components/MailTab";
 
 const EMPTY_DATA: AdminData = {
   users: [],
@@ -682,6 +683,7 @@ export default function App() {
 
   const titles: Record<Tab, [string, string]> = {
     dashboard: ["Resumen de plataforma", "Usuarios, proyectos y configuración central."],
+    mail: ["Correos", "Lee y responde los mensajes de Privacidad y Asuntos Legales."],
     users: ["Usuarios", "Aprueba registros y edita cada perfil."],
     companies: ["Empresas", "Equipos, obras y actividad de cada empresa registrada."],
     catalog: ["Catálogo", "Categorías, materiales, mano de obra y servicios."],
@@ -706,21 +708,22 @@ export default function App() {
             <h1>{titles[activeTab][0]}</h1>
             <p>{titles[activeTab][1]}</p>
           </div>
-          <button className="button button-secondary" onClick={() => void loadData()} disabled={loadingData}>
+          {activeTab !== "mail" && <button className="button button-secondary" onClick={() => void loadData()} disabled={loadingData}>
             <RefreshCw className={loadingData ? "spin" : ""} size={17} /> Actualizar
-          </button>
+          </button>}
         </header>
 
         {dataError && <AlertBanner message={dataError} onClose={() => setDataError(null)} />}
         {success && <SuccessBanner message={success} />}
 
-        {loadingData ? (
+        {loadingData && activeTab !== "mail" ? (
           <div className="content-loader">
             <Loader2 className="spin" size={34} />
             <span>Sincronizando con PostgreSQL...</span>
           </div>
         ) : (
           <>
+            {activeTab === "mail" && <MailTab />}
             {activeTab === "dashboard" && (
               <DashboardTab
                 data={data}
