@@ -233,7 +233,7 @@ export function MailTab() {
   async function handleReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedThreadId || !message || !replyText.trim() || sending) return;
-    const target = message.direction === "inbound" ? (message.from ?? "el remitente") : (message.to ?? []).join(", ");
+    const target = message.direction === "inbound" ? (message.reply_to?.length ? message.reply_to.join(", ") : message.from ?? "el remitente") : (message.to ?? []).join(", ");
     const confirmed = window.confirm(
       `¿Enviar esta respuesta desde ${BOXES.find((box) => box.id === mailbox)?.address} a ${target}? El envío no se puede deshacer.`
     );
@@ -265,7 +265,7 @@ export function MailTab() {
 
   const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
   const recipient = message?.direction === "inbound"
-    ? (message.from ?? "Remitente")
+    ? (message.reply_to?.length ? message.reply_to.join(", ") : message.from ?? "Remitente")
     : (message?.to ?? []).join(", ");
   const currentBox = BOXES.find((item) => item.id === mailbox)!;
 
