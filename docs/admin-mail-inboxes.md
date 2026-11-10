@@ -16,12 +16,12 @@ La lectura se ejecuta directamente bajo petición del superadministrador. El mó
 Establecer como **secrets de backend** en el entorno de la API (nunca en `VITE_*`, frontend, repositorio o cliente móvil):
 
 ```env
-RESEND_API_KEY=<clave de Resend con Full access>
+RESEND_ADMIN_MAIL_API_KEY=<clave de Resend con Full access>
 RESEND_PRIVACY_INBOX_ID=<UUID de la bandeja de privacidad>
 RESEND_LEGAL_INBOX_ID=<UUID de la bandeja legal>
 ```
 
-Resend exige **Full access** en la clave para listar hilos y leer mensajes. Una clave de tipo «Sending access» permite envíos, pero no la lectura de bandejas. Verificar los permisos de la clave actual y rotarla/crear una nueva por un canal seguro, si hace falta. Nunca enviar claves por chat ni consignarlas en archivos de Git.
+Resend exige **Full access** en la clave para listar hilos y leer mensajes. Una clave de tipo «Sending access» permite envíos, pero no la lectura de bandejas. Crear una clave independiente para el buzón administrativo sin reemplazar la clave de correo transaccional `RESEND_API_KEY`, y almacenarla mediante un canal seguro. Nunca enviar claves por chat ni consignarlas en archivos de Git.
 
 ### Acceso y seguridad
 
