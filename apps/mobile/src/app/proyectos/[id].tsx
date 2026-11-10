@@ -3,6 +3,7 @@ import {
   listBudgetsByProject,
 } from "@/services/budget-service";
 import { LeuretLoading } from "@/components/LeuretLoading";
+import { LeuretFeedback } from "@/components/LeuretFeedback";
 import type { Budget } from "@/types/budget";
 import {
   formatMoney,
@@ -39,6 +40,7 @@ import {
   radius,
 } from "@/constants/theme";
 import { useCompany } from "@/contexts/CompanyContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   getProjectById,
   updateProjectStatus,
@@ -91,6 +93,9 @@ function ProjectDetailScreenContent() {
     : params.id;
 
   const { activeCompany } = useCompany();
+  const { can } = usePermissions();
+  const canViewBudgets = can("budgets.view");
+  const canEditBudgets = can("budgets.edit");
 
   const [project, setProject] = useState<ProjectWithDetails | null>(null);
   const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -100,6 +105,7 @@ function ProjectDetailScreenContent() {
   const [activities, setActivities] = useState<Appointment[]>([]);
 
   const [creatingBudget, setCreatingBudget] = useState(false);
+  const [budgetCreationError, setBudgetCreationError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
@@ -136,7 +142,9 @@ function ProjectDetailScreenContent() {
         activitiesResult
       ] = await Promise.all([
         getProjectById(activeCompany.id, projectId),
-        listBudgetsByProject(activeCompany.id, projectId),
+        canViewBudgets
+          ? listBudgetsByProject(activeCompany.id, projectId)
+          : Promise.resolve({ budgets: [] as Budget[], error: null }),
         listProjectTasks(activeCompany.id, projectId),
         listProjectProgressHistory(activeCompany.id, projectId),
         listProjectPhotos(activeCompany.id, projectId),
@@ -168,7 +176,7 @@ function ProjectDetailScreenContent() {
       setLoading(false);
       setRefreshing(false);
     },
-    [activeCompany, projectId]
+    [activeCompany, projectId, canViewBudgets]
   );
 
   useEffect(() => {
@@ -325,10 +333,19 @@ function ProjectDetailScreenContent() {
   }
 
   async function handleCreateBudget() {
-    if (!activeCompany || !project) return;
+    if (creatingBudget) return;
+    if (!canEditBudgets) {
+      setBudgetCreationError("Tu rol no permite crear presupuestos en esta empresa.");
+      return;
+    }
+    if (!activeCompany || !project) {
+      setBudgetCreationError("No se pudo identificar la empresa o el proyecto.");
+      return;
+    }
 
     try {
       setCreatingBudget(true);
+      setBudgetCreationError(null);
 
       const { budgetId, error } = await createBudgetFromProject({
         companyId: activeCompany.id,
@@ -337,7 +354,7 @@ function ProjectDetailScreenContent() {
       });
 
       if (error || !budgetId) {
-        Alert.alert("No fue posible crear el presupuesto", error || "No se recibió el ID.");
+        setBudgetCreationError(error || "El servidor no devolvió el identificador del presupuesto.");
         return;
       }
 
@@ -345,6 +362,10 @@ function ProjectDetailScreenContent() {
         pathname: "/presupuestos/[id]",
         params: { id: budgetId },
       } as Href);
+    } catch (error) {
+      setBudgetCreationError(
+        error instanceof Error ? error.message : "Ocurrió un error inesperado."
+      );
     } finally {
       setCreatingBudget(false);
     }
@@ -699,26 +720,44 @@ function ProjectDetailScreenContent() {
 
         {/* Presupuestos del Proyecto */}
         <InfoSection title="Presupuestos">
-          <Pressable
-            onPress={() => void handleCreateBudget()}
-            disabled={creatingBudget}
-            style={({ pressed }) => [
-              styles.createBudgetButton,
-              creatingBudget && styles.disabledButton,
-              pressed && styles.pressed,
-            ]}
-          >
-            {creatingBudget ? (
-              <ActivityIndicator color={colors.textLight} />
-            ) : (
-              <>
-                <Ionicons name="receipt-outline" size={21} color={colors.textLight} />
-                <Text style={styles.createBudgetText}>Crear presupuesto</Text>
-              </>
-            )}
-          </Pressable>
+          {canEditBudgets ? (
+            <Pressable
+              onPress={() => void handleCreateBudget()}
+              disabled={creatingBudget}
+              style={({ pressed }) => [
+                styles.createBudgetButton,
+                creatingBudget && styles.disabledButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              {creatingBudget ? (
+                <ActivityIndicator color={colors.textLight} />
+              ) : (
+                <>
+                  <Ionicons name="receipt-outline" size={21} color={colors.textLight} />
+                  <Text style={styles.createBudgetText}>Crear presupuesto</Text>
+                </>
+              )}
+            </Pressable>
+          ) : (
+            <LeuretFeedback
+              tone="info"
+              title="Sin permiso para crear presupuestos"
+              message="Solicita a un administrador de la empresa un rol con acceso a presupuestos."
+              compact
+            />
+          )}
 
-          {budgets.length === 0 ? (
+          {budgetCreationError ? (
+            <LeuretFeedback
+              tone="error"
+              title="No fue posible crear el presupuesto"
+              message={budgetCreationError}
+              compact
+            />
+          ) : null}
+
+          {!canViewBudgets ? null : budgets.length === 0 ? (
             <View style={styles.emptyBudgetBox}>
               <Text style={styles.emptyBudgetText}>
                 Este proyecto todavía no tiene presupuestos.
