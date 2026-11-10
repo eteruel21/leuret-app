@@ -43,9 +43,16 @@ import { useCompany } from "@/contexts/CompanyContext";
 
 import {
   addBudgetItem,
+  applyBudgetPriceUpdates,
   deleteBudgetItem,
   getBudgetById,
+  getBudgetPriceUpdates,
+  type BudgetPriceUpdate,
 } from "@/services/budget-service";
+import {
+  PriceUpdatesBanner,
+  PriceUpdatesModal,
+} from "@/components/PriceUpdatesModal";
 import { getInvoiceByBudgetId, createInvoiceFromBudget } from "@/services/invoice-service";
 import type { Invoice } from "@/types/invoice";
 
@@ -89,6 +96,12 @@ export default function BudgetDetailScreen() {
     useState(false);
   const [shoppingListVisible, setShoppingListVisible] =
     useState(false);
+  const [priceUpdates, setPriceUpdates] =
+    useState<BudgetPriceUpdate[]>([]);
+  const [priceUpdatesVisible, setPriceUpdatesVisible] =
+    useState(false);
+  const [applyingPrices, setApplyingPrices] =
+    useState(false);
   const [sharingPdf, setSharingPdf] =
     useState(false);
   const [associatedInvoice, setAssociatedInvoice] =
@@ -122,6 +135,15 @@ export default function BudgetDetailScreen() {
         );
       } else {
         setBudget(loadedBudget);
+        if (loadedBudget?.status === "draft") {
+          const { updates } = await getBudgetPriceUpdates({
+            companyId: activeCompany.id,
+            budgetId,
+          });
+          setPriceUpdates(updates);
+        } else {
+          setPriceUpdates([]);
+        }
         try {
           const { invoice } = await getInvoiceByBudgetId(
             activeCompany.id,
@@ -208,6 +230,32 @@ export default function BudgetDetailScreen() {
         </Text>
       </View>
     );
+  }
+
+  async function handleApplyPrices(itemIds: string[]) {
+    if (!activeCompany || !budget) return;
+
+    setApplyingPrices(true);
+    const { updatedCount, error } = await applyBudgetPriceUpdates({
+      companyId: activeCompany.id,
+      budgetId: budget.id,
+      itemIds,
+    });
+    setApplyingPrices(false);
+
+    if (error) {
+      Alert.alert("No fue posible actualizar los precios", error);
+      return;
+    }
+
+    setPriceUpdatesVisible(false);
+    Alert.alert(
+      "Precios actualizados",
+      updatedCount === 1
+        ? "Se actualizó 1 partida."
+        : `Se actualizaron ${updatedCount} partidas.`,
+    );
+    await loadBudget(true);
   }
 
   async function handleSharePdf() {
@@ -355,6 +403,12 @@ export default function BudgetDetailScreen() {
             strong
           />
         </View>
+
+        <PriceUpdatesBanner
+          updates={priceUpdates}
+          currencyCode={budget.currency_code}
+          onPress={() => setPriceUpdatesVisible(true)}
+        />
 
         <View style={styles.buttonRow}>
           <Pressable
@@ -551,6 +605,15 @@ export default function BudgetDetailScreen() {
         items={budget.items}
         currencyCode={budget.currency_code}
         onClose={() => setShoppingListVisible(false)}
+      />
+
+      <PriceUpdatesModal
+        visible={priceUpdatesVisible}
+        updates={priceUpdates}
+        currencyCode={budget.currency_code}
+        applying={applyingPrices}
+        onClose={() => setPriceUpdatesVisible(false)}
+        onApply={(itemIds) => void handleApplyPrices(itemIds)}
       />
 
       <AddCatalogItemModal

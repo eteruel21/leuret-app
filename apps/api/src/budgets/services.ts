@@ -11,6 +11,8 @@ import {
   respondToBudgetAsClientRepo,
   rejectBudgetRepo,
   getBudgetHistoryRepo,
+  findBudgetPriceUpdatesRepo,
+  applyBudgetPriceUpdatesRepo,
   type CreateBudgetItemInput
 } from "./repository.js";
 import { notifyBudgetDecision } from "../notifications/event-service.js";
@@ -78,4 +80,17 @@ export function clientBudgetResponseError(error: unknown): { status: number; mes
 
 export async function getBudgetHistoryService(userId: string, budgetId: string, companyId?: string) {
   return getBudgetHistoryRepo(userId, budgetId, companyId);
+}
+
+export async function getBudgetPriceUpdatesService(userId: string, budgetId: string, companyId: string) {
+  return findBudgetPriceUpdatesRepo(userId, budgetId, companyId);
+}
+
+export async function applyBudgetPriceUpdatesService(
+  userId: string,
+  budgetId: string,
+  companyId: string,
+  itemIds: string[]
+) {
+  return applyBudgetPriceUpdatesRepo(userId, budgetId, companyId, itemIds);
 }

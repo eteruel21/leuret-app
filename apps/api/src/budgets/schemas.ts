@@ -128,3 +128,8 @@ export const convertCalculationSchema = z.object({
   sectionId: uuidSchema.optional(),
   items: z.array(createBudgetItemSchema.omit({ companyId: true })).optional()
 });
+
+export const applyPriceUpdatesSchema = z.object({
+  companyId: uuidSchema,
+  itemIds: z.array(uuidSchema).min(1).max(500)
+});

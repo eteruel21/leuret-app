@@ -549,3 +549,53 @@ export async function getBudgetHistory(
     return { history: [], error: errorMessage(error) };
   }
 }
+export type BudgetPriceUpdate = {
+  itemId: string;
+  description: string;
+  unitName: string;
+  quantity: number;
+  unitCost: number;
+  unitPrice: number;
+  catalogUnitCost: number;
+  catalogUnitPrice: number;
+  priceDifference: number;
+};
+
+export async function getBudgetPriceUpdates(input: {
+  budgetId: string;
+  companyId: string;
+}): Promise<{ updates: BudgetPriceUpdate[]; error: string | null }> {
+  try {
+    const response = await authenticatedRequest<{
+      status: string;
+      updates: BudgetPriceUpdate[];
+    }>(
+      `/budgets/${input.budgetId}/price-updates?companyId=${encodeURIComponent(input.companyId)}`
+    );
+    return { updates: response.updates, error: null };
+  } catch (error) {
+    return { updates: [], error: errorMessage(error) };
+  }
+}
+
+export async function applyBudgetPriceUpdates(input: {
+  budgetId: string;
+  companyId: string;
+  itemIds: string[];
+}): Promise<{ updatedCount: number; error: string | null }> {
+  try {
+    const response = await authenticatedRequest<{ updatedCount: number }>(
+      `/budgets/${input.budgetId}/price-updates`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          companyId: input.companyId,
+          itemIds: input.itemIds
+        })
+      }
+    );
+    return { updatedCount: response.updatedCount, error: null };
+  } catch (error) {
+    return { updatedCount: 0, error: errorMessage(error) };
+  }
+}
