@@ -1,6 +1,7 @@
 import { Buffer as NodeBuffer } from "node:buffer";
 import type { FastifyInstance } from "fastify";
 import { requireSuperAdmin } from "./authorize.js";
+import { getAdminCompanyDetailService, listAdminCompaniesService } from "./companies-services.js";
 import {
   getContractorDocument,
   getContractorReview,
@@ -8,6 +9,7 @@ import {
 } from "./contractor-review.js";
 import { getUserProfileDetails } from "../profile/details.js";
 import {
+  companyParamsSchema,
   userParamsSchema,
   userSchema,
   categorySchema,
@@ -41,6 +43,40 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     async (request) => {
       const userId = request.authenticatedUser!.id;
       return getAdminDashboardService(userId);
+    }
+  );
+
+  // Empresas registradas (solo lectura para el super administrador)
+  app.get(
+    "/admin/companies",
+    {
+      preHandler: requireSuperAdmin
+    },
+    async (request, reply) => {
+      const companies = await listAdminCompaniesService(request.authenticatedUser!.id);
+      reply.header("Cache-Control", "private, no-store");
+      return { companies };
+    }
+  );
+
+  app.get(
+    "/admin/companies/:companyId",
+    {
+      preHandler: requireSuperAdmin
+    },
+    async (request, reply) => {
+      const params = companyParamsSchema.safeParse(request.params);
+      if (!params.success) {
+        return reply.status(400).send({ message: "La empresa indicada no es válida." });
+      }
+
+      const detail = await getAdminCompanyDetailService(request.authenticatedUser!.id, params.data.companyId);
+      if (!detail) {
+        return reply.status(404).send({ message: "No se encontró la empresa." });
+      }
+
+      reply.header("Cache-Control", "private, no-store");
+      return detail;
     }
   );
 

@@ -8,9 +8,10 @@ import {
   Calculator,
   DollarSign,
   Settings,
+  Building2,
 } from "lucide-react";
 
-export type Tab = "dashboard" | "users" | "catalog" | "calculations" | "pricing" | "system";
+export type Tab = "dashboard" | "users" | "companies" | "catalog" | "calculations" | "pricing" | "system";
 
 interface NavButtonProps {
   icon: ReactNode;
@@ -52,6 +53,7 @@ export function Sidebar({ activeTab, setActiveTab, pendingUsersCount, email, onS
       <nav className="nav-links">
         <NavButton icon={<LayoutDashboard />} label="Resumen" tab="dashboard" active={activeTab} onClick={setActiveTab} />
         <NavButton icon={<Users />} label="Usuarios" tab="users" active={activeTab} onClick={setActiveTab} badge={pendingUsersCount} />
+        <NavButton icon={<Building2 />} label="Empresas" tab="companies" active={activeTab} onClick={setActiveTab} />
         <NavButton icon={<BookOpen />} label="Catálogo" tab="catalog" active={activeTab} onClick={setActiveTab} />
         <NavButton icon={<Calculator />} label="Cálculos" tab="calculations" active={activeTab} onClick={setActiveTab} />
         <NavButton icon={<DollarSign />} label="Precios" tab="pricing" active={activeTab} onClick={setActiveTab} />

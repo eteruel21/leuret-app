@@ -56,6 +56,7 @@ import { PricingTab } from "./components/PricingTab";
 import { SystemTab } from "./components/SystemTab";
 import { EditorModal, type Editor } from "./components/EditorModal";
 import { UserProfileModal } from "./components/UserProfileModal";
+import { CompaniesTab } from "./components/CompaniesTab";
 
 const EMPTY_DATA: AdminData = {
   users: [],
@@ -682,6 +683,7 @@ export default function App() {
   const titles: Record<Tab, [string, string]> = {
     dashboard: ["Resumen de plataforma", "Usuarios, proyectos y configuración central."],
     users: ["Usuarios", "Aprueba registros y edita cada perfil."],
+    companies: ["Empresas", "Equipos, obras y actividad de cada empresa registrada."],
     catalog: ["Catálogo", "Categorías, materiales, mano de obra y servicios."],
     calculations: ["Cálculos", "Fórmulas, parámetros, unidades y rendimientos."],
     pricing: ["Precios globales", "Valores predeterminados para todos los usuarios."],
@@ -739,6 +741,9 @@ export default function App() {
                 onEdit={(user) => setEditor({ kind: "user", draft: userDraft(user) })}
                 onToggle={toggleUser}
               />
+            )}
+            {activeTab === "companies" && (
+              <CompaniesTab users={data.users} onViewProfile={openContractorReview} />
             )}
             {activeTab === "catalog" && (
               <CatalogTab

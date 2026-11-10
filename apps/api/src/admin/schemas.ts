@@ -6,6 +6,10 @@ export const userParamsSchema = z.object({
   userId: uuidSchema
 });
 
+export const companyParamsSchema = z.object({
+  companyId: uuidSchema
+});
+
 export const userSchema = z.object({
   id: z.string().optional(),
   fullName: z.string().trim().max(150),
