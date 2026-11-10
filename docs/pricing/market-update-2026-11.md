@@ -4,6 +4,8 @@ Seed: `database/seeds/003_market_prices_2026_11.sql`
 Generador: `database/scripts/pricing/market_update_2026_11.py`
 Detalle por partida: `docs/pricing/market-update-2026-11-items.csv`
 
+**Estado:** aplicado en producción el 10-nov-2026. 1,155 partidas cambiaron (14 quedaron igual al redondear), 48 insumos nuevos, 10 insumos del seed 002 con precio, 11 partidas recategorizadas. `app_migrations.seed_history` registra 002 y 003 con su checksum, así que `npm run db:seed` los omite.
+
 ## 1. Diagnóstico del catálogo actual (producción, 10-nov-2026)
 
 | Hallazgo | Detalle |
@@ -13,7 +15,7 @@ Detalle por partida: `docs/pricing/market-update-2026-11-items.csv`
 | Insumos para calculadoras | 10 insumos (`leuret:material:*`, `leuret:labor:*`) ya cargados en producción **con precio 0**. |
 | Categorías erróneas | 10 muros/paredes de bloque y 1 mortero de nivelación estaban en «Movimiento de tierra y compactación». Se corrigen. |
 | Margen de venta | Uniforme: venta = costo × 1.35. Se conserva. |
-| Historial de precios | Vacío. Esta actualización deja 1,164 registros con `source = 'actualizacion_mercado_2026_11'`. |
+| Historial de precios | Vacío. Esta actualización deja 1,165 registros (1,155 partidas escaladas + 10 insumos que estaban en 0) con `source = 'actualizacion_mercado_2026_11'`. |
 
 ## 2. Qué cambió en el mercado (jul-2025 → sep-2026)
 
@@ -52,7 +54,7 @@ costo_nuevo = costo_2025 × (M × f_materiales + MO × 1.000 + E × 1.028)
 - Precio de venta: se conserva el margen de cada partida (≈ 1.35).
 - Protección: solo se actualizan filas cuyo costo sigue igual al de la base 2025. Si una partida ya se editó en el panel, se respeta. Ejecutar el seed dos veces no acumula el aumento.
 
-**Resultado:** costo directo total $371,407.80 → $376,852.84 (**+1.45 %**). Factor mínimo 0.994 (concreto bombeado), máximo 1.167 (conductores de cobre), mediana 1.020. 80 partidas suben 5 % o más; 7 bajan.
+**Resultado:** costo directo total $371,407.80 → $376,795.93 (**+1.45 %**). Factor mínimo 0.994 (concreto bombeado), máximo 1.167 (conductores de cobre), mediana 1.020. 80 partidas suben 5 % o más; 7 bajan.
 
 Variación por categoría (categoría original de la base):
 
