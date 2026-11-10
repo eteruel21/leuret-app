@@ -584,3 +584,58 @@ export async function deactivateCatalogYield(
     };
   }
 }
+export type PriceRegion = {
+  code: string;
+  name: string;
+  coverage: string;
+  material_factor: number;
+  labor_factor: number;
+  equipment_factor: number;
+  service_factor: number;
+  notes: string | null;
+};
+
+export async function listPriceRegions(): Promise<{
+  regions: PriceRegion[];
+  currentRegionCode: string;
+  error: string | null;
+}> {
+  try {
+    const result = await authenticatedRequest<{
+      regions: PriceRegion[];
+      currentRegionCode: string;
+    }>("/catalog/regions");
+
+    return {
+      regions: result.regions.map((region) => ({
+        ...region,
+        material_factor: Number(region.material_factor),
+        labor_factor: Number(region.labor_factor),
+        equipment_factor: Number(region.equipment_factor),
+        service_factor: Number(region.service_factor)
+      })),
+      currentRegionCode: result.currentRegionCode,
+      error: null
+    };
+  } catch (error) {
+    return {
+      regions: [],
+      currentRegionCode: "panama_metro",
+      error: errorMessage(error)
+    };
+  }
+}
+
+export async function setPriceRegion(
+  regionCode: string
+): Promise<{ error: string | null }> {
+  try {
+    await authenticatedRequest("/catalog/region", {
+      method: "PUT",
+      body: JSON.stringify({ regionCode })
+    });
+    return { error: null };
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+}

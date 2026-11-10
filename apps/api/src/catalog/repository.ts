@@ -266,3 +266,70 @@ export async function deactivateCatalogYieldRepo(userId: string, yieldId: string
     );
   });
 }
+
+export async function findPriceRegionsRepo(userId: string) {
+  return withUserTransaction(userId, async (client) => {
+    const regions = await client.query(
+      `
+        SELECT
+          code,
+          name,
+          coverage,
+          material_factor,
+          labor_factor,
+          equipment_factor,
+          service_factor,
+          notes
+        FROM public.platform_price_regions
+        WHERE active = true
+        ORDER BY sort_order ASC, name ASC
+      `
+    );
+
+    const current = await client.query(
+      `
+        SELECT region_code
+        FROM public.user_price_regions
+        WHERE user_id = app.current_user_id()
+      `
+    );
+
+    return {
+      regions: regions.rows,
+      currentRegionCode:
+        (current.rows[0]?.region_code as string | undefined) ?? "panama_metro"
+    };
+  });
+}
+
+export async function setUserPriceRegionRepo(userId: string, regionCode: string | null) {
+  return withUserTransaction(userId, async (client) => {
+    if (!regionCode || regionCode === "panama_metro") {
+      await client.query(
+        `DELETE FROM public.user_price_regions WHERE user_id = app.current_user_id()`
+      );
+      return true;
+    }
+
+    const region = await client.query(
+      `SELECT 1 FROM public.platform_price_regions WHERE code = $1 AND active = true`,
+      [regionCode]
+    );
+
+    if (region.rowCount === 0) {
+      return false;
+    }
+
+    await client.query(
+      `
+        INSERT INTO public.user_price_regions (user_id, region_code)
+        VALUES (app.current_user_id(), $1)
+        ON CONFLICT (user_id) DO UPDATE
+        SET region_code = EXCLUDED.region_code
+      `,
+      [regionCode]
+    );
+
+    return true;
+  });
+}

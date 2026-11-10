@@ -81,3 +81,11 @@ export const catalogItemQuerySchema = z.object({
   categoryName: z.string().trim().optional()
 });
 
+
+export const priceRegionSchema = z.object({
+  regionCode: z
+    .string()
+    .regex(/^[a-z0-9_]+$/)
+    .max(40)
+    .nullable()
+});

@@ -23,8 +23,11 @@ import { colors, radius, shadows } from "@/constants/theme";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
   listCatalogItems,
+  listPriceRegions,
   resetCatalogItemPricing,
+  setPriceRegion,
   updateCatalogItemPricing,
+  type PriceRegion,
 } from "@/services/catalog-service";
 import { formatMoney } from "@/types/budget";
 import type {
@@ -52,15 +55,25 @@ export default function CatalogScreen() {
   const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [regions, setRegions] = useState<PriceRegion[]>([]);
+  const [regionCode, setRegionCode] = useState("panama_metro");
+  const [regionPickerOpen, setRegionPickerOpen] = useState(false);
+  const [savingRegion, setSavingRegion] = useState(false);
 
   const loadCatalog = useCallback(
     async (showRefresh = false) => {
       if (showRefresh) setRefreshing(true);
       else setLoading(true);
 
-      const result = await listCatalogItems(
-        activeCompany?.id ?? "platform",
-      );
+      const [result, regionResult] = await Promise.all([
+        listCatalogItems(activeCompany?.id ?? "platform"),
+        listPriceRegions(),
+      ]);
+
+      if (!regionResult.error) {
+        setRegions(regionResult.regions);
+        setRegionCode(regionResult.currentRegionCode);
+      }
 
       if (result.error) {
         Alert.alert(
@@ -104,6 +117,28 @@ export default function CatalogScreen() {
         .includes(query);
     });
   }, [filter, items, search]);
+
+  const currentRegion =
+    regions.find((region) => region.code === regionCode) ?? null;
+
+  async function chooseRegion(code: string) {
+    if (code === regionCode) {
+      setRegionPickerOpen(false);
+      return;
+    }
+
+    setSavingRegion(true);
+    const result = await setPriceRegion(code);
+    setSavingRegion(false);
+
+    if (result.error) {
+      Alert.alert("No fue posible cambiar la región", result.error);
+      return;
+    }
+
+    setRegionPickerOpen(false);
+    await loadCatalog(true);
+  }
 
   if (loading) return <LeuretLoading message="Cargando precios globales…" fullScreen />;
 
@@ -150,6 +185,40 @@ export default function CatalogScreen() {
                 restaurarlo cuando quieras.
               </Text>
             </View>
+
+            {regions.length > 0 && (
+              <Pressable
+                onPress={() => setRegionPickerOpen(true)}
+                style={({ pressed }) => [
+                  styles.regionCard,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Ionicons
+                  name="location-outline"
+                  size={22}
+                  color={colors.primary}
+                />
+                <View style={styles.regionCopy}>
+                  <Text style={styles.regionLabel}>Región de precios</Text>
+                  <Text style={styles.regionName}>
+                    {currentRegion?.name ?? "Panamá metropolitano"}
+                  </Text>
+                  {currentRegion && currentRegion.code !== "panama_metro" && (
+                    <Text style={styles.regionFactors}>
+                      Materiales {formatFactor(currentRegion.material_factor)} ·
+                      mano de obra {formatFactor(currentRegion.labor_factor)} ·
+                      partidas {formatFactor(currentRegion.service_factor)}
+                    </Text>
+                  )}
+                </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+              </Pressable>
+            )}
 
             <View style={styles.searchBox}>
               <Ionicons
@@ -223,6 +292,71 @@ export default function CatalogScreen() {
         )}
       />
 
+      <Modal
+        visible={regionPickerOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setRegionPickerOpen(false)}
+      >
+        <SafeAreaView style={styles.modalSafeArea}>
+          <View style={styles.modalHeader}>
+            <Pressable
+              onPress={() => setRegionPickerOpen(false)}
+              disabled={savingRegion}
+            >
+              <Text style={styles.cancelText}>Cerrar</Text>
+            </Pressable>
+            <Text style={styles.modalTitle}>Región de precios</Text>
+            <View style={styles.modalSpacer}>
+              {savingRegion && (
+                <ActivityIndicator color={colors.primary} />
+              )}
+            </View>
+          </View>
+          <ScrollView contentContainerStyle={styles.modalContent}>
+            <Text style={styles.regionHelp}>
+              Los precios base son de Panamá y San Miguelito. Elige dónde
+              trabajas y el catálogo, las calculadoras y los presupuestos
+              usarán precios ajustados. Tus precios personalizados no cambian.
+            </Text>
+            {regions.map((region) => {
+              const selected = region.code === regionCode;
+              return (
+                <Pressable
+                  key={region.code}
+                  disabled={savingRegion}
+                  onPress={() => void chooseRegion(region.code)}
+                  style={({ pressed }) => [
+                    styles.regionOption,
+                    selected && styles.regionOptionSelected,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <View style={styles.regionCopy}>
+                    <Text style={styles.regionName}>{region.name}</Text>
+                    <Text style={styles.regionCoverage}>
+                      {region.coverage}
+                    </Text>
+                    <Text style={styles.regionFactors}>
+                      Materiales {formatFactor(region.material_factor)} · mano
+                      de obra {formatFactor(region.labor_factor)} · partidas{" "}
+                      {formatFactor(region.service_factor)}
+                    </Text>
+                  </View>
+                  {selected && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={24}
+                      color={colors.primary}
+                    />
+                  )}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
       <EditPersonalPriceModal
         item={editingItem}
         companyId={activeCompany?.id ?? "platform"}
@@ -234,6 +368,12 @@ export default function CatalogScreen() {
       />
     </SafeAreaView>
   );
+}
+
+function formatFactor(value: number) {
+  const percent = Math.round((value - 1) * 1000) / 10;
+  if (percent === 0) return "igual";
+  return `${percent > 0 ? "+" : ""}${percent}%`;
 }
 
 function CatalogPriceCard({
@@ -613,6 +753,35 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   infoText: { flex: 1, color: colors.text, lineHeight: 20 },
+  regionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    marginBottom: 16,
+  },
+  regionCopy: { flex: 1 },
+  regionLabel: { color: colors.textSecondary, fontSize: 12, fontWeight: "700" },
+  regionName: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  regionCoverage: { color: colors.textSecondary, marginTop: 2 },
+  regionFactors: { color: colors.textSecondary, fontSize: 12, marginTop: 4 },
+  regionHelp: { color: colors.textSecondary, lineHeight: 20, marginBottom: 16 },
+  regionOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    marginBottom: 10,
+  },
+  regionOptionSelected: { borderColor: colors.primary },
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
