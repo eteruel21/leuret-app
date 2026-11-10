@@ -234,3 +234,74 @@ export async function loadUserProfileDocument(
     `/admin/users/${encodeURIComponent(userId)}/documents/${encodeURIComponent(documentType)}`
   );
 }
+
+export type PriceAlertKind =
+  | "big_change"
+  | "no_price"
+  | "negative_margin"
+  | "low_margin"
+  | "stale";
+
+export type PriceAlert = {
+  itemId: string;
+  code: string | null;
+  name: string;
+  itemType: string;
+  categoryName: string | null;
+  unitSymbol: string | null;
+  unitCost: number;
+  salePrice: number;
+  kind: PriceAlertKind;
+  severity: "high" | "medium" | "low";
+  message: string;
+  changePercentage: number | null;
+  lastPriceChange: string | null;
+};
+
+export type PriceAlertsResponse = {
+  generatedAt: string;
+  counts: Partial<Record<PriceAlertKind, number>>;
+  alerts: PriceAlert[];
+};
+
+export type PriceHistoryEntry = {
+  id: string;
+  itemId: string;
+  code: string | null;
+  name: string;
+  itemType: string;
+  unitSymbol: string | null;
+  previousUnitCost: number;
+  unitCost: number;
+  previousSalePrice: number;
+  salePrice: number;
+  costChangePercentage: number | null;
+  source: string | null;
+  notes: string | null;
+  changedByName: string | null;
+  createdAt: string;
+};
+
+export async function loadPriceAlerts(
+  changeThreshold = 15
+): Promise<PriceAlertsResponse> {
+  return authenticatedRequest<PriceAlertsResponse>(
+    `/admin/platform-pricing/alerts?changeThreshold=${encodeURIComponent(String(changeThreshold))}`
+  );
+}
+
+export async function loadPriceHistory(input: {
+  search?: string | undefined;
+  itemId?: string | undefined;
+  limit?: number | undefined;
+} = {}): Promise<PriceHistoryEntry[]> {
+  const params = new URLSearchParams();
+  params.set("limit", String(input.limit ?? 100));
+  if (input.search?.trim()) params.set("search", input.search.trim());
+  if (input.itemId) params.set("itemId", input.itemId);
+
+  const response = await authenticatedRequest<{ entries: PriceHistoryEntry[] }>(
+    `/admin/platform-pricing/history?${params.toString()}`
+  );
+  return response.entries;
+}

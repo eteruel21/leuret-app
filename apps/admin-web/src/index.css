@@ -623,3 +623,23 @@ button { cursor: pointer; }
 .company-status-history { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
 .company-status-history li { padding: 10px 12px; border: 1px solid #1d2c40; border-radius: 10px; color: #cbd6e5; font-size: 13px; }
 .company-status-history small { display: block; margin-top: 4px; color: #91a3ba; }
+
+/* Monitor de precios */
+.alert-error { margin-bottom: 16px; padding: 12px 14px; border: 1px solid #7f1d1d; border-radius: 12px; color: #fecaca; background: rgba(127, 29, 29, .2); }
+.price-alert-summary { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 14px 0 18px; }
+.price-alert-chip { display: flex; flex-direction: column; min-width: 120px; padding: 10px 12px; border: 1px solid #24364c; border-radius: 12px; color: #cbd5e1; background: #10202f; text-align: left; cursor: pointer; }
+.price-alert-chip strong { font-size: 20px; color: #f8fafc; }
+.price-alert-chip span { font-size: 11px; font-weight: 700; }
+.price-alert-chip.active { border-color: #4ade80; }
+.price-alert-chip--big_change strong, .price-alert-chip--negative_margin strong, .price-alert-chip--no_price strong { color: #fca5a5; }
+.price-alert-threshold { margin-left: auto; min-width: 160px; }
+.severity-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 900; white-space: nowrap; }
+.severity-pill--high { color: #fecaca; background: rgba(239, 68, 68, .18); }
+.severity-pill--medium { color: #fde68a; background: rgba(245, 158, 11, .16); }
+.severity-pill--low { color: #bfdbfe; background: rgba(59, 130, 246, .14); }
+.row-actions { display: flex; align-items: center; gap: 6px; }
+.button-small { padding: 6px 10px; font-size: 12px; }
+.table-footnote { margin-top: 10px; color: #94a3b8; font-size: 12px; }
+.loading-row { display: flex; align-items: center; gap: 8px; padding: 18px 0; color: #94a3b8; }
+.change-up { color: #fca5a5; font-weight: 800; }
+.change-down { color: #86efac; font-weight: 800; }

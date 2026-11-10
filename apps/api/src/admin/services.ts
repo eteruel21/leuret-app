@@ -15,8 +15,12 @@ import {
   type YieldInput,
   type FormulaInput,
   type GlobalPriceInput,
-  type AdjustPricesInput
+  type AdjustPricesInput,
+  listPriceHistoryRepo,
+  findPriceAlertRowsRepo,
+  type PriceHistoryQuery
 } from "./repository.js";
+import { classifyPriceAlerts, type PriceAlertOptions } from "./price-alerts.js";
 
 export async function getAdminDashboardService(userId: string) {
   return getAdminDashboardDataRepo(userId);
@@ -52,4 +56,24 @@ export async function saveGlobalPriceService(userId: string, itemId: string, inp
 
 export async function adjustPricesService(userId: string, input: AdjustPricesInput) {
   return adjustPricesRepo(userId, input);
+}
+
+export async function listPriceHistoryService(userId: string, query: PriceHistoryQuery) {
+  return listPriceHistoryRepo(userId, query);
+}
+
+export async function getPriceAlertsService(userId: string, options: PriceAlertOptions) {
+  const rows = await findPriceAlertRowsRepo(userId, options.windowDays);
+  const alerts = classifyPriceAlerts(rows, options);
+  const counts = alerts.reduce<Record<string, number>>((acc, alert) => {
+    acc[alert.kind] = (acc[alert.kind] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  return {
+    generatedAt: new Date().toISOString(),
+    options,
+    counts,
+    alerts
+  };
 }

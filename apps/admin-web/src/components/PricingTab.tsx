@@ -16,6 +16,7 @@ import {
   type ItemType,
 } from "../admin-data";
 import { Field, SectionHeader, SelectField, Table, TextField } from "./CommonUI";
+import { PriceMonitor } from "./PriceMonitor";
 import { formatMoney } from "../utils/helpers";
 
 interface PricingTabProps {
@@ -178,6 +179,13 @@ export function PricingTab({
           Aplicar ajuste
         </button>
       </form>
+
+      <PriceMonitor
+        onOpenItem={(itemId) => {
+          const item = data.globalItems.find((entry) => entry.id === itemId);
+          if (item) onEdit(item);
+        }}
+      />
 
       {/* Catálogo maestro con filtros */}
       <section className="data-card">

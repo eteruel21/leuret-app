@@ -123,3 +123,16 @@ export function normalizeCode(value: string): string {
     .replace(/[^a-z0-9_]+/g, "_")
     .replace(/^_+|_+$/g, "");
 }
+
+export const priceHistoryQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).optional().default(100),
+  itemId: z.string().uuid().optional(),
+  search: z.string().trim().max(120).optional()
+});
+
+export const priceAlertsQuerySchema = z.object({
+  changeThreshold: z.coerce.number().min(1).max(100).optional().default(15),
+  windowDays: z.coerce.number().int().min(1).max(365).optional().default(60),
+  staleDays: z.coerce.number().int().min(30).max(1095).optional().default(180),
+  minMargin: z.coerce.number().min(0).max(90).optional().default(5)
+});
