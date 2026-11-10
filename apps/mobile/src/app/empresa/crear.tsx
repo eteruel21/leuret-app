@@ -155,6 +155,26 @@ export default function CreateCompanyScreen() {
                 </>
               )}
             </Pressable>
+
+            <Pressable
+              onPress={() =>
+                router.push("/empresa/unirme" as Href)
+              }
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.joinButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons
+                name="key-outline"
+                size={19}
+                color={colors.primary}
+              />
+              <Text style={styles.joinButtonText}>
+                Tengo un código de invitación
+              </Text>
+            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -218,6 +238,21 @@ function FormField({
 }
 
 const styles = StyleSheet.create({
+  joinButton: {
+    minHeight: 50,
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+
+  joinButtonText: {
+    color: colors.primary,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
   flex: {
     flex: 1,
   },

@@ -92,6 +92,28 @@ export default function SelectCompanyScreen() {
                 Crear otra empresa
               </Text>
             </Pressable>
+
+            <Pressable
+              onPress={() =>
+                router.push(
+                  "/empresa/unirme" as Href,
+                )
+              }
+              style={({ pressed }) => [
+                styles.addButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons
+                name="key-outline"
+                size={21}
+                color={colors.primary}
+              />
+
+              <Text style={styles.addButtonText}>
+                Unirme con un código
+              </Text>
+            </Pressable>
           </View>
         }
         renderItem={({ item }) => {

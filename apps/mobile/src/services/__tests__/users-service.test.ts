@@ -115,9 +115,8 @@ test("createCompanyInvitation: crea invitaciones correctamente", async () => {
     email: "nuevo@example.test",
     role: "estimator",
     status: "pending",
-    token: "token123",
+    acceptanceToken: "token123",
     expires_at: "2026-12-31T23:59:59Z",
-    created_by: "usr-1",
     created_at: "2026-01-01T00:00:00Z"
   };
   fetchMock.mockResolvedValueOnce(

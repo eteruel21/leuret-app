@@ -38,7 +38,8 @@ type CompanyContextValue = {
   loading: boolean;
   refreshing: boolean;
 
-  refreshCompanies: () => Promise<void>;
+  /** Recarga las empresas. Si se indica `preferredCompanyId` y existe, la activa. */
+  refreshCompanies: (preferredCompanyId?: string) => Promise<void>;
 
   setActiveCompanyId: (
     companyId: string
@@ -122,7 +123,7 @@ export function CompanyProvider({
   );
 
   const refreshCompanies =
-    useCallback(async () => {
+    useCallback(async (preferredCompanyId?: string) => {
       if (!userId) {
         setMemberships([]);
         setActiveCompanyIdState(null);
@@ -149,6 +150,20 @@ export function CompanyProvider({
         setMemberships(
           result.memberships
         );
+
+        if (
+          preferredCompanyId &&
+          result.memberships.some(
+            (membership) =>
+              membership.company_id ===
+              preferredCompanyId
+          )
+        ) {
+          await AsyncStorage.setItem(
+            ACTIVE_COMPANY_KEY,
+            preferredCompanyId
+          );
+        }
 
         const storedCompanyId =
           await AsyncStorage.getItem(

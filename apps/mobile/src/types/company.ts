@@ -63,18 +63,22 @@ export type CompanyInvitation = {
   email: string;
   role: InvitableCompanyRole;
   status: "pending" | "accepted" | "revoked" | "expired";
-  token: string;
   expires_at: string;
-  created_by: string;
   created_at: string;
+  inviter_email?: string | null;
+  /** Solo viene al crear la invitación; no se puede volver a consultar. */
+  acceptanceToken?: string;
 };
 
 export type AuditLogEntry = {
   id: string;
   company_id: string;
-  actor_id: string;
-  actor_email: string | null;
+  user_id: string;
+  user_email: string | null;
+  user_full_name: string | null;
   action: string;
-  details: Record<string, unknown>;
+  target_type: string | null;
+  target_id: string | null;
+  metadata: Record<string, unknown> | null;
   created_at: string;
-};
+};

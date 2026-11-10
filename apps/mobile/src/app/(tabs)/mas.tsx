@@ -34,6 +34,23 @@ type OptionItem = {
 
 const baseOptions: OptionItem[] = [
   {
+    id: "team",
+    title: "Equipo",
+    description:
+      "Miembros, roles e invitaciones de la empresa.",
+    icon: "people-circle-outline" as const,
+    onPress: () => router.push("/equipo" as Href),
+    capability: "team.view",
+  },
+  {
+    id: "join-company",
+    title: "Unirme a una empresa",
+    description:
+      "Usa un código de invitación que te enviaron.",
+    icon: "key-outline" as const,
+    onPress: () => router.push("/equipo/unirme" as Href),
+  },
+  {
     id: "my-tasks",
     title: "Mis tareas",
     description:
