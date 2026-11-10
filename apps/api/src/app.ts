@@ -8,7 +8,7 @@ import { registerClientRoutes } from "./clients/routes.js";
 import { registerCompanyRoutes } from "./companies/routes.js";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
-import Fastify from "fastify";
+import Fastify, { type FastifyBaseLogger } from "fastify";
 import fastifyCookie from "@fastify/cookie";
 
 import { registerAuthRoutes } from "./auth/routes.js";
@@ -25,20 +25,26 @@ import { registerStorageRoutes } from "./storage/routes.js";
 import { registerNotificationRoutes } from "./notifications/routes.js";
 import { registerAccountLegalRoutes } from "./account/routes.js";
 import { safeErrorDetails } from "./security/redaction.js";
+import { createAppLogger, defaultLogLevel } from "./observability/logger.js";
 import { getClientIp } from "./security/client-ip.js";
 
 export async function buildApp() {
   const app = Fastify({
-    logger: false
+    // Registro propio: JSON con secretos ocultos, compatible con Node y Workers.
+    loggerInstance: createAppLogger({
+      level: defaultLogLevel(env.NODE_ENV, env.LOG_LEVEL)
+    }) as unknown as FastifyBaseLogger,
+    // Solo se registran errores y peticiones lentas, no cada petición.
+    disableRequestLogging: true,
+    genReqId: (request) => {
+      const ray = request.headers["cf-ray"];
+      return typeof ray === "string" && ray ? ray : crypto.randomUUID();
+    }
   });
 
   app.decorateRequest("authenticatedUser", null);
 
   app.setErrorHandler((error, request, reply) => {
-    request.log.error(
-      safeErrorDetails(error),
-      "Error no controlado en la API."
-    );
     const errorStatusCode =
       typeof error === "object" &&
       error !== null &&
@@ -51,6 +57,18 @@ export async function buildApp() {
       errorStatusCode < 500
         ? errorStatusCode
         : 500;
+    const context = {
+      ...safeErrorDetails(error),
+      method: request.method,
+      route: request.routeOptions?.url ?? request.url.split("?")[0],
+      statusCode,
+      userId: request.authenticatedUser?.id ?? null
+    };
+    if (statusCode >= 500) {
+      request.log.error(context, "Error no controlado en la API.");
+    } else {
+      request.log.warn(context, "Solicitud rechazada por la API.");
+    }
     return reply.status(statusCode).send({
       message:
         statusCode < 500
@@ -76,6 +94,21 @@ export async function buildApp() {
   app.register(fastifyCookie, {
     secret: env.JWT_SECRET,
     hook: "onRequest"
+  });
+
+  // Peticiones lentas: ayudan a detectar consultas pesadas en producción.
+  app.addHook("onResponse", async (request, reply) => {
+    if (reply.elapsedTime > 3000) {
+      request.log.warn(
+        {
+          method: request.method,
+          route: request.routeOptions?.url ?? request.url.split("?")[0],
+          statusCode: reply.statusCode,
+          durationMs: Math.round(reply.elapsedTime)
+        },
+        "Petición lenta."
+      );
+    }
   });
 
   app.addHook("onRequest", async (request, reply) => {

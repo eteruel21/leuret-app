@@ -11,6 +11,10 @@ const environmentSchema = z.object({
     .enum(["postgres", "hyperdrive"])
     .default("postgres"),
 
+  LOG_LEVEL: z
+    .enum(["trace", "debug", "info", "warn", "error", "fatal", "silent"])
+    .optional(),
+
   TURNSTILE_SECRET_KEY: z.string().trim().min(1).optional(),
   TURNSTILE_ALLOWED_HOSTNAMES: z.string().trim().min(1).optional(),
 
