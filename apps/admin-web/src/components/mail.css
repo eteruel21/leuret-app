@@ -62,3 +62,9 @@
   .mail-workspace { border-radius:12px; }
   .mail-detail { padding:14px; }
 }
+
+.mail-attachment-button { display:flex; flex-wrap:wrap; align-items:center; gap:8px; width:100%; text-align:left; padding:10px 12px; border:1px solid #2b4059; border-radius:8px; background:#122238; color:#dce8f7; }
+.mail-attachment-button:hover { border-color:#22c55e; }
+.mail-attachment-button:disabled { opacity:.6; }
+.mail-attachment-button span { flex:1; min-width:120px; }
+.mail-attachment-button small { color:#9ac9fa; }
