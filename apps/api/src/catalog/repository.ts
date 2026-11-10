@@ -45,7 +45,7 @@ export async function findPlatformCatalogItems(
             )
           )
           AND ($2::text IS NULL OR item.category_name = $2)
-        ORDER BY item.name ASC
+        ORDER BY item.name ASC, item.id ASC
         LIMIT $3 OFFSET $4
       `,
       [searchPattern, options.categoryName || null, limit, offset]
