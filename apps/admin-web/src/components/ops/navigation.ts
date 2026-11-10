@@ -1,5 +1,6 @@
 export type Tab =
   | "dashboard"
+  | "mail"
   | "users"
   | "companies"
   | "projects"
@@ -14,6 +15,7 @@ export type Tab =
 
 export const TABS: Tab[] = [
   "dashboard",
+  "mail",
   "users",
   "companies",
   "projects",
@@ -29,6 +31,7 @@ export const TABS: Tab[] = [
 
 export const TAB_LABELS: Record<Tab, string> = {
   dashboard: "Resumen",
+  mail: "Correos",
   users: "Usuarios",
   companies: "Empresas",
   projects: "Obras",

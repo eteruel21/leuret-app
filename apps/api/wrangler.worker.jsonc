@@ -19,7 +19,10 @@
       "JWT_SECRET",
       "TURNSTILE_SECRET_KEY",
       "RESEND_API_KEY",
-      "EMAIL_FROM"
+      "EMAIL_FROM",
+      "RESEND_ADMIN_MAIL_API_KEY",
+      "RESEND_PRIVACY_INBOX_ID",
+      "RESEND_LEGAL_INBOX_ID"
     ]
   },
   "hyperdrive": [

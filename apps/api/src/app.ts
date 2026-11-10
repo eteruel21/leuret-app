@@ -1,4 +1,5 @@
 import { registerAdminRoutes } from "./admin/routes.js";
+import { registerAdminMailRoutes } from "./admin/mail-routes.js";
 import { registerInvoiceRoutes } from "./invoices/routes.js";
 import { registerOperationRoutes } from "./operations/routes.js";
 import { registerBudgetRoutes } from "./budgets/routes.js";
@@ -151,6 +152,7 @@ export async function buildApp() {
   app.register(registerOperationRoutes);
   app.register(registerInvoiceRoutes);
   app.register(registerAdminRoutes);
+  app.register(registerAdminMailRoutes);
   app.register(registerActivityRoutes);
   app.register(registerProjectTaskRoutes);
   app.register(registerProjectProgressRoutes);
