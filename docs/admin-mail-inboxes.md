@@ -7,9 +7,9 @@ El módulo `Correos` es un **cliente de correo**, no un chat. Permite al superad
 - `privacidad@leurettech.com` — bandeja Resend «Privacidad y Protección de Datos».
 - `legal@leurettech.com` — bandeja Resend «Asuntos Legales».
 
-Desde el panel se pueden consultar **Recibidos** y **Enviados**, seleccionar conversaciones, abrir el contenido de un mensaje, identificar adjuntos por nombre, marcar conversaciones como leídas y **responder manualmente**. Resend dirige la respuesta al remitente o Reply-To del correo y mantiene el hilo de email. No se publica ningún mensaje en la aplicación de los usuarios. No hay respuesta automática ni agente.
+Desde el panel se pueden consultar **Recibidos** y **Enviados**, seleccionar conversaciones, abrir el contenido de un mensaje, identificar y abrir adjuntos con enlaces temporales verificados, marcar conversaciones como leídas y **responder manualmente**. Resend dirige la respuesta al remitente o Reply-To del correo y mantiene el hilo de email. No se publica ningún mensaje en la aplicación de los usuarios. No hay respuesta automática ni agente.
 
-La lectura se ejecuta directamente bajo petición del superadministrador. El módulo **no crea webhooks** ni almacena copias de los correos en PostgreSQL: Resend mantiene los hilos y su política de retención propia. El botón «Actualizar correos» hace la consulta manual; los contadores automáticos, alertas push y descarga de adjuntos no están incluidos en esta primera versión.
+La lectura se ejecuta directamente bajo petición del superadministrador. El módulo **no crea webhooks** ni almacena copias de los correos en PostgreSQL: Resend mantiene los hilos y su política de retención propia. El botón «Actualizar correos» hace la consulta manual; los contadores automáticos, alertas push no están incluidos en esta primera versión.
 
 ## Configuración de la API (antes de probar o desplegar)
 
@@ -32,7 +32,7 @@ Resend exige **Full access** en la clave para listar hilos y leer mensajes. Una 
 - Se muestran los mensajes externos **como texto**, nunca como HTML activo, y no se insertan scripts ni imágenes remotas provenientes del email en el DOM.
 - Cada respuesta exige un clic explícito, confirmación visible, un cuerpo de texto no vacío y clave de idempotencia para evitar duplicados al reintentar.
 - Los errores externos no devuelven claves ni cuerpos completos de Resend.
-- El acceso a metadatos de adjuntos no habilita todavía su descarga; requiere verificar el flujo de URL firmada y el vínculo del adjunto al correo autorizado antes de habilitarla.
+- Cada acceso a un adjunto comprueba en Resend que pertenece al mensaje del buzón autorizado y solo entrega una URL HTTPS firmada temporalmente. Los archivos de terceros se deben abrir con precaución.
 - La respuesta enviada es una acción real y no puede recuperarse. La interfaz muestra el buzón y destinatario antes del envío.
 
 ## Pruebas previas al merge
@@ -40,7 +40,7 @@ Resend exige **Full access** en la clave para listar hilos y leer mensajes. Una 
 1. Ejecutar `npm run typecheck --workspace=api` y `npm run typecheck --workspace=admin-web` (o el flujo `Validate`).
 2. Ejecutar las pruebas de API, especialmente `apps/api/src/admin/__tests__/mail-routes.test.ts`.
 3. Probar que un usuario anónimo y uno que no sea superadmin reciben 401/403 y nunca se ejecuta una llamada a Resend.
-4. Ingresar como superadmin; probar ambos buzones, alternar carpetas, abrir mensajes y validar que no se muestra HTML activo.
+4. Ingresar como superadmin; probar ambos buzones, alternar carpetas, abrir mensajes, comprobar enlaces firmados para adjuntos y validar que no se muestra HTML activo.
 5. Enviar pruebas desde una cuenta externa (no a terceros) y comprobar recepción, lectura y respuesta.
 6. Comprobar políticas de retención, permisos de acceso y políticas de privacidad vigentes antes del lanzamiento.
 
@@ -51,6 +51,7 @@ Resend exige **Full access** en la clave para listar hilos y leer mensajes. Una 
 | GET | `/admin/mail/:mailbox/threads?folder=inbox\|sent&after=<uuid>` | Lista de hilos |
 | GET | `/admin/mail/:mailbox/threads/:threadId/emails` | Lista de mensajes |
 | GET | `/admin/mail/:mailbox/threads/:threadId/emails/:emailId` | Contenido de mensaje |
+| GET | `/admin/mail/:mailbox/threads/:threadId/emails/:emailId/attachments/:attachmentId` | Obtener enlace temporal de adjunto |
 | PATCH | `/admin/mail/:mailbox/threads/:threadId/read` | Marcar leído |
 | POST | `/admin/mail/:mailbox/threads/:threadId/emails/:emailId/reply` | Enviar respuesta manual |
 
