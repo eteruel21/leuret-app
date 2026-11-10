@@ -45,7 +45,7 @@ En caso de que una migración SQL haya generado errores:
 
 ## 4. Rollback de Interfaces Web (Cloudflare Pages)
 
-1. Ingresar al panel de **Cloudflare Pages** -> Proyectos `leuret-admin-web` / `contractor-pro-web`.
+1. Ingresar al panel de **Cloudflare Pages** -> Proyectos `leuret-admin-web` / `leuret-pro-web`.
 2. Ir a la pestaña **Deployments**.
 3. En el despliegue anterior estable, seleccionar los tres puntos `...` -> **Rollback to this deployment**.
 4. La actualización tomará efecto en la red CDN global de Cloudflare en menos de 5 segundos.
