@@ -151,7 +151,13 @@ function ProjectDetailScreenContent() {
         listProjectTasks(activeCompany.id, projectId),
         listProjectProgressHistory(activeCompany.id, projectId),
         listProjectPhotos(activeCompany.id, projectId),
-        fetchCompanyActivities(activeCompany.id, { projectId })
+        fetchCompanyActivities(activeCompany.id, { projectId }).catch((error: unknown) => {
+          Alert.alert(
+            "Agenda no disponible",
+            error instanceof Error ? error.message : "No fue posible cargar las actividades del proyecto."
+          );
+          return [] as Appointment[];
+        })
       ]);
 
       if (projectResult.error) {

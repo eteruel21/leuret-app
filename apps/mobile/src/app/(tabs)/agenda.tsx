@@ -48,6 +48,8 @@ export default function AgendaScreen() {
   const { activeCompany } = useCompany();
   const [appointments, setAppointments] =
     useState<Appointment[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const formatDate = (dateStr: string) => {
     return formatDateUtil(dateStr, activeCompany?.timezone || undefined);
@@ -57,8 +59,9 @@ export default function AgendaScreen() {
     useCallback(() => {
       let active = true;
 
+      setAppointments([]);
+      setLoadError(null);
       if (!activeCompany?.id) {
-        setAppointments([]);
         return () => { active = false; };
       }
       void getAppointments(activeCompany.id)
@@ -67,18 +70,15 @@ export default function AgendaScreen() {
         })
         .catch((error) => {
           if (!active) return;
-          console.error("[Agenda] Error de sincronizacion:", error);
+          console.error("[Agenda] Error de sincronización:", error);
           setAppointments([]);
-          Alert.alert(
-            "Error de sincronizacion",
-            "No fue posible cargar las actividades. Revisa tu conexion e intenta nuevamente."
-          );
+          setLoadError("No pudimos consultar las actividades de Supabase. Revisa la conexión o tus permisos e inténtalo nuevamente.");
         });
 
       return () => {
         active = false;
       };
-    }, [activeCompany?.id]),
+    }, [activeCompany?.id, reloadKey]),
   );
 
   const grouped = useMemo(() => {
@@ -152,7 +152,24 @@ export default function AgendaScreen() {
       </Animated.View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {appointments.length === 0 ? (
+        {loadError ? (
+          <LeuretEmptyState
+            icon="cloud-offline-outline"
+            title="No se pudo sincronizar la agenda"
+            description={loadError}
+            actionLabel="Reintentar"
+            actionIcon="refresh"
+            onAction={() => setReloadKey((key) => key + 1)}
+            style={styles.emptyStateSpacing}
+          />
+        ) : !activeCompany ? (
+          <LeuretEmptyState
+            icon="business-outline"
+            title="Selecciona una empresa"
+            description="Selecciona una empresa para ver sus actividades guardadas."
+            style={styles.emptyStateSpacing}
+          />
+        ) : appointments.length === 0 ? (
           <LeuretEmptyState
             icon="calendar-clear-outline"
             title="No hay actividades programadas"
