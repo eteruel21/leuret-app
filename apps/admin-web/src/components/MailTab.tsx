@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import { Inbox, Send, Mail, RefreshCw, Paperclip, Loader2 } from "lucide-react";
 import {
   type MailboxName,
@@ -200,7 +201,7 @@ export function MailTab() {
     }
   }
 
-  async function handleReply(event: React.FormEvent<HTMLFormElement>) {
+  async function handleReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedThreadId || !message || !replyText.trim() || sending) return;
     const target = message.direction === "inbound" ? (message.from ?? "el remitente") : (message.to ?? []).join(", ");
