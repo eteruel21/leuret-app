@@ -37,9 +37,10 @@ describe("permisos por rol (deben coincidir con la API)", () => {
     expect(allowed).toEqual(["owner", "admin", "estimator"]);
   });
 
-  it("detalle de proyecto: owner, admin, supervisor y sales", () => {
-    const allowed = ROLES.filter((role) => can(role, "projects.view"));
-    expect(allowed).toEqual(["owner", "admin", "supervisor", "sales"]);
+  it("todo el equipo abre la obra, pero solo algunos ven sus montos", () => {
+    expect(ROLES.filter((role) => can(role, "projects.view"))).toEqual(ROLES);
+    expect(ROLES.filter((role) => can(role, "projects.financials"))).toEqual(["owner", "admin", "supervisor", "sales"]);
+    expect(ROLES.filter((role) => can(role, "progress.record"))).toEqual(["owner", "admin", "supervisor"]);
   });
 
   it("facturas, clientes y catálogo se consultan con cualquier rol", () => {
@@ -68,7 +69,6 @@ describe("inicio por rol", () => {
       const actions = quickActionsFor(role);
       expect(actions.length).toBeGreaterThan(0);
       if (!can(role, "budgets.view")) expect(actions).not.toContain("budget");
-      if (!can(role, "projects.view")) expect(actions).not.toContain("project");
     }
   });
 

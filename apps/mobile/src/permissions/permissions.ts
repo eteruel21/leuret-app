@@ -26,7 +26,10 @@ export const CAPABILITIES = {
 
   // Proyectos — projects/routes.ts
   "projects.list": ALL_ROLES,
-  "projects.view": ["owner", "admin", "supervisor", "sales"],
+  "projects.view": ALL_ROLES,
+  // Montos de la obra (estimado y valor contratado); la API los oculta a los demás.
+  "projects.financials": ["owner", "admin", "supervisor", "sales"],
+  "projects.status.edit": ["owner", "admin", "supervisor", "sales"],
   "projects.create": ["owner", "admin", "supervisor", "sales"],
   "projects.progress.edit": MANAGERS,
 
@@ -35,6 +38,7 @@ export const CAPABILITIES = {
   "tasks.edit": ALL_ROLES,
   "tasks.delete": ["owner", "admin", "supervisor"],
   "progress.upload": ALL_ROLES,
+  "progress.record": ["owner", "admin", "supervisor"],
   "progress.delete": ["owner", "admin", "supervisor"],
 
   // Facturas — invoices/routes.ts

@@ -140,3 +140,20 @@ export async function updateProjectProgressRepo(userId: string, projectId: strin
     );
   });
 }
+
+export async function findCompanyRoleRepo(userId: string, companyId: string): Promise<string | null> {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query<{ role: string }>(
+      `
+        SELECT role::text AS role
+        FROM public.company_members
+        WHERE company_id = $1
+          AND user_id = app.current_user_id()
+          AND active = true
+        LIMIT 1
+      `,
+      [companyId]
+    );
+    return result.rows[0]?.role ?? null;
+  });
+}
