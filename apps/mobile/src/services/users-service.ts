@@ -199,9 +199,14 @@ export async function getCompanyAuditLogs(
 
     const response = await authenticatedRequest<{
       logs: AuditLogEntry[];
-      total: number;
+      total?: number;
+      pagination?: { totalItems: number };
     }>(`/companies/${companyId}/audit-logs?${params.toString()}`);
-    return { logs: response.logs, total: response.total, error: null };
+    return {
+      logs: response.logs,
+      total: response.pagination?.totalItems ?? response.total ?? response.logs.length,
+      error: null
+    };
   } catch (error) {
     return { logs: [], total: 0, error: errorMessage(error) };
   }

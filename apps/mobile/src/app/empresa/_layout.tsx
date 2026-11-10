@@ -38,6 +38,13 @@ export default function CompanyLayout() {
           title: "Seleccionar empresa",
         }}
       />
+
+      <Stack.Screen
+        name="unirme"
+        options={{
+          title: "Unirme a una empresa",
+        }}
+      />
     </Stack>
   );
 }

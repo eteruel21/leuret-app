@@ -60,7 +60,8 @@ export const CAPABILITIES = {
   "agenda.use": ALL_ROLES,
   "agenda.delete": ["owner", "admin", "supervisor"],
 
-  // Empresa — companies/routes.ts
+  // Empresa y equipo — companies/routes.ts
+  "team.view": ALL_ROLES,
   "company.manage": MANAGERS,
 } as const satisfies Record<string, readonly CompanyRole[]>;
 
