@@ -4,6 +4,8 @@ import { httpServerHandler } from "cloudflare:node";
 
 import { buildApp } from "./app.js";
 import { processAccountDeletionStorageQueue } from "./account/storage-cleanup.js";
+import { processInvoicePaymentReminders } from "./invoices/payment-reminders.js";
+import { safeErrorDetails } from "./security/redaction.js";
 import {
   configureHyperdriveDatabase
 } from "./db/pool.js";
@@ -104,6 +106,18 @@ export default {
           );
         }
       })
+    );
+
+    context.waitUntil(
+      processInvoicePaymentReminders({ limit: 25 })
+        .then((result) => {
+          if (result.claimed > 0) {
+            console.log(JSON.stringify({ level: "info", msg: "Recordatorios de cobro procesados.", ...result }));
+          }
+        })
+        .catch((error: unknown) => {
+          console.error("Fallaron los recordatorios de cobro programados.", safeErrorDetails(error));
+        })
     );
   }
 } satisfies ExportedHandler<Env>;
