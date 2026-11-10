@@ -6,6 +6,7 @@ import {
   listMailThreads,
   listMailMessages,
   readMailMessage,
+  getMailAttachmentDownload,
   markMailThreadRead,
   replyToMailMessage
 } from "./mail-service.js";
@@ -17,6 +18,9 @@ const threadParamsSchema = z.object({
 });
 const emailParamsSchema = threadParamsSchema.extend({
   emailId: z.uuid()
+});
+const attachmentParamsSchema = emailParamsSchema.extend({
+  attachmentId: z.uuid()
 });
 const querySchema = z.object({
   folder: z.enum(["inbox", "sent"]).default("inbox"),
@@ -74,6 +78,24 @@ export async function registerAdminMailRoutes(app: FastifyInstance): Promise<voi
     }
     try {
       return await readMailMessage(params.data.mailbox, params.data.threadId, params.data.emailId);
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
+  app.get("/admin/mail/:mailbox/threads/:threadId/emails/:emailId/attachments/:attachmentId", { preHandler: requireSuperAdmin }, async (request, reply) => {
+    reply.header("Cache-Control", "private, no-store");
+    const params = attachmentParamsSchema.safeParse(request.params);
+    if (!params.success) {
+      return reply.status(400).send({ message: "Adjunto no válido." });
+    }
+    try {
+      return await getMailAttachmentDownload(
+        params.data.mailbox,
+        params.data.threadId,
+        params.data.emailId,
+        params.data.attachmentId
+      );
     } catch (error) {
       return fail(reply, error);
     }
