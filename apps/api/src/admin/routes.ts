@@ -20,7 +20,9 @@ import {
   formulaSchema,
   globalPriceParamsSchema,
   globalPriceSchema,
-  adjustPricesSchema
+  adjustPricesSchema,
+  priceHistoryQuerySchema,
+  priceAlertsQuerySchema
 } from "./schemas.js";
 import {
   getAdminDashboardService,
@@ -31,7 +33,9 @@ import {
   saveYieldService,
   saveFormulaService,
   saveGlobalPriceService,
-  adjustPricesService
+  adjustPricesService,
+  listPriceHistoryService,
+  getPriceAlertsService
 } from "./services.js";
 
 export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
@@ -449,4 +453,44 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       return { success: true, adjustedCount };
     }
   );
+
+  // 10. Historial de cambios de precios globales
+  app.get(
+    "/admin/platform-pricing/history",
+    {
+      preHandler: requireSuperAdmin
+    },
+    async (request, reply) => {
+      const query = priceHistoryQuerySchema.safeParse(request.query);
+      if (!query.success) {
+        return reply.status(400).send({
+          message: "Los filtros del historial no son válidos."
+        });
+      }
+
+      const entries = await listPriceHistoryService(request.authenticatedUser!.id, query.data);
+      reply.header("Cache-Control", "private, no-store");
+      return { entries };
+    }
+  );
+
+  // 11. Alertas de precios globales
+  app.get(
+    "/admin/platform-pricing/alerts",
+    {
+      preHandler: requireSuperAdmin
+    },
+    async (request, reply) => {
+      const query = priceAlertsQuerySchema.safeParse(request.query);
+      if (!query.success) {
+        return reply.status(400).send({
+          message: "Los parámetros de alertas no son válidos."
+        });
+      }
+
+      reply.header("Cache-Control", "private, no-store");
+      return getPriceAlertsService(request.authenticatedUser!.id, query.data);
+    }
+  );
+
 }

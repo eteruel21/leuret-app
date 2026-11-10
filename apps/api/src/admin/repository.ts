@@ -1,4 +1,5 @@
 import { withUserTransaction } from "../db/with-user-transaction.js";
+import type { PriceAlertRow } from "./price-alerts.js";
 import { revokeAllUserSessions } from "../auth/repository.js";
 import type { z } from "zod";
 import type {
@@ -717,5 +718,122 @@ export async function adjustPricesRepo(userId: string, input: AdjustPricesInput)
 
       return result.rowCount ?? 0;
     }
+  });
+}
+
+export type PriceHistoryQuery = {
+  limit: number;
+  itemId?: string | undefined;
+  search?: string | undefined;
+};
+
+export async function listPriceHistoryRepo(userId: string, query: PriceHistoryQuery) {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query(
+      `
+        SELECT
+          history.id,
+          history.catalog_item_id,
+          item.code,
+          item.name,
+          item.item_type,
+          item.unit_symbol,
+          history.previous_unit_cost,
+          history.unit_cost,
+          history.previous_sale_price,
+          history.sale_price,
+          history.source,
+          history.notes,
+          history.created_at,
+          NULLIF(trim(concat_ws(' ', profile.first_name, profile.last_name)), '') AS changed_by_name
+        FROM public.platform_catalog_price_history AS history
+        JOIN public.platform_catalog_items AS item
+          ON item.id = history.catalog_item_id
+        LEFT JOIN public.profiles AS profile
+          ON profile.id = history.changed_by
+        WHERE ($1::uuid IS NULL OR history.catalog_item_id = $1)
+          AND (
+            $2::text IS NULL
+            OR item.name ILIKE $2
+            OR item.code ILIKE $2
+            OR history.source ILIKE $2
+          )
+        ORDER BY history.created_at DESC, history.id DESC
+        LIMIT $3
+      `,
+      [
+        query.itemId ?? null,
+        query.search ? `%${query.search}%` : null,
+        query.limit
+      ]
+    );
+
+    return result.rows.map((row) => {
+      const previousCost = Number(row.previous_unit_cost ?? 0);
+      const unitCost = Number(row.unit_cost ?? 0);
+      return {
+        id: row.id as string,
+        itemId: row.catalog_item_id as string,
+        code: (row.code as string | null) ?? null,
+        name: row.name as string,
+        itemType: row.item_type as string,
+        unitSymbol: (row.unit_symbol as string | null) ?? null,
+        previousUnitCost: previousCost,
+        unitCost,
+        previousSalePrice: Number(row.previous_sale_price ?? 0),
+        salePrice: Number(row.sale_price ?? 0),
+        costChangePercentage:
+          previousCost > 0
+            ? Math.round(((unitCost - previousCost) / previousCost) * 1000) / 10
+            : null,
+        source: (row.source as string | null) ?? null,
+        notes: (row.notes as string | null) ?? null,
+        changedByName: (row.changed_by_name as string | null) ?? null,
+        createdAt: new Date(row.created_at).toISOString()
+      };
+    });
+  });
+}
+
+export async function findPriceAlertRowsRepo(userId: string, windowDays: number) {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query<PriceAlertRow>(
+      `
+        WITH window_changes AS (
+          SELECT
+            catalog_item_id,
+            (array_agg(previous_unit_cost ORDER BY created_at ASC))[1] AS window_from_cost,
+            count(*) AS window_changes
+          FROM public.platform_catalog_price_history
+          WHERE created_at >= now() - make_interval(days => $1::int)
+          GROUP BY catalog_item_id
+        ),
+        last_changes AS (
+          SELECT catalog_item_id, max(created_at) AS last_price_change
+          FROM public.platform_catalog_price_history
+          GROUP BY catalog_item_id
+        )
+        SELECT
+          item.id,
+          item.code,
+          item.name,
+          item.item_type::text AS item_type,
+          item.category_name,
+          item.unit_symbol,
+          item.default_unit_cost,
+          item.default_sale_price,
+          item.updated_at,
+          window_changes.window_from_cost,
+          window_changes.window_changes,
+          last_changes.last_price_change
+        FROM public.platform_catalog_items AS item
+        LEFT JOIN window_changes ON window_changes.catalog_item_id = item.id
+        LEFT JOIN last_changes ON last_changes.catalog_item_id = item.id
+        WHERE item.active = true
+      `,
+      [windowDays]
+    );
+
+    return result.rows;
   });
 }
