@@ -23,6 +23,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../../constants/theme";
 import { useCompany } from "../../contexts/CompanyContext";
 import { addBudgetItem } from "../../services/budget-service";
+import { compactMaterials, material } from "../../services/budget-materials";
 import { listCatalogItems } from "../../services/catalog-service";
 import { filterCalculatorCatalogItems } from "../../services/calculators/catalog-picker";
 import {
@@ -385,8 +386,9 @@ export default function MasonryCalculatorScreen() {
       result.netWallArea > 0
         ? result.totalCost / result.netWallArea
         : 0;
+    const c = computeMasonry(withCatalogCosts(form, trackedPrices));
     const unitCost = budgetUnitCost(
-      computeMasonry(withCatalogCosts(form, trackedPrices)).totalCost,
+      c.totalCost,
       result.netWallArea,
       unitPrice,
     );
@@ -412,6 +414,11 @@ export default function MasonryCalculatorScreen() {
       unitCost,
       unitPrice,
       taxable: true,
+      materials: compactMaterials([
+        material("Bloque", c.blocksToBuy, "und.", c.blockCost),
+        material("Cemento", c.cementBagsToBuy, "saco", c.cementCost),
+        material("Arena", c.sandVolume, "m³", c.sandCost),
+      ]),
       notes,
     });
 

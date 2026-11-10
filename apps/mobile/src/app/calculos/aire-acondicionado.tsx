@@ -18,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../../constants/theme";
 import { useCompany } from "../../contexts/CompanyContext";
 import { addBudgetItem } from "../../services/budget-service";
+import { compactMaterials, material } from "../../services/budget-materials";
 import { listCatalogItems } from "../../services/catalog-service";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
@@ -331,8 +332,9 @@ export default function AirConditioningScreen() {
     }
 
     const unitPrice = result.totalCost / result.unitCount;
+    const c = (compute(withCatalogCosts(form, tracked)) ?? result);
     const unitCost = budgetUnitCost(
-      (compute(withCatalogCosts(form, tracked)) ?? result).totalCost,
+      c.totalCost,
       result.unitCount, unitPrice);
     const capacity = formatDecimal(
       result.selectedCapacityPerUnit,
@@ -352,6 +354,16 @@ export default function AirConditioningScreen() {
       unitCost,
       unitPrice,
       taxable: true,
+      materials: compactMaterials([
+        material(`Aire acondicionado ${capacity} BTU`, c.unitCount, "und.", c.equipmentCost),
+        material("Tubería de cobre adicional", c.extraCopperMeters, "m", c.copperCost),
+        material("Cable eléctrico", c.cableMeters, "m", c.cableCost),
+        material("Drenaje", c.drainPieces, "und.", c.drainCost),
+        material("Base o soporte", c.brackets, "und.", c.bracketCost),
+        material("Breaker", c.breakers, "und.", c.breakerCost),
+        material("Desconectador", c.disconnects, "und.", c.disconnectCost),
+        material("Refrigerante", c.refrigerantKilograms, "kg", c.refrigerantCost),
+      ]),
       notes:
         `Carga estimada: ${formatDecimal(result.designLoadBtu, 0, currency)} BTU` +
         ` · ${formatDecimal(result.extraCopperMeters, 2, currency)} m de cobre adicional` +

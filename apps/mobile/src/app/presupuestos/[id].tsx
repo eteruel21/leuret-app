@@ -43,9 +43,16 @@ import { useCompany } from "@/contexts/CompanyContext";
 
 import {
   addBudgetItem,
+  applyBudgetPriceUpdates,
   deleteBudgetItem,
   getBudgetById,
+  getBudgetPriceUpdates,
+  type BudgetPriceUpdate,
 } from "@/services/budget-service";
+import {
+  PriceUpdatesBanner,
+  PriceUpdatesModal,
+} from "@/components/PriceUpdatesModal";
 import { getInvoiceByBudgetId, createInvoiceFromBudget } from "@/services/invoice-service";
 import type { Invoice } from "@/types/invoice";
 
@@ -61,6 +68,7 @@ import {
 } from "@/types/budget";
 
 import { shareBudgetPdf } from "@/utils/budget-pdf";
+import { ShoppingListModal } from "@/components/ShoppingListModal";
 
 import { listCatalogItems } from "@/services/catalog-service";
 import type { CatalogItemWithDetails } from "@/types/catalog";
@@ -85,6 +93,14 @@ export default function BudgetDetailScreen() {
   const [modalVisible, setModalVisible] =
     useState(false);
   const [catalogModalVisible, setCatalogModalVisible] =
+    useState(false);
+  const [shoppingListVisible, setShoppingListVisible] =
+    useState(false);
+  const [priceUpdates, setPriceUpdates] =
+    useState<BudgetPriceUpdate[]>([]);
+  const [priceUpdatesVisible, setPriceUpdatesVisible] =
+    useState(false);
+  const [applyingPrices, setApplyingPrices] =
     useState(false);
   const [sharingPdf, setSharingPdf] =
     useState(false);
@@ -119,6 +135,15 @@ export default function BudgetDetailScreen() {
         );
       } else {
         setBudget(loadedBudget);
+        if (loadedBudget?.status === "draft") {
+          const { updates } = await getBudgetPriceUpdates({
+            companyId: activeCompany.id,
+            budgetId,
+          });
+          setPriceUpdates(updates);
+        } else {
+          setPriceUpdates([]);
+        }
         try {
           const { invoice } = await getInvoiceByBudgetId(
             activeCompany.id,
@@ -205,6 +230,32 @@ export default function BudgetDetailScreen() {
         </Text>
       </View>
     );
+  }
+
+  async function handleApplyPrices(itemIds: string[]) {
+    if (!activeCompany || !budget) return;
+
+    setApplyingPrices(true);
+    const { updatedCount, error } = await applyBudgetPriceUpdates({
+      companyId: activeCompany.id,
+      budgetId: budget.id,
+      itemIds,
+    });
+    setApplyingPrices(false);
+
+    if (error) {
+      Alert.alert("No fue posible actualizar los precios", error);
+      return;
+    }
+
+    setPriceUpdatesVisible(false);
+    Alert.alert(
+      "Precios actualizados",
+      updatedCount === 1
+        ? "Se actualizó 1 partida."
+        : `Se actualizaron ${updatedCount} partidas.`,
+    );
+    await loadBudget(true);
   }
 
   async function handleSharePdf() {
@@ -353,6 +404,12 @@ export default function BudgetDetailScreen() {
           />
         </View>
 
+        <PriceUpdatesBanner
+          updates={priceUpdates}
+          currencyCode={budget.currency_code}
+          onPress={() => setPriceUpdatesVisible(true)}
+        />
+
         <View style={styles.buttonRow}>
           <Pressable
             onPress={() => void handleSharePdf()}
@@ -404,6 +461,21 @@ export default function BudgetDetailScreen() {
             </Pressable>
           )}
         </View>
+
+        <Pressable
+          onPress={() => setShoppingListVisible(true)}
+          style={({ pressed }) => [
+            styles.shoppingButton,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Ionicons
+            name="cart-outline"
+            size={20}
+            color={colors.primary}
+          />
+          <Text style={styles.shoppingButtonText}>Lista de compras</Text>
+        </Pressable>
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -525,6 +597,23 @@ export default function BudgetDetailScreen() {
         sectionId={defaultSection?.id ?? null}
         onClose={() => setModalVisible(false)}
         onCreated={() => void loadBudget(true)}
+      />
+
+      <ShoppingListModal
+        visible={shoppingListVisible}
+        title={budget.budget_number}
+        items={budget.items}
+        currencyCode={budget.currency_code}
+        onClose={() => setShoppingListVisible(false)}
+      />
+
+      <PriceUpdatesModal
+        visible={priceUpdatesVisible}
+        updates={priceUpdates}
+        currencyCode={budget.currency_code}
+        applying={applyingPrices}
+        onClose={() => setPriceUpdatesVisible(false)}
+        onApply={(itemIds) => void handleApplyPrices(itemIds)}
       />
 
       <AddCatalogItemModal
@@ -1516,6 +1605,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+  },
+
+  shoppingButton: {
+    minHeight: 50,
+    marginTop: 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+
+  shoppingButtonText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: "900",
   },
 
   pdfButtonText: {

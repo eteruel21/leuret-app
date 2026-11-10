@@ -20,7 +20,8 @@ import {
   createBudgetItemSchema,
   approveBudgetSchema,
   rejectBudgetSchema,
-  convertCalculationSchema
+  convertCalculationSchema,
+  applyPriceUpdatesSchema
 } from "./schemas.js";
 
 import {
@@ -34,8 +35,11 @@ import {
   approveBudgetService,
   clientBudgetResponseError,
   rejectBudgetService,
-  getBudgetHistoryService
+  getBudgetHistoryService,
+  getBudgetPriceUpdatesService,
+  applyBudgetPriceUpdatesService
 } from "./services.js";
+import { BudgetNotDraftError } from "./repository.js";
 
 import { getCalculationDetailService } from "../calculations/services.js";
 
@@ -394,4 +398,74 @@ export async function registerBudgetRoutes(
       return reply.status(201).send({ items: createdItems });
     }
   );
+
+  app.get(
+    "/budgets/:budgetId/price-updates",
+    {
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"])]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedParams = budgetParamsSchema.safeParse(request.params);
+      const parsedQuery = companyQuerySchema.safeParse(request.query);
+
+      if (!parsedParams.success || !parsedQuery.success) {
+        return reply.status(400).send({ message: "El presupuesto no es válido." });
+      }
+
+      const result = await getBudgetPriceUpdatesService(
+        userId,
+        parsedParams.data.budgetId,
+        parsedQuery.data.companyId
+      );
+
+      if (!result) {
+        return reply.status(404).send({ message: "Presupuesto no encontrado." });
+      }
+
+      return result;
+    }
+  );
+
+  app.post(
+    "/budgets/:budgetId/price-updates",
+    {
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"])]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedParams = budgetParamsSchema.safeParse(request.params);
+      const parsedBody = applyPriceUpdatesSchema.safeParse(request.body);
+
+      if (!parsedParams.success || !parsedBody.success) {
+        return reply.status(400).send({ message: "Las partidas a actualizar no son válidas." });
+      }
+
+      try {
+        const result = await applyBudgetPriceUpdatesService(
+          userId,
+          parsedParams.data.budgetId,
+          parsedBody.data.companyId,
+          parsedBody.data.itemIds
+        );
+
+        if (!result) {
+          return reply.status(404).send({ message: "Presupuesto no encontrado." });
+        }
+
+        return { success: true, updatedCount: result.updatedCount };
+      } catch (error) {
+        if (error instanceof BudgetNotDraftError) {
+          return reply.status(409).send({ message: error.message });
+        }
+        request.log.error(safeErrorDetails(error), "No se pudieron actualizar los precios.");
+        return reply.status(400).send({ message: "Error al actualizar los precios." });
+      }
+    }
+  );
+
 }

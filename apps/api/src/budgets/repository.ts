@@ -279,10 +279,11 @@ export async function addBudgetItemRepo(userId: string, budgetId: string, input:
           unit_price,
           discount_percentage,
           taxable,
-          notes
+          notes,
+          materials
         )
         VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb
         )
         RETURNING *
       `,
@@ -300,7 +301,10 @@ export async function addBudgetItemRepo(userId: string, budgetId: string, input:
         input.unitPrice,
         input.discountPercentage,
         input.taxable,
-        input.notes || null
+        input.notes || null,
+        input.materials && input.materials.length > 0
+          ? JSON.stringify(input.materials)
+          : null
       ]
     );
 
@@ -526,5 +530,129 @@ export async function respondToBudgetAsClientRepo(
       [budgetId, decision, reason ?? null]
     );
     return result.rows[0] ?? null;
+  });
+}
+
+const CATALOG_PRICE_SQL = `CASE WHEN catalog.sale_price > 0 THEN catalog.sale_price ELSE catalog.unit_cost END`;
+
+export async function findBudgetPriceUpdatesRepo(userId: string, budgetId: string, companyId: string) {
+  return withUserTransaction(userId, async (client) => {
+    const budget = await client.query(
+      `SELECT status FROM public.budgets WHERE id = $1 AND company_id = $2 LIMIT 1`,
+      [budgetId, companyId]
+    );
+
+    if (budget.rowCount === 0) {
+      return null;
+    }
+
+    const result = await client.query(
+      `
+        SELECT
+          item.id,
+          item.description,
+          item.unit_name,
+          item.quantity,
+          item.unit_cost,
+          item.unit_price,
+          catalog.unit_cost AS catalog_unit_cost,
+          ${CATALOG_PRICE_SQL} AS catalog_unit_price
+        FROM public.budget_items AS item
+        JOIN public.effective_platform_catalog_prices AS catalog
+          ON catalog.id = item.platform_catalog_item_id
+         AND catalog.active = true
+        WHERE item.budget_id = $1
+          AND item.company_id = $2
+          AND (
+            abs(item.unit_cost - catalog.unit_cost) >= 0.005
+            OR abs(item.unit_price - ${CATALOG_PRICE_SQL}) >= 0.005
+          )
+        ORDER BY item.sort_order ASC, item.created_at ASC
+      `,
+      [budgetId, companyId]
+    );
+
+    return {
+      status: budget.rows[0].status as string,
+      updates: result.rows.map((row) => {
+        const quantity = Number(row.quantity ?? 0);
+        const unitPrice = Number(row.unit_price ?? 0);
+        const catalogUnitPrice = Number(row.catalog_unit_price ?? 0);
+        return {
+          itemId: row.id as string,
+          description: row.description as string,
+          unitName: row.unit_name as string,
+          quantity,
+          unitCost: Number(row.unit_cost ?? 0),
+          unitPrice,
+          catalogUnitCost: Number(row.catalog_unit_cost ?? 0),
+          catalogUnitPrice,
+          priceDifference: Math.round((catalogUnitPrice - unitPrice) * quantity * 100) / 100
+        };
+      })
+    };
+  });
+}
+
+export class BudgetNotDraftError extends Error {
+  constructor() {
+    super("Solo se pueden actualizar precios en presupuestos en borrador.");
+  }
+}
+
+export async function applyBudgetPriceUpdatesRepo(
+  userId: string,
+  budgetId: string,
+  companyId: string,
+  itemIds: string[]
+) {
+  return withUserTransaction(userId, async (client) => {
+    const budget = await client.query(
+      `SELECT status, version FROM public.budgets WHERE id = $1 AND company_id = $2 LIMIT 1 FOR UPDATE`,
+      [budgetId, companyId]
+    );
+
+    if (budget.rowCount === 0) {
+      return null;
+    }
+
+    if (budget.rows[0].status !== "draft") {
+      throw new BudgetNotDraftError();
+    }
+
+    const result = await client.query(
+      `
+        UPDATE public.budget_items AS item
+        SET
+          unit_cost = catalog.unit_cost,
+          unit_price = ${CATALOG_PRICE_SQL},
+          updated_at = now()
+        FROM public.effective_platform_catalog_prices AS catalog
+        WHERE catalog.id = item.platform_catalog_item_id
+          AND catalog.active = true
+          AND item.budget_id = $1
+          AND item.company_id = $2
+          AND item.id = ANY($3::uuid[])
+        RETURNING item.id
+      `,
+      [budgetId, companyId, itemIds]
+    );
+
+    if ((result.rowCount ?? 0) > 0) {
+      await client.query(
+        `
+          INSERT INTO public.budget_change_history (company_id, budget_id, version, action, performed_by, notes)
+          VALUES ($1, $2, $3, 'prices_refreshed', app.current_user_id(), $4)
+        `,
+        [
+          companyId,
+          budgetId,
+          budget.rows[0].version ?? 1,
+          `Precios actualizados desde el catálogo en ${result.rowCount} partida(s)`
+        ]
+      );
+    }
+
+    return { updatedCount: result.rowCount ?? 0 };
   });
 }
