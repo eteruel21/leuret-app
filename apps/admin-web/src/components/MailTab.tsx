@@ -219,10 +219,14 @@ export function MailTab() {
       setReplyText("");
       setPendingKey(null);
       setNotice("Respuesta enviada correctamente al correo del destinatario.");
-      const page = await listMessages(mailbox, selectedThreadId);
-      setMessages(page.data);
-      setHasMoreMessages(page.hasMore);
-      setSelectedMessageId(page.data[page.data.length - 1]?.id ?? null);
+      try {
+        const page = await listMessages(mailbox, selectedThreadId);
+        setMessages(page.data);
+        setHasMoreMessages(page.hasMore);
+        setSelectedMessageId(page.data[page.data.length - 1]?.id ?? null);
+      } catch {
+        setNotice("Respuesta enviada. Actualiza la bandeja si todavía no aparece en la conversación.");
+      }
     } catch (cause) {
       setError(errorMessage(cause));
     } finally {
