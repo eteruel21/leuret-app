@@ -19,14 +19,14 @@ function configuration(mailbox: MailboxName): { apiKey: string; inbox: MailboxCo
     ? env.RESEND_PRIVACY_INBOX_ID
     : env.RESEND_LEGAL_INBOX_ID;
 
-  if (!env.RESEND_API_KEY || !id) {
+  if (!env.RESEND_ADMIN_MAIL_API_KEY || !id) {
     throw new MailProviderError(
-      "El buzón todavía no está configurado en el servidor. Comprueba la clave de Resend y el identificador de la bandeja."
+      "El buzón todavía no está configurado en el servidor. Comprueba la clave administrativa de Resend y el identificador de la bandeja."
     );
   }
 
   return {
-    apiKey: env.RESEND_API_KEY,
+    apiKey: env.RESEND_ADMIN_MAIL_API_KEY,
     inbox: {
       id,
       address: mailbox === "privacy" ? "privacidad@leurettech.com" : "legal@leurettech.com"
