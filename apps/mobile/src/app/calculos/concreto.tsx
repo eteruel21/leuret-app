@@ -26,6 +26,7 @@ import { useCompany } from "../../contexts/CompanyContext";
 import { useFormulaParameters } from "../../hooks/useFormulaParameters";
 import { addBudgetItem } from "../../services/budget-service";
 import { listCatalogItems } from "../../services/catalog-service";
+import { filterCalculatorCatalogItems } from "../../services/calculators/catalog-picker";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
   calculateConcrete,
@@ -1105,28 +1106,10 @@ function CatalogPricePicker({
 }) {
   const [search, setSearch] = useState("");
 
-  const filteredItems = useMemo(() => {
-    const query = search.trim().toLowerCase();
-
-    return items.filter((item) => {
-      const validType =
-        target === "labor"
-          ? item.item_type === "labor" ||
-            item.item_type === "service"
-          : item.item_type === "material";
-
-      if (!validType) return false;
-      if (!query) return true;
-
-      return (
-        item.name.toLowerCase().includes(query) ||
-        (item.sku?.toLowerCase().includes(query) ?? false) ||
-        (item.category?.name
-          .toLowerCase()
-          .includes(query) ?? false)
-      );
-    });
-  }, [items, search, target]);
+  const filteredItems = useMemo(
+    () => target ? filterCalculatorCatalogItems(items, target, search) : [],
+    [items, search, target]
+  );
 
   const title =
     target === "cement"
@@ -1194,7 +1177,7 @@ function CatalogPricePicker({
                     No hay ítems compatibles
                   </Text>
                   <Text style={styles.catalogEmptyText}>
-                    Crea primero el material o la mano de obra en el catálogo.
+                    El catálogo todavía no tiene un concepto del tipo y uso adecuado. Cierra esta ventana para ingresar el precio manualmente o registra el insumo en el catálogo.
                   </Text>
                 </View>
               }
