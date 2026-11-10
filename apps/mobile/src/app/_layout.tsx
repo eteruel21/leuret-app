@@ -154,6 +154,7 @@ function RootNavigator() {
         <Stack.Screen name="facturas" />
         <Stack.Screen name="presupuestos" />
         <Stack.Screen name="proyectos" />
+        <Stack.Screen name="tareas" />
         <Stack.Screen name="catalogo" />
       </Stack.Protected>
 

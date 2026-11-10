@@ -13,3 +13,7 @@ export const createTaskSchema = z.object({
 });
 
 export const updateTaskSchema = createTaskSchema.partial();
+
+export const myTasksQuerySchema = z.object({
+  status: z.enum(["open", "all"]).default("open")
+});

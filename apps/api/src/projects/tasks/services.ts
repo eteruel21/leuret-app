@@ -1,6 +1,7 @@
 import {
   createTaskRepo,
   deleteTaskRepo,
+  findMyTasksRepo,
   findProjectTasksRepo,
   updateTaskRepo,
   type CreateTaskInput,
@@ -9,6 +10,10 @@ import {
 
 export async function listProjectTasksService(userId: string, companyId: string, projectId: string) {
   return findProjectTasksRepo(userId, companyId, projectId);
+}
+
+export async function listMyTasksService(userId: string, companyId: string, includeCompleted: boolean) {
+  return findMyTasksRepo(userId, companyId, includeCompleted);
 }
 
 export async function createTaskService(
