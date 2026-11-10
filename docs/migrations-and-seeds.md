@@ -73,6 +73,8 @@ database/
 ## 5. Semillas de Datos (`database/seeds/`)
 
 - `001_import_contraloria_catalog.sql`: Carga el catálogo oficial de rubros de construcción de Panamá (Contraloría / precios de referencia del mercado panameño), que incluye códigos, descripciones, unidades de medida (m², m³, global, c/u) y valores de costo directo de referencia.
+- `002_calculator_materials_unpriced.sql`: Crea los insumos individuales (`leuret:material:*`, `leuret:labor:*`) que usan las calculadoras, sin precio.
+- `003_market_prices_2026_11.sql`: Actualización de mercado de noviembre 2026. Escala las partidas de la Contraloría con los índices IPMC del INEC, pone precio a materiales y mano de obra y registra el historial. Ver `docs/pricing/market-update-2026-11.md`.
 
 ---
 
