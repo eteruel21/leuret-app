@@ -241,7 +241,14 @@ export default function MasonryCalculatorScreen() {
       plasterLabor: "plasterLaborPrice",
     };
 
-    updateField(fieldByTarget[catalogTarget], String(price));
+    if (Number.isFinite(price) && price > 0) {
+      updateField(fieldByTarget[catalogTarget], String(price));
+    } else {
+      Alert.alert(
+        "Precio pendiente",
+        "Este insumo aún no tiene precio configurado. Introduce el precio manualmente en la calculadora."
+      );
+    }
     setSelectedCatalogNames((current) => ({
       ...current,
       [catalogTarget]: item.name,
@@ -1007,7 +1014,7 @@ function CatalogPicker({
                       </Text>
                     </View>
                     <Text style={styles.catalogItemPrice}>
-                      {formatMoney(price, currencyCode)}
+                      {price > 0 ? formatMoney(price, currencyCode) : "Precio por definir"}
                     </Text>
                   </Pressable>
                 );
