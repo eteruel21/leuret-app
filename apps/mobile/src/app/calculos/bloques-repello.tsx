@@ -24,6 +24,7 @@ import { colors, radius } from "../../constants/theme";
 import { useCompany } from "../../contexts/CompanyContext";
 import { addBudgetItem } from "../../services/budget-service";
 import { listCatalogItems } from "../../services/catalog-service";
+import { filterCalculatorCatalogItems } from "../../services/calculators/catalog-picker";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
   calculateMasonry,
@@ -904,26 +905,10 @@ function CatalogPicker({
 }) {
   const [search, setSearch] = useState("");
 
-  const filteredItems = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    const laborTarget =
-      target === "masonryLabor" || target === "plasterLabor";
-
-    return items.filter((item) => {
-      const validType = laborTarget
-        ? item.item_type === "labor" || item.item_type === "service"
-        : item.item_type === "material";
-
-      if (!validType) return false;
-      if (!query) return true;
-
-      return (
-        item.name.toLowerCase().includes(query) ||
-        (item.sku?.toLowerCase().includes(query) ?? false) ||
-        (item.category?.name.toLowerCase().includes(query) ?? false)
-      );
-    });
-  }, [items, search, target]);
+  const filteredItems = useMemo(
+    () => target ? filterCalculatorCatalogItems(items, target, search) : [],
+    [items, search, target]
+  );
 
   const titles: Record<CatalogTarget, string> = {
     block: "Seleccionar bloque",
@@ -990,7 +975,7 @@ function CatalogPicker({
                     No hay ítems compatibles
                   </Text>
                   <Text style={styles.emptyText}>
-                    Crea primero el material o la mano de obra en el catálogo.
+                    No existe un concepto de este tipo y uso en el catálogo. Puedes cerrar y escribir el precio manualmente, o registrar el material o la mano de obra.
                   </Text>
                 </View>
               }
