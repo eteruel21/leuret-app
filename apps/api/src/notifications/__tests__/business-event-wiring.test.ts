@@ -28,6 +28,9 @@ describe("conexión de push con eventos de negocio", () => {
       created_by: "contractor-1",
       status: "rejected"
     };
+    // Evitar consultar la base de datos real en esta prueba unitaria.
+    vi.spyOn(budgetRepository, "isLinkedClientForBudgetRepo")
+      .mockResolvedValue(false);
     vi.spyOn(budgetRepository, "approveBudgetRepo")
       .mockResolvedValueOnce(approvedBudget);
     vi.spyOn(budgetRepository, "rejectBudgetRepo")
