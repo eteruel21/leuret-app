@@ -19,6 +19,9 @@ const environmentSchema = z.object({
   TURNSTILE_ALLOWED_HOSTNAMES: z.string().trim().min(1).optional(),
 
   RESEND_API_KEY: z.string().trim().min(1).optional(),
+  // Identificadores de bandejas existentes: no contienen secretos.
+  RESEND_PRIVACY_INBOX_ID: z.uuid().optional(),
+  RESEND_LEGAL_INBOX_ID: z.uuid().optional(),
 
 
   EMAIL_FROM: z.string().trim().min(1).optional(),
