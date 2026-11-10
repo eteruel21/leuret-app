@@ -1,6 +1,6 @@
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LeuretButton } from "@/components/LeuretButton";
@@ -107,7 +107,10 @@ export default function ClientBudgetDetailScreen() {
     );
   }
 
-  const canRespond = budget.status === "sent" || budget.status === "viewed";
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const isExpired = Boolean(budget.valid_until && budget.valid_until.slice(0, 10) < todayKey);
+  const awaitingResponse = budget.status === "sent" || budget.status === "viewed";
+  const canRespond = awaitingResponse && !isExpired;
   const currency = budget.currency_code || budget.company?.currency_code;
 
   return (
@@ -173,15 +176,25 @@ export default function ClientBudgetDetailScreen() {
                 <LeuretButton
                   label="Aprobar"
                   loading={submitting}
-                  onPress={() => Alert.alert("Aprobar presupuesto", "¿Confirmas la aprobación?", [
-                    { text: "Cancelar", style: "cancel" },
-                    { text: "Aprobar", onPress: () => void approve() },
-                  ])}
+                  onPress={() => {
+                    const message = `Vas a aprobar el presupuesto por ${formatMoney(budget.total, currency)}. El contratista recibirá un aviso para continuar.`;
+                    // En la web, Alert.alert con botones no muestra nada.
+                    if (Platform.OS === "web") {
+                      if (window.confirm(`Aprobar presupuesto\n\n${message}`)) void approve();
+                      return;
+                    }
+                    Alert.alert("Aprobar presupuesto", message, [
+                      { text: "Cancelar", style: "cancel" },
+                      { text: "Aprobar", onPress: () => void approve() },
+                    ]);
+                  }}
                   style={styles.action}
                 />
               </View>
             )}
           </View>
+        ) : awaitingResponse && isExpired ? (
+          <LeuretFeedback tone="info" title="Presupuesto vencido" message="Este presupuesto ya no está vigente. Pide al contratista una versión actualizada." />
         ) : budget.status === "approved" ? (
           <LeuretFeedback tone="success" title="Presupuesto aprobado" message="El contratista ya puede continuar con la facturación." />
         ) : budget.status === "rejected" ? (

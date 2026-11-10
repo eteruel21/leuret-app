@@ -36,7 +36,7 @@ export async function getClientBudgetDetailRepo(userId: string, budgetId: string
           budget.*,
           CASE
             WHEN project.id IS NULL THEN NULL
-            ELSE jsonb_build_object('name', project.name, 'code', project.code)
+            ELSE jsonb_build_object('name', project.name, 'code', project.project_code)
           END AS project,
           CASE
             WHEN company.id IS NULL THEN NULL
@@ -55,6 +55,17 @@ export async function getClientBudgetDetailRepo(userId: string, budgetId: string
 
     const budget = budgetResult.rows[0];
     if (!budget) return null;
+
+    // La primera vez que el cliente abre un presupuesto enviado, queda como "visto".
+    if (budget.status === "sent") {
+      const viewed = await client.query<{ marked: boolean }>(
+        `SELECT private.mark_budget_viewed_by_client($1) AS marked`,
+        [budget.id]
+      );
+      if (viewed.rows[0]?.marked) {
+        budget.status = "viewed";
+      }
+    }
 
     const sectionsResult = await client.query(
       `
@@ -477,5 +488,43 @@ export async function getBudgetHistoryRepo(userId: string, budgetId: string, com
     );
 
     return result.rows;
+  });
+}
+
+/** ¿El usuario actual es el cliente vinculado a este presupuesto? */
+export async function isLinkedClientForBudgetRepo(userId: string, budgetId: string): Promise<boolean> {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query<{ linked: boolean }>(
+      `
+        SELECT EXISTS (
+          SELECT 1
+          FROM public.budgets AS budget
+          JOIN public.clients AS customer
+            ON customer.id = budget.client_id
+           AND customer.company_id = budget.company_id
+          WHERE budget.id = $1
+            AND customer.user_id = app.current_user_id()
+            AND customer.active = true
+        ) AS linked
+      `,
+      [budgetId]
+    );
+    return result.rows[0]?.linked === true;
+  });
+}
+
+/** Respuesta del cliente desde su portal (aprobación o rechazo). */
+export async function respondToBudgetAsClientRepo(
+  userId: string,
+  budgetId: string,
+  decision: "approved" | "rejected",
+  reason?: string
+) {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query(
+      `SELECT * FROM private.respond_to_budget_as_client($1, $2, $3)`,
+      [budgetId, decision, reason ?? null]
+    );
+    return result.rows[0] ?? null;
   });
 }
