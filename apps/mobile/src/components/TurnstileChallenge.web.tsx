@@ -4,7 +4,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+
+import {
+  buildOpenInChromeIntent,
+  detectInAppBrowser,
+  openInBrowserHint,
+} from "@/utils/in-app-browser";
 
 import type {
   TurnstileChallengeProps,
@@ -36,6 +42,9 @@ declare global {
     turnstile?: TurnstileApi;
   }
 }
+
+/** Si el widget no entrega token ni error en este tiempo, mostramos ayuda. */
+const TURNSTILE_STALL_MS = 15_000;
 
 const TURNSTILE_SCRIPT_ID = "cloudflare-turnstile-script";
 const TURNSTILE_SCRIPT_URL =
@@ -106,6 +115,13 @@ export default function TurnstileChallenge({
   const [containerElement, setContainerElement] = useState<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<TurnstileWidgetId | null>(null);
   const onTokenRef = useRef(onToken);
+  const [failed, setFailed] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const browserInfo =
+    typeof navigator === "undefined"
+      ? null
+      : detectInAppBrowser(navigator.userAgent);
 
   useEffect(() => {
     onTokenRef.current = onToken;
@@ -122,8 +138,23 @@ export default function TurnstileChallenge({
 
     let cancelled = false;
     let api: TurnstileApi | null = null;
+    let settled = false;
 
     onTokenRef.current(null);
+    setFailed(false);
+
+    const markFailed = () => {
+      if (!cancelled) {
+        setFailed(true);
+        onTokenRef.current(null);
+      }
+    };
+
+    const stallTimer = setTimeout(() => {
+      if (!settled) {
+        markFailed();
+      }
+    }, TURNSTILE_STALL_MS);
 
     loadTurnstile()
       .then((turnstile) => {
@@ -151,7 +182,9 @@ export default function TurnstileChallenge({
           size: "flexible",
 
           callback: (token) => {
+            settled = true;
             if (!cancelled) {
+              setFailed(false);
               onTokenRef.current(token);
             }
           },
@@ -170,21 +203,20 @@ export default function TurnstileChallenge({
 
           "error-callback": (code) => {
             console.error("[Cloudflare Turnstile] Error:", code);
-            if (!cancelled) {
-              onTokenRef.current(null);
-            }
+            settled = true;
+            markFailed();
           },
         });
       })
       .catch((error) => {
         console.error("[Cloudflare Turnstile]", error);
-        if (!cancelled) {
-          onTokenRef.current(null);
-        }
+        settled = true;
+        markFailed();
       });
 
     return () => {
       cancelled = true;
+      clearTimeout(stallTimer);
 
       if (api && widgetIdRef.current) {
         try {
@@ -198,7 +230,7 @@ export default function TurnstileChallenge({
 
       containerElement.innerHTML = "";
     };
-  }, [action, containerElement, resetKey]);
+  }, [action, containerElement, resetKey, retryNonce]);
 
   const siteKey =
     process.env.EXPO_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? "";
@@ -219,14 +251,108 @@ export default function TurnstileChallenge({
     );
   }
 
-  return createElement("div", {
-    ref: setContainerElement,
-    style: {
-      width: "100%",
-      minHeight: 65,
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-  });
+  const currentUrl =
+    typeof window === "undefined" ? "" : window.location.href;
+  const chromeIntent =
+    browserInfo?.isInAppBrowser && browserInfo.platform === "android"
+      ? buildOpenInChromeIntent(currentUrl)
+      : null;
+  const showHelp = failed || Boolean(browserInfo?.isInAppBrowser);
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(currentUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <View style={{ width: "100%" }}>
+      {createElement("div", {
+        ref: setContainerElement,
+        style: {
+          width: "100%",
+          minHeight: 65,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        },
+      })}
+
+      {showHelp ? (
+        <View
+          accessibilityRole="alert"
+          style={{
+            marginTop: 8,
+            padding: 12,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: failed ? "#FCA5A5" : "#FCD34D",
+            backgroundColor: failed ? "#FEF2F2" : "#FFFBEB",
+            gap: 8,
+          }}
+        >
+          <Text style={{ color: "#1F2937", fontSize: 13, lineHeight: 18 }}>
+            {browserInfo?.isInAppBrowser
+              ? openInBrowserHint(browserInfo)
+              : "No pudimos completar la verificación de seguridad. Revisa tu conexión y vuelve a intentarlo."}
+          </Text>
+
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {failed ? (
+              <Pressable
+                onPress={() => setRetryNonce((value) => value + 1)}
+                accessibilityRole="button"
+                style={helpButtonStyle}
+              >
+                <Text style={helpButtonTextStyle}>Reintentar</Text>
+              </Pressable>
+            ) : null}
+
+            {chromeIntent ? (
+              <Pressable
+                onPress={() => {
+                  window.location.href = chromeIntent;
+                }}
+                accessibilityRole="button"
+                style={helpButtonStyle}
+              >
+                <Text style={helpButtonTextStyle}>Abrir en Chrome</Text>
+              </Pressable>
+            ) : null}
+
+            {browserInfo?.isInAppBrowser ? (
+              <Pressable
+                onPress={copyLink}
+                accessibilityRole="button"
+                style={helpButtonStyle}
+              >
+                <Text style={helpButtonTextStyle}>
+                  {copied ? "Enlace copiado" : "Copiar enlace"}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
 }
+
+const helpButtonStyle = {
+  paddingVertical: 8,
+  paddingHorizontal: 12,
+  borderRadius: 8,
+  borderWidth: 1,
+  borderColor: "#D1D5DB",
+  backgroundColor: "#FFFFFF",
+} as const;
+
+const helpButtonTextStyle = {
+  color: "#1F2937",
+  fontSize: 13,
+  fontWeight: "600",
+} as const;
