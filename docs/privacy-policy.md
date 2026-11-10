@@ -1,10 +1,10 @@
 # Política de Privacidad — Leuret App
 
-**Fecha de última actualización:** 9 de noviembre de 2026
+**Fecha de última actualización:** 10 de noviembre de 2026
 
 Esta Política explica cómo **LEURET TECH**, operador de **Leuret App**, trata los datos personales de usuarios, clientes, contratistas y demás personas relacionadas con la Plataforma.
 
-El tratamiento se realiza conforme a la Ley 81 de 26 de marzo de 2019 sobre Protección de Datos Personales, el Decreto Ejecutivo 285 de 18 de mayo de 2021 y demás normas panameñas aplicables.
+El tratamiento se realiza conforme a la Ley 81 de 26 de marzo de 2019 sobre Protección de Datos Personales, el Decreto Ejecutivo 285 de 28 de mayo de 2021 y demás normas panameñas aplicables.
 
 ## 1. Responsable del tratamiento
 
@@ -28,7 +28,7 @@ Según el tipo de cuenta y las funciones utilizadas, podemos tratar:
 - **Notificaciones:** token del dispositivo y preferencia de recepción cuando el usuario habilita esa función.
 - **Comunicaciones:** consultas de soporte, solicitudes de privacidad y mensajes relacionados con el Servicio.
 
-Leuret App puede almacenar información de terceros incorporada por un usuario, por ejemplo datos de sus clientes o contactos. Quien la incorpora debe contar con autorización o fundamento legal suficiente.
+Leuret App puede almacenar información de terceros incorporada por un usuario, por ejemplo datos de sus clientes o contactos. Quien la incorpora debe contar con autorización o fundamento legal suficiente, informarles cuando corresponda y limitar la información compartida a lo necesario para la actividad.
 
 ## 3. Fuentes
 
@@ -69,8 +69,8 @@ No vendemos ni alquilamos datos personales.
 
 Podemos utilizar proveedores que procesan información únicamente para prestar servicios a LEURET TECH, entre ellos:
 
-- **Cloudflare:** ejecución del API, distribución web, protección, almacenamiento privado y servicios asociados;
-- **Supabase/PostgreSQL:** infraestructura y administración de base de datos;
+- **Cloudflare:** distribución web, seguridad y verificación antifraude (como Turnstile), así como ejecución o almacenamiento cuando esas funciones estén configuradas;
+- **PostgreSQL y el proveedor de alojamiento de base de datos que corresponda al despliegue vigente:** almacenamiento y procesamiento de datos;
 - **Resend:** entrega de correos transaccionales;
 - **Expo y proveedores de plataforma móvil:** compilación, distribución y notificaciones cuando esas funciones estén habilitadas;
 - **Apple o Google:** distribución y servicios del sistema operativo cuando corresponda.
@@ -154,11 +154,19 @@ La Plataforma está dirigida a personas de 18 años o más. No buscamos registra
 
 La persona titular puede contactar primero a **privacidad@leurettech.com** para procurar una solución. También puede presentar una consulta o denuncia ante la **Autoridad Nacional de Transparencia y Acceso a la Información (ANTAI)**, por medio de su Dirección de Protección de Datos Personales.
 
-## 17. Cambios a esta política
+## 17. Cookies y almacenamiento local
+
+En la versión web podemos usar cookies y tecnologías de almacenamiento local necesarias para mantener la sesión, recordar preferencias técnicas y prevenir abusos. Los mecanismos de autenticación y seguridad pueden incluir cookies protegidas, registros técnicos y herramientas antifraude como Cloudflare Turnstile. Algunas funciones dependen de proveedores que aplican sus propios avisos de privacidad.
+
+Las notificaciones del dispositivo requieren la habilitación correspondiente. El usuario puede gestionar permisos desde el sistema operativo o su navegador. Las cookies estrictamente necesarias para el funcionamiento y la seguridad no equivalen a una autorización general para publicidad personalizada.
+
+Si se incorporan herramientas analíticas o publicitarias no esenciales, se informará de ellas y se solicitará el consentimiento cuando la ley lo exija, antes de activarlas.
+
+## 18. Cambios a esta política
 
 Los cambios materiales se informarán por la Plataforma, correo electrónico u otro medio razonable. La fecha de actualización permanecerá visible.
 
-## 18. Contacto
+## 19. Contacto
 
 **LEURET TECH — Leuret App**  
 República de Panamá  

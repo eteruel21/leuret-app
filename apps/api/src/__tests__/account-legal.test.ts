@@ -114,10 +114,11 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.title).toBe("Términos y Condiciones de Uso");
-    expect(body.updatedAt).toBe("2026-11-09");
+    expect(body.updatedAt).toBe("2026-11-10");
     expect(typeof body.content).toBe("string");
     expect(body.content).toContain("LEURET TECH");
     expect(body.content).toContain("Leuret App");
+    expect(body.content).toContain("Decreto Ejecutivo 285 de 28 de mayo de 2021");
     expect(body.content).not.toContain("Documentación en actualización.");
     await app.close();
   });
@@ -132,7 +133,7 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.title).toBe("Política de Privacidad");
-    expect(body.updatedAt).toBe("2026-11-09");
+    expect(body.updatedAt).toBe("2026-11-10");
     expect(typeof body.content).toBe("string");
     expect(body.content).toContain("LEURET TECH");
     expect(body.content).toContain("Leuret App");
