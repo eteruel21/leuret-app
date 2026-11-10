@@ -201,7 +201,7 @@ export default function HomeScreen() {
     const companyId = activeCompany?.id;
     if (!companyId) { setDashboard(EMPTY_DASHBOARD); return; }
     let mounted = true;
-    setDashboard((current) => ({ ...current, loading: true, error: false }));
+    setDashboard({ ...EMPTY_DASHBOARD, loading: true });
     void Promise.all([listProjectsByCompany(companyId), listClients(companyId), listInvoices(companyId), fetchCompanyActivities(companyId)]).then(([projectsResult, clientsResult, invoicesResult, activities]) => {
       if (!mounted) return;
       const activeProjects = projectsResult.projects.filter((project) => project.status !== "completed" && project.status !== "cancelled");
@@ -210,7 +210,7 @@ export default function HomeScreen() {
       const currentTime = new Date();
       const nextActivity = activities.filter((activity) => activity.status === "scheduled" || activity.status === "confirmed").filter((activity) => { const date = new Date(`${activity.date}T${activity.time}`); return !Number.isNaN(date.getTime()) && date >= currentTime; }).sort((a,b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))[0] ?? null;
       setDashboard({ projectCount: projectsResult.projects.length, activeProjectCount: activeProjects.length, clientCount: clientsResult.clients.length, invoiceCount: invoices.length, balanceDue, nextActivity, loading: false, error: Boolean(projectsResult.error || clientsResult.error || invoicesResult.error) });
-    }).catch(() => { if (mounted) setDashboard((current) => ({ ...current, loading: false, error: true })); });
+    }).catch(() => { if (mounted) setDashboard({ ...EMPTY_DASHBOARD, error: true }); });
     return () => { mounted = false; };
   }, [activeCompany?.id]));
 
@@ -325,21 +325,21 @@ export default function HomeScreen() {
 
             <View style={styles.metrics}>
               <View style={styles.metric}>
-                <Text style={styles.metricValue}>{dashboard.loading ? "" : dashboard.projectCount}</Text>
+                <Text style={styles.metricValue}>{dashboard.loading ? "" : dashboard.error ? "—" : dashboard.projectCount}</Text>
                 <Text style={styles.metricLabel}>Proyectos</Text>
               </View>
 
               <View style={styles.metricDivider} />
 
               <View style={styles.metric}>
-                <Text style={styles.metricValue}>{dashboard.loading ? "" : dashboard.clientCount}</Text>
+                <Text style={styles.metricValue}>{dashboard.loading ? "" : dashboard.error ? "—" : dashboard.clientCount}</Text>
                 <Text style={styles.metricLabel}>Clientes</Text>
               </View>
 
               <View style={styles.metricDivider} />
 
               <View style={styles.metric}>
-                <Text style={styles.metricValue}>{dashboard.loading ? "" : dashboard.invoiceCount}</Text>
+                <Text style={styles.metricValue}>{dashboard.loading ? "" : dashboard.error ? "—" : dashboard.invoiceCount}</Text>
                 <Text style={styles.metricLabel}>Facturas</Text>
               </View>
             </View>
@@ -414,7 +414,7 @@ export default function HomeScreen() {
                     Proyectos
                   </Text>
                   <Text style={styles.operationText}>
-                    {dashboard.loading ? "Actualizando proyectos..." : dashboard.projectCount === 0 ? "Todavía no tienes proyectos." : `${dashboard.activeProjectCount} activos de ${dashboard.projectCount}.`}
+                    {dashboard.loading ? "Actualizando proyectos..." : dashboard.error ? "No se pudo verificar la información." : dashboard.projectCount === 0 ? "Todavía no tienes proyectos." : `${dashboard.activeProjectCount} activos de ${dashboard.projectCount}.`}
                   </Text>
                 </View>
 
@@ -456,7 +456,7 @@ export default function HomeScreen() {
                     Finanzas
                   </Text>
                   <Text style={styles.operationText}>
-                    {dashboard.loading ? "Actualizando facturación..." : dashboard.balanceDue > 0 ? `Por cobrar: ${formatMoney(dashboard.balanceDue)}` : "Sin saldos pendientes."}
+                    {dashboard.loading ? "Actualizando facturación..." : dashboard.error ? "No se pudo verificar la información." : dashboard.balanceDue > 0 ? `Por cobrar: ${formatMoney(dashboard.balanceDue)}` : "Sin saldos pendientes."}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
