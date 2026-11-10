@@ -114,7 +114,9 @@ export async function registerProjectRoutes(
   app.get(
     "/projects/:projectId",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "supervisor", "sales"])]
+      // Todo el equipo puede abrir la obra; los montos solo los ven
+      // owner, admin, supervisor y ventas (ver getProjectByIdService).
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "supervisor", "sales", "estimator", "member"])]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);

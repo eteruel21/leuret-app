@@ -96,6 +96,9 @@ function ProjectDetailScreenContent() {
   const { can } = usePermissions();
   const canViewBudgets = can("budgets.view");
   const canEditBudgets = can("budgets.edit");
+  const canSeeFinancials = can("projects.financials");
+  const canEditStatus = can("projects.status.edit");
+  const canRecordProgress = can("progress.record");
 
   const [project, setProject] = useState<ProjectWithDetails | null>(null);
   const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -434,7 +437,7 @@ function ProjectDetailScreenContent() {
               return (
                 <Pressable
                   key={option.value}
-                  disabled={savingStatus}
+                  disabled={savingStatus || !canEditStatus}
                   onPress={() => void handleChangeStatus(option.value)}
                   style={[
                     styles.statusChip,
@@ -457,7 +460,8 @@ function ProjectDetailScreenContent() {
         </InfoSection>
 
         {/* Registro de Avance */}
-        <InfoSection title="Registro de avance (% y notas)">
+        <InfoSection title={canRecordProgress ? "Registro de avance (% y notas)" : "Historial de avance"}>
+          {canRecordProgress ? (
           <View style={styles.progressForm}>
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Porcentaje (%)</Text>
@@ -497,6 +501,7 @@ function ProjectDetailScreenContent() {
               )}
             </Pressable>
           </View>
+          ) : null}
 
           {/* Historial de Avances */}
           {progressHistory.length > 0 && (
@@ -699,17 +704,21 @@ function ProjectDetailScreenContent() {
             value={project.address?.address || "Sin dirección asignada"}
           />
 
-          <InfoRow
-            icon="cash-outline"
-            label="Estimado inicial"
-            value={formatMoney(project.budget_estimate)}
-          />
+          {canSeeFinancials ? (
+            <>
+              <InfoRow
+                icon="cash-outline"
+                label="Estimado inicial"
+                value={formatMoney(project.budget_estimate)}
+              />
 
-          <InfoRow
-            icon="briefcase-outline"
-            label="Valor contratado"
-            value={formatMoney(project.contract_value)}
-          />
+              <InfoRow
+                icon="briefcase-outline"
+                label="Valor contratado"
+                value={formatMoney(project.contract_value)}
+              />
+            </>
+          ) : null}
 
           <InfoRow
             icon="document-text-outline"
