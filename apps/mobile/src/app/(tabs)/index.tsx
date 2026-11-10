@@ -32,6 +32,7 @@ import {
 } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { OwnerDashboard } from "@/components/OwnerDashboard";
 import { RoleDashboard } from "@/components/RoleDashboard";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -369,7 +370,10 @@ export default function HomeScreen() {
           </View>
 
           {showOwnerDashboard && activeCompany ? (
-            <OwnerDashboard companyId={activeCompany.id} />
+            <>
+              <OnboardingChecklist />
+              <OwnerDashboard companyId={activeCompany.id} />
+            </>
           ) : (role === "sales" || role === "estimator") && activeCompany ? (
             <RoleDashboard companyId={activeCompany.id} role={role} />
           ) : showProjects || showFinances ? (
