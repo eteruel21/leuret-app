@@ -18,6 +18,7 @@ import { pool } from "./db/pool.js";
 import { registerProfileRoutes } from "./profile/routes.js";
 import { registerProfileDocumentRoutes } from "./profile/document-routes.js";
 import { registerActivityRoutes } from "./activities/routes.js";
+import { registerDashboardRoutes } from "./dashboard/routes.js";
 import { registerProjectTaskRoutes } from "./projects/tasks/routes.js";
 import { registerProjectProgressRoutes } from "./projects/progress/routes.js";
 import { registerStorageRoutes } from "./storage/routes.js";
@@ -115,6 +116,7 @@ export async function buildApp() {
   app.register(registerStorageRoutes);
   app.register(registerNotificationRoutes);
   app.register(registerAccountLegalRoutes);
+  app.register(registerDashboardRoutes);
 
   app.get("/health", async () => {
     return {
