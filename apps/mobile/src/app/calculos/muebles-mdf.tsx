@@ -599,7 +599,7 @@ function CatalogButton({
 
 const PICKER_KEYWORDS: Record<Target, RegExp> = {
   mdf: /mdf|melamina|aglomerado|tablero/,
-  back: /fondo|hdf|mdf 3|masonite/,
+  back: /fondo|hdf|masonite|mdf (1\/4|1\/8|3 ?mm)/,
   edge: /canto|tapacanto/,
   hinge: /bisagra/,
   slide: /corredera|riel|telescop/,

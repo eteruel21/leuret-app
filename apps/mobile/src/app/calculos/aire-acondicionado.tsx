@@ -668,13 +668,13 @@ function CatalogButton({
 
 
 const PICKER_KEYWORDS: Record<Target, RegExp> = {
-  equipment: /aire acondicionado|split|inverter|btu|minisplit/,
+  equipment: /^aire acondicionado|minisplit|mini split|^split/,
   copper: /tuberia de cobre|tubo de cobre|cobre flexible|linea de cobre|par de cobre/,
   cable: /thhn|thw|alambre|conductor|cable (electrico|de cobre|#|calibre)/,
-  drain: /drenaje|pvc|manguera|tubo/,
-  bracket: /bracket|rack|soporte.*(condens|aire|split|equipo)|base.*(condens|aire|split)/,
+  drain: /drenaje|manguera|tubo pvc/,
+  bracket: /bracket|\brack\b|soporte.*(condens|aire|split|equipo)|base.*(condens|aire|split)/,
   breaker: /breaker|disyuntor|termomagnetico/,
-  disconnect: /desconectador|disconnect|cuchilla/,
+  disconnect: /desconectador|desconexion|disconnect|cuchilla/,
   refrigerant: /refrigerante|gas|r-?410|r-?32/,
   supplies: /cinta (aislante|de vinil)|aislante termico|armaflex|tornillo|silicon/,
   labor: /refrigeracion|aire|tecnico|electric/,
