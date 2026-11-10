@@ -104,3 +104,24 @@ export async function findUserPushTokensRepo(userId: string) {
   });
 }
 
+
+/**
+ * Propietarios y administradores activos de la empresa. Se consulta con la
+ * identidad de un miembro de la empresa (quien creó el presupuesto), porque
+ * el cliente que responde no puede leer el equipo.
+ */
+export async function findCompanyManagerIdsRepo(contextUserId: string, companyId: string): Promise<string[]> {
+  return withUserTransaction(contextUserId, async (client) => {
+    const result = await client.query<{ user_id: string }>(
+      `
+        SELECT member.user_id
+        FROM public.company_members AS member
+        WHERE member.company_id = $1
+          AND member.active = true
+          AND member.role IN ('owner', 'admin')
+      `,
+      [companyId]
+    );
+    return result.rows.map((row) => row.user_id);
+  });
+}

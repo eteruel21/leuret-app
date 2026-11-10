@@ -6,6 +6,8 @@ import {
   notifyInvoicePaymentRegistered
 } from "../event-service.js";
 import * as pushService from "../push-service.js";
+import * as notificationRepository from "../repository.js";
+import { budgetDecisionRecipients } from "../event-service.js";
 
 describe("notificaciones push de eventos de negocio", () => {
   afterEach(() => {
@@ -13,6 +15,7 @@ describe("notificaciones push de eventos de negocio", () => {
   });
 
   it("notifica al creador cuando el cliente aprueba o rechaza un presupuesto", async () => {
+    vi.spyOn(notificationRepository, "findCompanyManagerIdsRepo").mockResolvedValue([]);
     const sendSpy = vi
       .spyOn(pushService, "sendPushNotificationToUser")
       .mockResolvedValue({ sent: 1, failed: 0 });
@@ -45,6 +48,43 @@ describe("notificaciones push de eventos de negocio", () => {
         data: expect.objectContaining({ type: "budget.rejected" })
       })
     );
+  });
+
+  it("también avisa a owners y admins, sin repetir y con el monto aprobado", async () => {
+    vi.spyOn(notificationRepository, "findCompanyManagerIdsRepo").mockResolvedValue(["owner-1", "contractor-1", "admin-2"]);
+    const sendSpy = vi
+      .spyOn(pushService, "sendPushNotificationToUser")
+      .mockResolvedValue({ sent: 1, failed: 0 });
+
+    await notifyBudgetDecision(
+      { id: "b-1", company_id: "company-1", created_by: "contractor-1", budget_number: "PRE-7", total: 2500, currency_code: "USD" },
+      "approved"
+    );
+
+    expect(sendSpy.mock.calls.map((call) => call[0])).toEqual(["contractor-1", "owner-1", "admin-2"]);
+    expect(sendSpy.mock.calls[0]?.[1].body).toContain("PRE-7");
+    expect(sendSpy.mock.calls[0]?.[1].body).toContain("2,500.00");
+  });
+
+  it("si no se puede leer el equipo, igual avisa al creador", async () => {
+    vi.spyOn(notificationRepository, "findCompanyManagerIdsRepo").mockRejectedValue(new Error("db caída"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const sendSpy = vi
+      .spyOn(pushService, "sendPushNotificationToUser")
+      .mockResolvedValue({ sent: 1, failed: 0 });
+
+    await notifyBudgetDecision(
+      { id: "b-2", company_id: "company-1", created_by: "contractor-1", rejection_reason: "Muy caro" },
+      "rejected"
+    );
+
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    expect(sendSpy.mock.calls[0]?.[1].body).toContain("Muy caro");
+  });
+
+  it("calcula destinatarios únicos", () => {
+    expect(budgetDecisionRecipients("a", ["b", "a", "c"])).toEqual(["a", "b", "c"]);
+    expect(budgetDecisionRecipients(null, ["b"])).toEqual(["b"]);
   });
 
   it("notifica al usuario cliente al emitir una factura y registrar un pago", async () => {
