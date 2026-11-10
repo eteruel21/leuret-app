@@ -13,6 +13,8 @@ export type Client = {
   phone: string | null;
   secondary_phone: string | null;
   notes: string | null;
+  /** Cuenta Leuret vinculada (portal del cliente). */
+  user_id?: string | null;
   active: boolean;
   created_by: string | null;
   created_at: string;

@@ -71,6 +71,7 @@ import {
 import {
   deleteProjectPhoto,
   listProjectPhotos,
+  setProjectPhotoSharing,
   uploadProjectPhoto,
   type ProjectPhoto
 } from "@/services/photo-service";
@@ -324,6 +325,23 @@ function ProjectDetailScreenContent() {
       Alert.alert("No fue posible subir la foto", error instanceof Error ? error.message : "Ocurrió un error inesperado.");
     } finally {
       setUploadingPhoto(false);
+    }
+  }
+
+  async function handleTogglePhotoSharing(photo: ProjectPhoto) {
+    if (!activeCompany || !project) return;
+    const share = photo.is_private;
+    // Respuesta inmediata; si falla, se revierte.
+    setPhotos((current) => current.map((p) => (p.id === photo.id ? { ...p, is_private: !share } : p)));
+    try {
+      const updated = await setProjectPhotoSharing(activeCompany.id, project.id, photo.id, share);
+      setPhotos((current) => current.map((p) => (p.id === photo.id ? updated : p)));
+    } catch (error) {
+      setPhotos((current) => current.map((p) => (p.id === photo.id ? photo : p)));
+      Alert.alert(
+        "No se pudo cambiar la visibilidad",
+        error instanceof Error ? error.message : "Inténtalo nuevamente."
+      );
     }
   }
 
@@ -609,7 +627,9 @@ function ProjectDetailScreenContent() {
         {/* Fotos de Proyecto y Almacenamiento Privado */}
         <InfoSection title="Fotos del proyecto">
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionBadge}>{photos.length} fotos</Text>
+            <Text style={styles.sectionBadge}>
+              {photos.length} fotos · {photos.filter((photo) => !photo.is_private).length} visibles al cliente
+            </Text>
             <Pressable
               onPress={() => setShowPhotoForm(!showPhotoForm)}
               style={styles.addSmallButton}
@@ -651,6 +671,10 @@ function ProjectDetailScreenContent() {
               <Text style={styles.emptyText}>No hay fotos registradas para este proyecto.</Text>
             </View>
           ) : (
+            <>
+            <Text style={styles.photoHint}>
+              Toca el ojo para mostrar u ocultar una foto en el portal del cliente.
+            </Text>
             <View style={styles.photosGrid}>
               {photos.map((photo) => {
                 const fullImageUrl = photo.signedUrl.startsWith("http")
@@ -668,6 +692,20 @@ function ProjectDetailScreenContent() {
                         {photo.caption || photo.file_name}
                       </Text>
                       <Pressable
+                        accessibilityRole="switch"
+                        accessibilityState={{ checked: !photo.is_private }}
+                        accessibilityLabel={photo.is_private ? "Compartir con el cliente" : "Dejar de compartir con el cliente"}
+                        onPress={() => void handleTogglePhotoSharing(photo)}
+                        style={styles.photoDeleteBtn}
+                        hitSlop={8}
+                      >
+                        <Ionicons
+                          name={photo.is_private ? "eye-off-outline" : "eye-outline"}
+                          size={16}
+                          color={photo.is_private ? colors.textMuted : colors.success}
+                        />
+                      </Pressable>
+                      <Pressable
                         onPress={() => void handleDeletePhoto(photo.id)}
                         style={styles.photoDeleteBtn}
                       >
@@ -678,6 +716,7 @@ function ProjectDetailScreenContent() {
                 );
               })}
             </View>
+            </>
           )}
         </InfoSection>
 
@@ -1148,6 +1187,11 @@ const styles = StyleSheet.create({
   },
   photoDeleteBtn: {
     paddingLeft: 4,
+  },
+  photoHint: {
+    marginBottom: 8,
+    fontSize: 11,
+    color: colors.textSecondary,
   },
   activityCard: {
     flexDirection: "row",

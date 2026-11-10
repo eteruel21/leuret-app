@@ -1,307 +1,354 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { useEffect, useState } from "react";
-import {
-  Alert,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { type Href, router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { ContactActions } from "@/components/client/ContactActions";
 import { LeuretEmptyState } from "@/components/LeuretEmptyState";
+import { LeuretFeedback } from "@/components/LeuretFeedback";
 import { LeuretLoading } from "@/components/LeuretLoading";
+import { MotionPressable } from "@/components/MotionPressable";
+import { colors, radius, shadows } from "@/constants/theme";
+import { useAuth } from "@/contexts/AuthContext";
+import { getClientContractorCompanies, type ContractorCompany } from "@/services/client-service";
+import { getClientSummary, type ClientSummary } from "@/services/client-portal-service";
+import { relativeDayLabel, shortMonth, todayKey } from "@/utils/client-portal";
+import { formatMoney } from "@/utils/format";
 
-import { colors, radius } from "../../constants/theme";
-import { useAuth } from "../../contexts/AuthContext";
-import { getClientContractorCompanies, type ContractorCompany } from "../../services/client-service";
+type IconName = React.ComponentProps<typeof Ionicons>["name"];
+
+function greeting(): string {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: "America/Panama" }).format(new Date()),
+  );
+  if (hour < 12) return "Buenos días";
+  if (hour < 19) return "Buenas tardes";
+  return "Buenas noches";
+}
 
 export default function ClientHomeScreen() {
-  const { profile, user, signOut } = useAuth();
+  const { profile, user } = useAuth();
   const profileId = profile?.id;
   const [contractors, setContractors] = useState<ContractorCompany[]>([]);
+  const [summary, setSummary] = useState<ClientSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!profileId) return;
+  const load = useCallback(
+    async (showRefresh = false) => {
+      if (!profileId) return;
+      if (showRefresh) setRefreshing(true);
 
-    let active = true;
+      const [companiesResult, summaryResult] = await Promise.all([
+        getClientContractorCompanies(profileId),
+        getClientSummary(),
+      ]);
 
-    getClientContractorCompanies(profileId)
-      .then((res) => {
-        if (!active) return;
+      if (!companiesResult.error) setContractors(companiesResult.companies);
+      if (summaryResult.summary) setSummary(summaryResult.summary);
+      setError(companiesResult.error || summaryResult.error);
+      setLoading(false);
+      setRefreshing(false);
+    },
+    [profileId],
+  );
 
-        if (res.error) {
-          Alert.alert("Error al cargar proveedores", res.error);
-        } else {
-          setContractors(res.companies);
-        }
-      })
-      .catch((err) => {
-        if (!active) return;
-        console.error(err);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
 
-    return () => {
-      active = false;
-    };
-  }, [profileId]);
-
-  const performSignOut = async () => {
-    const { error } = await signOut();
-
-    if (!error) return;
-
-    if (Platform.OS === "web") {
-      console.error("No se pudo cerrar sesión:", error.message);
-      return;
-    }
-
-    Alert.alert("No se pudo cerrar sesión", error.message);
-  };
-
-  const handleSignOut = () => {
-    if (Platform.OS === "web") {
-      void performSignOut();
-      return;
-    }
-
-    Alert.alert("Cerrar sesión", "¿Estás seguro de que deseas salir?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Salir",
-        style: "destructive",
-        onPress: () => void performSignOut(),
-      },
-    ]);
-  };
+  const firstName = (profile?.first_name || profile?.full_name || "").trim().split(/\s+/)[0] || "Cliente";
+  const pending = summary?.pending_budgets ?? 0;
+  const openInvoices = summary?.open_invoices ?? [];
+  const openCount = openInvoices.reduce((sum, row) => sum + row.open_count, 0);
+  const overdueCount = openInvoices.reduce((sum, row) => sum + row.overdue_count, 0);
+  const next = summary?.next_activity ?? null;
+  const today = todayKey();
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.welcome}>Hola,</Text>
-          <Text style={styles.name}>{profile?.full_name || "Cliente"}</Text>
+        <View style={styles.headerText}>
+          <Text style={styles.welcome}>{greeting()},</Text>
+          <Text style={styles.name} numberOfLines={1}>
+            {firstName}
+          </Text>
         </View>
-
-        <View style={styles.headerActions}>
-          <Pressable
-            accessibilityLabel="Editar perfil"
-            onPress={() => router.push("/perfil")}
-            style={styles.profileButton}
-          >
-            <Ionicons name="person-outline" size={21} color={colors.primary} />
-          </Pressable>
-          <Pressable onPress={handleSignOut} style={styles.logoutButton}>
-            <Ionicons name="log-out-outline" size={22} color={colors.danger} />
-          </Pressable>
-        </View>
+        <Pressable
+          accessibilityLabel="Mi cuenta"
+          onPress={() => router.navigate("/(client-tabs)/cuenta" as Href)}
+          style={styles.profileButton}
+        >
+          <Ionicons name="person-outline" size={21} color={colors.textLight} />
+        </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.noticeCard}>
-          <Ionicons
-            name="checkmark-circle-outline"
-            size={26}
-            color={colors.primary}
-          />
-          <View style={styles.noticeTextContainer}>
-            <Text style={styles.noticeTitle}>Acceso de Cliente Activo</Text>
-            <Text style={styles.noticeBody}>
-              Desde aquí puedes visualizar los proyectos, presupuestos e
-              información compartida por tus contratistas asociados.
-            </Text>
-          </View>
-        </View>
-
-        <Text style={styles.sectionTitle}>Mis Contratistas / Proveedores</Text>
-
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}
+      >
         {loading ? (
-          <LeuretLoading message="Cargando proveedores…" compact />
-        ) : contractors.length === 0 ? (
-          <LeuretEmptyState
-            icon="business-outline"
-            title="Sin proveedores vinculados"
-            description={`Pídele a tu contratista que registre tu correo electrónico (${user?.email || "el que usaste al registrarte"}) para vincularte automáticamente.`}
-            compact
-          />
+          <LeuretLoading message="Preparando tu resumen…" compact />
         ) : (
-          contractors.map((company) => (
-            <View key={company.id} style={styles.companyCard}>
-              <View style={styles.companyHeader}>
-                <Ionicons name="briefcase-outline" size={24} color={colors.primary} />
-                <Text style={styles.companyName}>{company.name}</Text>
-              </View>
+          <>
+            {error ? (
+              <LeuretFeedback
+                tone="error"
+                title="No pudimos actualizar tu resumen"
+                message={error}
+                actionLabel="Reintentar"
+                onAction={() => void load(true)}
+              />
+            ) : null}
 
-              <View style={styles.divider} />
-
-              {company.phone ? (
-                <View style={styles.infoRow}>
-                  <Ionicons name="call-outline" size={16} color={colors.textSecondary} />
-                  <Text style={styles.infoText}>{company.phone}</Text>
+            {pending > 0 ? (
+              <MotionPressable
+                onPress={() => router.navigate("/(client-tabs)/presupuestos" as Href)}
+                pressedScale={0.985}
+                style={styles.actionBanner}
+                accessibilityRole="button"
+              >
+                <View style={styles.actionIcon}>
+                  <Ionicons name="document-text" size={22} color={colors.textInverse} />
                 </View>
-              ) : null}
-
-              {company.email ? (
-                <View style={styles.infoRow}>
-                  <Ionicons name="mail-outline" size={16} color={colors.textSecondary} />
-                  <Text style={styles.infoText}>{company.email}</Text>
+                <View style={styles.actionText}>
+                  <Text style={styles.actionTitle}>
+                    {pending === 1 ? "Tienes un presupuesto por responder" : `Tienes ${pending} presupuestos por responder`}
+                  </Text>
+                  <Text style={styles.actionBody}>Revísalo y apruébalo o pide cambios.</Text>
                 </View>
-              ) : null}
+                <Ionicons name="chevron-forward" size={20} color={colors.textInverse} />
+              </MotionPressable>
+            ) : null}
 
-              {company.address ? (
-                <View style={styles.infoRow}>
-                  <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
-                  <Text style={styles.infoText}>{company.address}</Text>
-                </View>
-              ) : null}
+            <View style={styles.tiles}>
+              <Tile
+                icon="business-outline"
+                label="Proyectos activos"
+                value={String(summary?.active_projects ?? 0)}
+                onPress={() => router.navigate("/(client-tabs)/proyectos" as Href)}
+              />
+              <Tile
+                icon="receipt-outline"
+                label={overdueCount ? `${overdueCount} vencida${overdueCount === 1 ? "" : "s"}` : `${openCount} por pagar`}
+                value={
+                  openInvoices.length === 0
+                    ? formatMoney(0)
+                    : openInvoices.map((row) => formatMoney(row.balance_due, row.currency_code)).join(" + ")
+                }
+                caption="Saldo pendiente"
+                alert={overdueCount > 0}
+                onPress={() => router.navigate("/(client-tabs)/facturas" as Href)}
+              />
             </View>
-          ))
+
+            <Text style={styles.sectionTitle}>Próxima visita</Text>
+            {next ? (
+              <MotionPressable
+                pressedScale={0.985}
+                disabled={!next.project_id}
+                onPress={() =>
+                  next.project_id &&
+                  router.push({ pathname: "/cliente-proyectos/[id]", params: { id: next.project_id } } as Href)
+                }
+                style={styles.visitCard}
+              >
+                <View style={styles.visitDate}>
+                  <Text style={styles.visitDay}>{next.date.slice(8, 10)}</Text>
+                  <Text style={styles.visitMonth}>{shortMonth(next.date)}</Text>
+                </View>
+                <View style={styles.visitInfo}>
+                  <Text style={styles.visitWhen}>
+                    {relativeDayLabel(next.date, today)} · {next.start_time}
+                    {next.end_time ? `–${next.end_time}` : ""}
+                  </Text>
+                  <Text style={styles.visitTitle}>{next.title}</Text>
+                  <Text style={styles.visitMeta} numberOfLines={1}>
+                    {[next.project_name, next.company?.name].filter(Boolean).join(" · ")}
+                  </Text>
+                  {next.address ? (
+                    <Text style={styles.visitMeta} numberOfLines={1}>
+                      {next.address}
+                    </Text>
+                  ) : null}
+                </View>
+              </MotionPressable>
+            ) : (
+              <View style={styles.emptyCard}>
+                <Ionicons name="calendar-clear-outline" size={20} color={colors.textMuted} />
+                <Text style={styles.emptyText}>No tienes visitas programadas.</Text>
+              </View>
+            )}
+
+            <Text style={styles.sectionTitle}>Tus contratistas</Text>
+            {contractors.length === 0 ? (
+              <LeuretEmptyState
+                icon="business-outline"
+                title="Sin contratistas vinculados"
+                description={`Pídele a tu contratista que te registre con tu correo (${user?.email || "el que usaste al registrarte"}) para vincularte automáticamente.`}
+                compact
+              />
+            ) : (
+              contractors.map((company) => (
+                <View key={company.id} style={styles.companyCard}>
+                  <View style={styles.companyHeader}>
+                    <View style={styles.companyAvatar}>
+                      <Text style={styles.companyInitial}>{company.name.trim().charAt(0).toUpperCase()}</Text>
+                    </View>
+                    <View style={styles.companyInfo}>
+                      <Text style={styles.companyName}>{company.name}</Text>
+                      {company.address ? (
+                        <Text style={styles.companyMeta} numberOfLines={1}>
+                          {company.address}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                  <View style={styles.companyActions}>
+                    <ContactActions
+                      phone={company.phone}
+                      email={company.email}
+                      address={company.address}
+                      whatsappMessage="Hola, te escribo desde Leuret."
+                    />
+                  </View>
+                </View>
+              ))
+            )}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+function Tile({
+  icon,
+  label,
+  value,
+  caption,
+  alert = false,
+  onPress,
+}: {
+  icon: IconName;
+  label: string;
+  value: string;
+  caption?: string;
+  alert?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <MotionPressable onPress={onPress} pressedScale={0.97} style={styles.tile} accessibilityRole="button">
+      <View style={[styles.tileIcon, alert && styles.tileIconAlert]}>
+        <Ionicons name={icon} size={18} color={alert ? colors.danger : colors.primary} />
+      </View>
+      {caption ? <Text style={styles.tileCaption}>{caption}</Text> : null}
+      <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
+      <Text style={[styles.tileLabel, alert && styles.tileLabelAlert]}>{label}</Text>
+    </MotionPressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.surfaceDark,
-  },
+  safeArea: { flex: 1, backgroundColor: colors.surfaceDark },
   header: {
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 24,
-    backgroundColor: colors.surfaceDark,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
   },
-  welcome: {
-    color: colors.textMuted,
-    fontSize: 14,
-  },
-  name: {
-    marginTop: 3,
-    color: colors.textLight,
-    fontSize: 24,
-    fontWeight: "900",
-  },
-  logoutButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: colors.dangerSoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerActions: {
-    flexDirection: "row",
-    gap: 10,
-  },
+  headerText: { flex: 1 },
+  welcome: { color: colors.textMuted, fontSize: 14 },
+  name: { marginTop: 3, color: colors.textLight, fontSize: 24, fontWeight: "900" },
   profileButton: {
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surfaceDarkRaised,
     alignItems: "center",
     justifyContent: "center",
   },
-  content: {
-    flexGrow: 1,
-    padding: 20,
-    paddingBottom: 40,
-    backgroundColor: colors.background,
-  },
-  noticeCard: {
+  content: { flexGrow: 1, padding: 20, paddingBottom: 40, gap: 14, backgroundColor: colors.background },
+  actionBanner: {
     flexDirection: "row",
-    padding: 16,
-    borderRadius: radius.md,
-    backgroundColor: colors.successSoft,
-    marginBottom: 24,
-    gap: 12,
-  },
-  noticeTextContainer: {
-    flex: 1,
-  },
-  noticeTitle: {
-    color: colors.primaryDark,
-    fontWeight: "800",
-    fontSize: 14,
-  },
-  noticeBody: {
-    color: colors.primaryDark,
-    fontSize: 12,
-    marginTop: 4,
-    lineHeight: 17,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: colors.text,
-    marginBottom: 14,
-  },
-  loader: {
-    marginTop: 20,
-  },
-  emptyState: {
-    padding: 24,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
     alignItems: "center",
-  },
-  emptyTitle: {
-    marginTop: 12,
-    fontSize: 15,
-    fontWeight: "800",
-    color: colors.text,
-  },
-  emptyText: {
-    marginTop: 6,
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: "center",
-    lineHeight: 18,
-  },
-  companyCard: {
+    gap: 12,
     padding: 16,
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.accent,
+    ...shadows.glow,
+  },
+  actionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.18)",
+  },
+  actionText: { flex: 1 },
+  actionTitle: { color: colors.textInverse, fontSize: 15, fontWeight: "900" },
+  actionBody: { marginTop: 2, color: colors.textInverse, fontSize: 12, opacity: 0.9 },
+  tiles: { flexDirection: "row", gap: 12 },
+  tile: {
+    flex: 1,
+    padding: 14,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: 12,
+    backgroundColor: colors.surface,
+    ...shadows.soft,
   },
-  companyHeader: {
+  tileIcon: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
+  tileIconAlert: { backgroundColor: colors.dangerSoft },
+  tileCaption: { marginTop: 10, color: colors.textSecondary, fontSize: 11, fontWeight: "800" },
+  tileValue: { marginTop: 10, color: colors.text, fontSize: 22, fontWeight: "900" },
+  tileLabel: { marginTop: 2, color: colors.textSecondary, fontSize: 12, fontWeight: "700" },
+  tileLabelAlert: { color: colors.danger },
+  sectionTitle: { marginTop: 10, fontSize: 17, fontWeight: "900", color: colors.text },
+  visitCard: {
+    flexDirection: "row",
+    gap: 14,
+    padding: 14,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  visitDate: { width: 54, height: 60, borderRadius: radius.md, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceDark },
+  visitDay: { color: colors.textLight, fontSize: 22, fontWeight: "900" },
+  visitMonth: { color: colors.textLightMuted, fontSize: 11, fontWeight: "800", textTransform: "uppercase" },
+  visitInfo: { flex: 1 },
+  visitWhen: { color: colors.accent, fontSize: 12, fontWeight: "900" },
+  visitTitle: { marginTop: 2, color: colors.text, fontSize: 15, fontWeight: "800" },
+  visitMeta: { marginTop: 2, color: colors.textSecondary, fontSize: 12, fontWeight: "600" },
+  emptyCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+    padding: 14,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: "dashed",
+    backgroundColor: colors.surface,
   },
-  companyName: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: colors.text,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: 12,
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 6,
-  },
-  infoText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
+  emptyText: { color: colors.textSecondary, fontSize: 13, fontWeight: "600" },
+  companyCard: { padding: 16, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  companyHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  companyAvatar: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
+  companyInitial: { color: colors.primary, fontSize: 17, fontWeight: "900" },
+  companyInfo: { flex: 1 },
+  companyName: { fontSize: 16, fontWeight: "800", color: colors.text },
+  companyMeta: { marginTop: 2, fontSize: 12, color: colors.textSecondary },
+  companyActions: { marginTop: 14 },
 });

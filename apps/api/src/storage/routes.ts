@@ -5,7 +5,8 @@ import {
   createProjectPhotoRepo,
   deleteProjectPhotoRepo,
   findProjectPhotosRepo,
-  getPhotoByIdRepo
+  getPhotoByIdRepo,
+  updateProjectPhotoSharingRepo
 } from "./repository.js";
 import {
   buildSecureStorageKey,
@@ -58,6 +59,11 @@ const photoParamsSchema = z.object({
   companyId: z.string().uuid(),
   projectId: z.string().uuid(),
   photoId: z.string().uuid()
+});
+
+const updatePhotoSchema = z.object({
+  sharedWithClient: z.boolean(),
+  caption: z.string().trim().max(500).nullable().optional()
 });
 
 const profileDocumentParamsSchema = z.object({
@@ -318,6 +324,40 @@ export async function registerStorageRoutes(app: FastifyInstance): Promise<void>
 
       const signedUrl = await getStorageSignedUrl(photoRecord.id, photoRecord.storage_path, 60);
       return reply.status(201).send({ photo: { ...photoRecord, signedUrl } });
+    }
+  );
+
+  // Compartir u ocultar una foto en el portal del cliente
+  app.patch(
+    "/companies/:companyId/projects/:projectId/photos/:photoId",
+    {
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator", "member", "supervisor", "sales"])]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedParams = photoParamsSchema.safeParse(request.params);
+      const parsedBody = updatePhotoSchema.safeParse(request.body);
+      if (!parsedParams.success || !parsedBody.success) {
+        return reply.status(400).send({ message: "Parámetros inválidos." });
+      }
+
+      const photo = await updateProjectPhotoSharingRepo(
+        userId,
+        parsedParams.data.companyId,
+        parsedParams.data.projectId,
+        parsedParams.data.photoId,
+        parsedBody.data.sharedWithClient,
+        parsedBody.data.caption
+      );
+
+      if (!photo) {
+        return reply.status(404).send({ message: "Foto no encontrada." });
+      }
+
+      const signedUrl = await getStorageSignedUrl(photo.id, photo.storage_path, 60);
+      return { photo: { ...photo, signedUrl } };
     }
   );
 

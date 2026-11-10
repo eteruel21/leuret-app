@@ -13,9 +13,10 @@ import {
   getBudgetHistoryRepo,
   findBudgetPriceUpdatesRepo,
   applyBudgetPriceUpdatesRepo,
+  sendBudgetRepo,
   type CreateBudgetItemInput
 } from "./repository.js";
-import { notifyBudgetDecision } from "../notifications/event-service.js";
+import { notifyBudgetDecision, notifyBudgetSent } from "../notifications/event-service.js";
 
 export async function getClientBudgetsService(userId: string) {
   return findClientBudgets(userId);
@@ -52,6 +53,17 @@ export async function approveBudgetService(userId: string, budgetId: string, com
     ? await respondToBudgetAsClientRepo(userId, budgetId, "approved")
     : await approveBudgetRepo(userId, budgetId, companyId);
   await notifyBudgetDecision(budget, "approved");
+  return budget;
+}
+
+export async function sendBudgetService(
+  userId: string,
+  budgetId: string,
+  companyId: string,
+  validUntil?: string | null
+) {
+  const { budget, clientUserId } = await sendBudgetRepo(userId, budgetId, companyId, validUntil);
+  await notifyBudgetSent(budget, clientUserId);
   return budget;
 }
 

@@ -25,6 +25,7 @@ import {
 } from "@/services/push-notification-service";
 import { processOfflineSyncQueue } from "@/services/offline-sync-service";
 import { readPendingInvitation } from "@/utils/pending-invitation";
+import { useNotificationNavigation } from "@/hooks/useNotificationNavigation";
 
 function LeuretStartupMark() {
   const pulse = useSharedValue(0);
@@ -118,6 +119,12 @@ function RootNavigator() {
     });
   }, [canUseCompany, hasActiveCompany]);
 
+  // Tocar un aviso push abre su presupuesto o factura (también en arranque en frío).
+  useNotificationNavigation({
+    enabled: isClientAuthenticated || hasActiveCompany,
+    isClient: isClientAuthenticated,
+  });
+
   const isInitialLoading = authLoading && !profile;
   const isCompanyInitialLoading =
     isContractorAuthenticated && companyLoading && !activeCompany;
@@ -182,6 +189,9 @@ function RootNavigator() {
 
       <Stack.Protected guard={isClientAuthenticated}>
         <Stack.Screen name="(client-tabs)" />
+        <Stack.Screen name="cliente-presupuestos" />
+        <Stack.Screen name="cliente-facturas" />
+        <Stack.Screen name="cliente-proyectos" />
       </Stack.Protected>
 
       <Stack.Protected guard={hasActiveCompany || isClientAuthenticated}>

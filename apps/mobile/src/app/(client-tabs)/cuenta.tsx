@@ -1,199 +1,192 @@
 import { Ionicons } from "@expo/vector-icons";
-import { StyleSheet, Text, View, Pressable, Alert } from "react-native";
+import { type Href, router } from "expo-router";
+import { useState } from "react";
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { colors, radius } from "../../constants/theme";
-import { useAuth } from "../../contexts/AuthContext";
-import { formatDate } from "../../utils/format";
+import { LeuretButton } from "@/components/LeuretButton";
+import { colors, radius } from "@/constants/theme";
+import { useAuth } from "@/contexts/AuthContext";
+import { confirmAction, showAlert } from "@/utils/alert";
+import { formatDate } from "@/utils/format";
 
-export default function ClientProfileScreen() {
+type IconName = React.ComponentProps<typeof Ionicons>["name"];
+
+const TERMS_URL = "https://admin.leurettech.com/legal/terms";
+const PRIVACY_URL = "https://admin.leurettech.com/legal/privacy";
+
+function initials(name: string | null | undefined): string {
+  const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "C";
+}
+
+export default function ClientAccountScreen() {
   const { profile, user, signOut } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
 
-  const handleSignOut = () => {
-    Alert.alert("Cerrar sesión", "¿Estás seguro de que deseas salir?", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Salir", style: "destructive", onPress: () => void signOut() },
-    ]);
-  };
+  async function handleSignOut() {
+    const confirmed = await confirmAction({
+      title: "Cerrar sesión",
+      message: "¿Seguro que deseas salir?",
+      confirmText: "Salir",
+      destructive: true,
+    });
+    if (!confirmed) return;
+
+    setSigningOut(true);
+    const { error } = await signOut();
+    setSigningOut(false);
+    if (error) showAlert("No se pudo cerrar sesión", error.message);
+  }
+
+  async function openUrl(url: string) {
+    try {
+      await Linking.openURL(url);
+    } catch {
+      showAlert("No se pudo abrir el enlace", url);
+    }
+  }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Mi Cuenta</Text>
-      </View>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.title}>Mi cuenta</Text>
 
-      <View style={styles.content}>
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={48} color={colors.primary} />
+            <Text style={styles.avatarText}>{initials(profile?.full_name)}</Text>
           </View>
-          <Text style={styles.name}>{profile?.full_name || "Usuario Cliente"}</Text>
-          <Text style={styles.roleBadge}>Cliente Final</Text>
-        </View>
-
-        <View style={styles.infoSection}>
-          <Text style={styles.sectionTitle}>Detalles Personales</Text>
-
-          <View style={styles.infoCard}>
-            <View style={styles.infoRow}>
-              <View style={styles.iconBox}>
-                <Ionicons name="mail-outline" size={20} color={colors.textSecondary} />
-              </View>
-              <View>
-                <Text style={styles.infoLabel}>Correo Electrónico</Text>
-                <Text style={styles.infoValue}>{user?.email || "Sin correo"}</Text>
-              </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.infoRow}>
-              <View style={styles.iconBox}>
-                <Ionicons name="call-outline" size={20} color={colors.textSecondary} />
-              </View>
-              <View>
-                <Text style={styles.infoLabel}>Teléfono</Text>
-                <Text style={styles.infoValue}>{profile?.phone || "Sin teléfono registrado"}</Text>
-              </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.infoRow}>
-              <View style={styles.iconBox}>
-                <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
-              </View>
-              <View>
-                <Text style={styles.infoLabel}>Fecha de Registro</Text>
-                <Text style={styles.infoValue}>
-                  {profile?.created_at ? formatDate(profile.created_at) : "N/A"}
-                </Text>
-              </View>
-            </View>
+          <View style={styles.profileInfo}>
+            <Text style={styles.name}>{profile?.full_name || "Cliente"}</Text>
+            <Text style={styles.email}>{user?.email || "Sin correo"}</Text>
+            <Text style={styles.roleBadge}>Cliente</Text>
           </View>
         </View>
 
-        <Pressable onPress={handleSignOut} style={styles.logoutButton}>
-          <Ionicons name="log-out-outline" size={20} color={colors.textLight} />
-          <Text style={styles.logoutText}>Cerrar Sesión</Text>
-        </Pressable>
-      </View>
+        <View style={styles.infoCard}>
+          <InfoRow icon="call-outline" label="Teléfono" value={profile?.phone || "Sin teléfono registrado"} />
+          <View style={styles.divider} />
+          <InfoRow
+            icon="notifications-outline"
+            label="Avisos en el teléfono"
+            value={profile?.notifications_opt_in ? "Activados" : "Desactivados"}
+          />
+          <View style={styles.divider} />
+          <InfoRow
+            icon="calendar-outline"
+            label="Cliente desde"
+            value={profile?.created_at ? formatDate(profile.created_at) : "—"}
+          />
+        </View>
+
+        <View style={styles.menu}>
+          <MenuRow
+            icon="create-outline"
+            label="Editar mis datos y avisos"
+            onPress={() => router.push("/perfil" as Href)}
+          />
+          <MenuRow
+            icon="shield-checkmark-outline"
+            label="Privacidad, exportar o eliminar mis datos"
+            onPress={() => router.push("/perfil" as Href)}
+          />
+          <MenuRow icon="document-text-outline" label="Términos de uso" onPress={() => void openUrl(TERMS_URL)} external />
+          <MenuRow icon="lock-closed-outline" label="Política de privacidad" onPress={() => void openUrl(PRIVACY_URL)} external last />
+        </View>
+
+        <LeuretButton
+          label="Cerrar sesión"
+          icon="log-out-outline"
+          variant="danger"
+          loading={signingOut}
+          onPress={() => void handleSignOut()}
+          style={styles.logout}
+        />
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
+function InfoRow({ icon, label, value }: { icon: IconName; label: string; value: string }) {
+  return (
+    <View style={styles.infoRow}>
+      <View style={styles.iconBox}>
+        <Ionicons name={icon} size={20} color={colors.textSecondary} />
+      </View>
+      <View style={styles.infoText}>
+        <Text style={styles.infoLabel}>{label}</Text>
+        <Text style={styles.infoValue}>{value}</Text>
+      </View>
+    </View>
+  );
+}
+
+function MenuRow({
+  icon,
+  label,
+  onPress,
+  external = false,
+  last = false,
+}: {
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+  external?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole={external ? "link" : "button"}
+      style={({ pressed }) => [styles.menuRow, !last && styles.menuRowBorder, pressed && styles.pressed]}
+    >
+      <Ionicons name={icon} size={20} color={colors.primary} />
+      <Text style={styles.menuLabel}>{label}</Text>
+      <Ionicons name={external ? "open-outline" : "chevron-forward"} size={18} color={colors.textMuted} />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 20,
-    backgroundColor: colors.background,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: colors.text,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  content: { padding: 20, paddingBottom: 40, gap: 16 },
+  title: { fontSize: 28, fontWeight: "900", color: colors.text },
   profileCard: {
+    flexDirection: "row",
     alignItems: "center",
-    padding: 24,
+    gap: 16,
+    padding: 18,
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 24,
+    backgroundColor: colors.surfaceDark,
   },
-  avatar: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: colors.primarySoft,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  name: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: colors.text,
-  },
+  avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" },
+  avatarText: { color: colors.textInverse, fontSize: 22, fontWeight: "900" },
+  profileInfo: { flex: 1 },
+  name: { fontSize: 18, fontWeight: "900", color: colors.textLight },
+  email: { marginTop: 2, fontSize: 13, color: colors.textLightMuted },
   roleBadge: {
+    alignSelf: "flex-start",
     marginTop: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-    backgroundColor: colors.steelSoft,
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  infoSection: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: colors.text,
-    marginBottom: 10,
-  },
-  infoCard: {
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: colors.steelSoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  infoLabel: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    fontWeight: "700",
-  },
-  infoValue: {
-    fontSize: 14,
-    color: colors.text,
-    fontWeight: "800",
-    marginTop: 2,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: 12,
-  },
-  logoutButton: {
-    height: 54,
-    borderRadius: radius.md,
-    backgroundColor: colors.danger,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: "auto",
-    marginBottom: 30,
-  },
-  logoutText: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+    overflow: "hidden",
+    backgroundColor: colors.surfaceDarkRaised,
     color: colors.textLight,
-    fontSize: 16,
-    fontWeight: "900",
+    fontSize: 11,
+    fontWeight: "800",
   },
+  infoCard: { borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: 16 },
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  infoText: { flex: 1 },
+  iconBox: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.steelSoft, alignItems: "center", justifyContent: "center" },
+  infoLabel: { fontSize: 11, color: colors.textSecondary, fontWeight: "700" },
+  infoValue: { fontSize: 14, color: colors.text, fontWeight: "800", marginTop: 2 },
+  divider: { height: 1, backgroundColor: colors.divider, marginVertical: 12 },
+  menu: { borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+  menuRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, minHeight: 54 },
+  menuRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.divider },
+  menuLabel: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "700" },
+  pressed: { backgroundColor: colors.surfaceAlt },
+  logout: { marginTop: 8 },
 });

@@ -69,6 +69,7 @@ import {
 
 import { shareBudgetPdf } from "@/utils/budget-pdf";
 import { ShoppingListModal } from "@/components/ShoppingListModal";
+import { SendBudgetPanel } from "@/components/SendBudgetPanel";
 
 import { listCatalogItems } from "@/services/catalog-service";
 import type { CatalogItemWithDetails } from "@/types/catalog";
@@ -409,6 +410,22 @@ export default function BudgetDetailScreen() {
           currencyCode={budget.currency_code}
           onPress={() => setPriceUpdatesVisible(true)}
         />
+
+        {budget.status === "draft" && activeCompany ? (
+          <View style={styles.sendPanel}>
+            <SendBudgetPanel
+              companyId={activeCompany.id}
+              budget={budget}
+              itemCount={budget.items.length}
+              clientHasAccount={Boolean(budget.client?.user_id)}
+              timezone={activeCompany.timezone}
+              onSent={(sent) => {
+                setBudget((current) => (current ? { ...current, ...sent } : current));
+                setPriceUpdates([]);
+              }}
+            />
+          </View>
+        ) : null}
 
         <View style={styles.buttonRow}>
           <Pressable
@@ -1795,5 +1812,8 @@ const styles = StyleSheet.create({
     color: colors.textLight,
     fontSize: 12,
     fontWeight: "900",
+  },
+  sendPanel: {
+    marginTop: 14,
   },
 });
