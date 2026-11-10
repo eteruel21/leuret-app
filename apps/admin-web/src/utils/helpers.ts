@@ -9,7 +9,7 @@ export function errorMessage(error: unknown): string {
 
 export function formatDate(value: string | null): string {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("es-PA", { dateStyle: "medium" }).format(new Date(value));
+  return new Intl.DateTimeFormat("es-PA", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
 }
 
 export function formatMoney(value: number): string {

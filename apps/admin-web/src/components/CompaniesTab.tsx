@@ -19,10 +19,13 @@ import {
 } from "../companies-data";
 import { errorMessage, formatDate } from "../utils/helpers";
 import { AlertBanner, EmptyState, SectionHeader, Table } from "./CommonUI";
+import type { OpsNavigate } from "./ops/navigation";
 
 interface CompaniesTabProps {
   users: PlatformUser[];
   onViewProfile: (user: PlatformUser) => void;
+  focusId?: string | null;
+  onNavigate: OpsNavigate;
 }
 
 const FILTERS: Array<{ value: CompanyFilter; label: string }> = [
@@ -40,14 +43,14 @@ const SORTS: Array<{ value: CompanySort; label: string }> = [
   { value: "name", label: "Nombre (A-Z)" },
 ];
 
-export function CompaniesTab({ users, onViewProfile }: CompaniesTabProps) {
+export function CompaniesTab({ users, onViewProfile, focusId = null, onNavigate }: CompaniesTabProps) {
   const [companies, setCompanies] = useState<AdminCompany[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<CompanyFilter>("all");
   const [sort, setSort] = useState<CompanySort>("recent");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(focusId);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -216,6 +219,10 @@ export function CompaniesTab({ users, onViewProfile }: CompaniesTabProps) {
             setSelectedId(null);
             onViewProfile(user);
           }}
+          onNavigate={(target) => {
+            setSelectedId(null);
+            onNavigate(target);
+          }}
         />
       )}
     </>
@@ -228,12 +235,14 @@ function CompanyDetailModal({
   onClose,
   onViewProfile,
   onStatusChanged,
+  onNavigate,
 }: {
   companyId: string;
   users: PlatformUser[];
   onClose: () => void;
   onViewProfile: (user: PlatformUser) => void;
   onStatusChanged: (companyId: string, active: boolean) => void;
+  onNavigate: OpsNavigate;
 }) {
   const [detail, setDetail] = useState<AdminCompanyDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -318,6 +327,20 @@ function CompanyDetailModal({
                   <Value label="Teléfono" value={company.phone} />
                   <Value label="Dirección" value={company.address} />
                   <Value label="Moneda / zona" value={`${company.currencyCode} · ${company.timezone ?? "—"}`} />
+                </div>
+              </section>
+
+              <section className="review-section">
+                <div className="profile-section-heading">
+                  <Eye size={18} />
+                  <h3>Ver operación de la empresa</h3>
+                </div>
+                <div className="quick-links">
+                  <button className="button button-ghost" onClick={() => onNavigate({ tab: "projects", companyId: company.id })}>Obras</button>
+                  <button className="button button-ghost" onClick={() => onNavigate({ tab: "budgets", companyId: company.id })}>Presupuestos</button>
+                  <button className="button button-ghost" onClick={() => onNavigate({ tab: "invoices", companyId: company.id })}>Facturas</button>
+                  <button className="button button-ghost" onClick={() => onNavigate({ tab: "clients", companyId: company.id })}>Clientes</button>
+                  <button className="button button-ghost" onClick={() => onNavigate({ tab: "audit", companyId: company.id })}>Auditoría</button>
                 </div>
               </section>
 
@@ -457,7 +480,7 @@ function CompanyDetailModal({
                     </thead>
                     <tbody>
                       {detail.recentProjects.map((project) => (
-                        <tr key={project.id}>
+                        <tr key={project.id} className="clickable-row" onClick={() => onNavigate({ tab: "projects", id: project.id })}>
                           <td>
                             <strong>{project.name}</strong>
                             <small>{project.projectCode ?? ""}</small>

@@ -57,6 +57,15 @@ import { SystemTab } from "./components/SystemTab";
 import { EditorModal, type Editor } from "./components/EditorModal";
 import { UserProfileModal } from "./components/UserProfileModal";
 import { CompaniesTab } from "./components/CompaniesTab";
+import { ProjectsTab } from "./components/ops/ProjectsTab";
+import { BudgetsTab } from "./components/ops/BudgetsTab";
+import { InvoicesTab } from "./components/ops/InvoicesTab";
+import { ClientsTab } from "./components/ops/ClientsTab";
+import { AuditTab } from "./components/ops/AuditTab";
+import { OverviewPanel } from "./components/ops/OverviewPanel";
+import { CommandPalette } from "./components/ops/CommandPalette";
+import { UserSessionsPanel } from "./components/ops/UserSessionsPanel";
+import { isTab, readHash, writeHash, type NavTarget } from "./components/ops/navigation";
 
 const EMPTY_DATA: AdminData = {
   users: [],
@@ -160,14 +169,50 @@ export default function App() {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaResetKey, setCaptchaResetKey] = useState(0);
 
-  const [activeTab, setActiveTab] = useState<Tab>(() => {
+  // Navegación: la pestaña y el registro abierto viven en el hash (#/obras?id=...)
+  // para que el botón «atrás» funcione y cada vista se pueda compartir.
+  const [nav, setNav] = useState<NavTarget & { key: number }>(() => {
+    const fromHash = typeof window !== "undefined" ? readHash(window.location.hash) : null;
+    if (fromHash) return { ...fromHash, key: 0 };
     const saved = localStorage.getItem("admin_active_tab");
-    return (saved as Tab) || "dashboard";
+    return { tab: isTab(saved) ? saved : "dashboard", key: 0 };
   });
+  const activeTab = nav.tab;
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  const navigate = useCallback((target: NavTarget) => {
+    setNav((current) => ({ ...target, key: current.key + 1 }));
+    const nextHash = writeHash(target);
+    if (window.location.hash !== nextHash) {
+      window.history.pushState(null, "", nextHash);
+    }
+  }, []);
+
+  const setActiveTab = useCallback((tab: Tab) => navigate({ tab }), [navigate]);
 
   useEffect(() => {
     localStorage.setItem("admin_active_tab", activeTab);
   }, [activeTab]);
+
+  useEffect(() => {
+    const onPop = () => {
+      const target = readHash(window.location.hash);
+      if (target) setNav((current) => ({ ...target, key: current.key + 1 }));
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const [data, setData] = useState<AdminData>(EMPTY_DATA);
   const [loadingData, setLoadingData] = useState(false);
@@ -341,6 +386,23 @@ export default function App() {
     } finally {
       setReviewLoading(false);
     }
+  }
+
+  function openUserById(userId: string) {
+    const user = data.users.find((value) => value.id === userId);
+    void openContractorReview(
+      user ?? {
+        id: userId,
+        fullName: "Usuario",
+        phone: "",
+        role: "contractor",
+        active: false,
+        approvedAt: null,
+        approvedBy: null,
+        createdAt: "",
+        companyName: "",
+      }
+    );
   }
 
   function closeContractorReview() {
@@ -684,6 +746,11 @@ export default function App() {
     dashboard: ["Resumen de plataforma", "Usuarios, proyectos y configuración central."],
     users: ["Usuarios", "Aprueba registros y edita cada perfil."],
     companies: ["Empresas", "Equipos, obras y actividad de cada empresa registrada."],
+    projects: ["Obras", "Avance, tareas, presupuestos y facturas de cada obra."],
+    budgets: ["Presupuestos", "Todos los presupuestos, partidas, versiones y su estado."],
+    invoices: ["Facturación", "Facturas, pagos, saldos y notas de crédito de la plataforma."],
+    clients: ["Clientes", "Clientes registrados por las empresas y su actividad."],
+    audit: ["Auditoría", "Quién hizo qué y cuándo en el panel y en las empresas."],
     catalog: ["Catálogo", "Categorías, materiales, mano de obra y servicios."],
     calculations: ["Cálculos", "Fórmulas, parámetros, unidades y rendimientos."],
     pricing: ["Precios globales", "Valores predeterminados para todos los usuarios."],
@@ -698,6 +765,7 @@ export default function App() {
         pendingUsersCount={pendingUsers.length}
         email={session.user.email}
         onSignOut={handleSignOut}
+        onOpenSearch={() => setPaletteOpen(true)}
       />
 
       <main className="main-content">
@@ -721,6 +789,7 @@ export default function App() {
           </div>
         ) : (
           <>
+            {activeTab === "dashboard" && <OverviewPanel onNavigate={navigate} />}
             {activeTab === "dashboard" && (
               <DashboardTab
                 data={data}
@@ -743,7 +812,56 @@ export default function App() {
               />
             )}
             {activeTab === "companies" && (
-              <CompaniesTab users={data.users} onViewProfile={openContractorReview} />
+              <CompaniesTab
+                key={nav.key}
+                users={data.users}
+                onViewProfile={openContractorReview}
+                focusId={nav.id ?? null}
+                onNavigate={navigate}
+              />
+            )}
+            {activeTab === "projects" && (
+              <ProjectsTab
+                key={nav.key}
+                companies={data.companies}
+                initialStatus={nav.status ?? ""}
+                initialCompanyId={nav.companyId ?? ""}
+                focusId={nav.id ?? null}
+                onNavigate={navigate}
+              />
+            )}
+            {activeTab === "budgets" && (
+              <BudgetsTab
+                key={nav.key}
+                companies={data.companies}
+                initialStatus={nav.status ?? ""}
+                initialCompanyId={nav.companyId ?? ""}
+                focusId={nav.id ?? null}
+                onNavigate={navigate}
+              />
+            )}
+            {activeTab === "invoices" && (
+              <InvoicesTab
+                key={nav.key}
+                companies={data.companies}
+                initialStatus={nav.status ?? ""}
+                initialCompanyId={nav.companyId ?? ""}
+                focusId={nav.id ?? null}
+                onNavigate={navigate}
+              />
+            )}
+            {activeTab === "clients" && (
+              <ClientsTab
+                key={nav.key}
+                companies={data.companies}
+                initialCompanyId={nav.companyId ?? ""}
+                initialSearch={nav.search ?? ""}
+                focusId={nav.id ?? null}
+                onNavigate={navigate}
+              />
+            )}
+            {activeTab === "audit" && (
+              <AuditTab key={nav.key} companies={data.companies} initialCompanyId={nav.companyId ?? ""} onNavigate={navigate} />
             )}
             {activeTab === "catalog" && (
               <CatalogTab
@@ -807,6 +925,15 @@ export default function App() {
           onRetry={() => void openContractorReview(reviewUser)}
           onApprove={approveContractorFromReview}
           onOpenDocument={openContractorDocument}
+        >
+          <UserSessionsPanel userId={reviewUser.id} isSelf={reviewUser.id === session.user.id} />
+        </UserProfileModal>
+      )}
+      {paletteOpen && (
+        <CommandPalette
+          onClose={() => setPaletteOpen(false)}
+          onNavigate={navigate}
+          onOpenUser={openUserById}
         />
       )}
       {editor && (

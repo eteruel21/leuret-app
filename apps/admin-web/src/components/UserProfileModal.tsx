@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   Building2,
   ExternalLink,
@@ -38,6 +39,8 @@ interface UserProfileModalProps {
   onOpenDocument: (
     type: ContractorDocumentType
   ) => Promise<void>;
+  /** Secciones extra (por ejemplo, sesiones activas) al final del perfil. */
+  children?: ReactNode;
 }
 
 function visibleValue(
@@ -147,6 +150,7 @@ export function UserProfileModal({
   onRetry,
   onApprove,
   onOpenDocument,
+  children,
 }: UserProfileModalProps) {
   const pendingContractor = Boolean(
     profile?.role === "contractor" &&
@@ -552,6 +556,7 @@ export function UserProfileModal({
               </section>
             </div>
           )}
+          {profile && children}
         </div>
 
         <div className="modal-footer">
