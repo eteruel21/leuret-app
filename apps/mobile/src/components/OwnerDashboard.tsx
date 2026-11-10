@@ -9,6 +9,7 @@ import { getCompanyDashboard } from "@/services/dashboard-service";
 import {
   buildAttentionItems,
   monthChange,
+  projectsKpiDetail,
   type AttentionItem,
   type AttentionSeverity,
   type CompanyDashboard,
@@ -143,6 +144,7 @@ export function OwnerDashboard({ companyId }: { companyId: string }) {
   const money = (value: number) => formatMoney(value, dashboard.currencyCode);
   const change = monthChange(dashboard.collections.thisMonth, dashboard.collections.lastMonth);
   const attention = buildAttentionItems(dashboard, money);
+  const projectsKpi = projectsKpiDetail(dashboard.projects);
   const monthName = new Intl.DateTimeFormat("es-PA", { month: "long" }).format(new Date());
 
   return (
@@ -192,14 +194,10 @@ export function OwnerDashboard({ companyId }: { companyId: string }) {
           onPress={() => router.push("/presupuestos" as Href)}
         />
         <Kpi
-          label="Obras activas"
+          label="Obras en ejecución"
           value={String(dashboard.projects.activeCount)}
-          detail={
-            dashboard.projects.lateCount > 0
-              ? `${dashboard.projects.lateCount} ${dashboard.projects.lateCount === 1 ? "atrasada" : "atrasadas"}`
-              : "Todas a tiempo"
-          }
-          tone={dashboard.projects.lateCount > 0 ? "negative" : "positive"}
+          detail={projectsKpi.text}
+          tone={projectsKpi.tone}
           onPress={() => router.push("/proyectos" as Href)}
         />
       </View>

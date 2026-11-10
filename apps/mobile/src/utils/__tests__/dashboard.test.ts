@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildAttentionItems, monthChange, type CompanyDashboard } from "../dashboard";
+import { buildAttentionItems, monthChange, projectsKpiDetail, type CompanyDashboard } from "../dashboard";
 
 const money = (value: number) => `$${value.toFixed(2)}`;
 
@@ -77,5 +77,22 @@ describe("buildAttentionItems", () => {
     expect(items.map((item) => item.severity)).toEqual(["danger", "warning", "warning", "info"]);
     expect(items[0]?.detail).toContain("40%");
     expect(items[3]?.detail).toBe("$1500.00 en cotizaciones enviadas");
+  });
+});
+
+describe("projectsKpiDetail", () => {
+  it("muestra las obras en preparación cuando no hay atrasos", () => {
+    expect(projectsKpiDetail({ activeCount: 0, preparingCount: 1, lateCount: 0, lateProjects: [] })).toEqual({
+      text: "1 en preparación",
+      tone: "default",
+    });
+  });
+
+  it("los atrasos tienen prioridad", () => {
+    expect(projectsKpiDetail({ activeCount: 2, preparingCount: 3, lateCount: 1, lateProjects: [] }).text).toBe("1 atrasada");
+  });
+
+  it("sin obras no dice 'todas a tiempo'", () => {
+    expect(projectsKpiDetail({ activeCount: 0, preparingCount: 0, lateCount: 0, lateProjects: [] }).text).toBe("Sin obras en curso");
   });
 });

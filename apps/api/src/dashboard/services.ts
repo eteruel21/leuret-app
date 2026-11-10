@@ -41,6 +41,8 @@ export function mapDashboardRow(row: Row) {
     },
     projects: {
       activeCount: toNumber(row.active_project_count),
+      // Prospecto, inspección o cotizado: trabajo en marcha que aún no se ejecuta.
+      preparingCount: toNumber(row.preparing_project_count),
       lateCount: toNumber(row.late_project_count),
       lateProjects: toList(row.late_projects).map((item) => ({
         id: String(item.id),
