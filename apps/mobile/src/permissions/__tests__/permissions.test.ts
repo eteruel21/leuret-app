@@ -76,13 +76,19 @@ describe("inicio por rol", () => {
     expect(quickActionsFor("estimator")[0]).toBe("budget");
     expect(quickActionsFor("sales")[0]).toBe("client");
     expect(quickActionsFor("supervisor")[0]).toBe("project");
-    expect(quickActionsFor("member")[0]).toBe("agenda");
+    expect(quickActionsFor("member")[0]).toBe("tasks");
   });
 
   it("la configuración por rol no incluye accesos prohibidos", () => {
     for (const role of ROLES) {
       expect(quickActionsFor(role)).toEqual(HOME_QUICK_ACTIONS[role]);
     }
+  });
+
+  it("el equipo de campo tiene sus tareas en el inicio", () => {
+    expect(quickActionsFor("member")).toContain("tasks");
+    expect(quickActionsFor("supervisor")).toContain("tasks");
+    for (const role of ROLES) expect(can(role, "tasks.mine")).toBe(true);
   });
 
   it("sin rol no hay accesos", () => {

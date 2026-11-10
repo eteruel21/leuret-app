@@ -23,6 +23,43 @@ export async function findProjectTasksRepo(userId: string, companyId: string, pr
   });
 }
 
+/**
+ * Tareas asignadas al usuario en una empresa, con los datos básicos del
+ * proyecto. No expone montos del proyecto: sirve para el equipo de campo,
+ * que no tiene acceso al detalle completo.
+ */
+export async function findMyTasksRepo(userId: string, companyId: string, includeCompleted: boolean) {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query(
+      `
+        SELECT
+          t.*,
+          jsonb_build_object(
+            'id', p.id,
+            'name', p.name,
+            'project_code', p.project_code,
+            'status', p.status
+          ) AS project
+        FROM public.project_tasks AS t
+        JOIN public.projects AS p
+          ON p.id = t.project_id AND p.company_id = t.company_id
+        WHERE t.company_id = $1
+          AND t.assigned_user_id = $2
+          AND ($3::boolean OR t.status <> 'completed')
+          AND p.status <> 'cancelled'
+        ORDER BY
+          (t.status = 'completed') ASC,
+          t.due_date ASC NULLS LAST,
+          CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END ASC,
+          t.created_at DESC
+        LIMIT 200
+      `,
+      [companyId, userId, includeCompleted]
+    );
+    return result.rows;
+  });
+}
+
 export async function createTaskRepo(userId: string, companyId: string, projectId: string, input: CreateTaskInput) {
   return withUserTransaction(userId, async (client) => {
     const completedAt = input.status === "completed" ? new Date().toISOString() : null;

@@ -1,10 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { authenticateRequest, requireActiveUser, requireCompanyRole } from "../../auth/authenticate.js";
-import { createTaskSchema, updateTaskSchema } from "./schemas.js";
+import { createTaskSchema, myTasksQuerySchema, updateTaskSchema } from "./schemas.js";
 import {
   createTaskService,
   deleteTaskService,
+  listMyTasksService,
   listProjectTasksService,
   updateTaskService
 } from "./services.js";
@@ -12,6 +13,10 @@ import {
 const projectParamsSchema = z.object({
   companyId: z.string().uuid(),
   projectId: z.string().uuid()
+});
+
+const companyParamsSchema = z.object({
+  companyId: z.string().uuid()
 });
 
 const taskParamsSchema = z.object({
@@ -30,6 +35,32 @@ function authenticatedUserId(request: FastifyRequest, reply: FastifyReply): stri
 }
 
 export async function registerProjectTaskRoutes(app: FastifyInstance): Promise<void> {
+  // "Mis tareas": cualquier rol ve las tareas que tiene asignadas, sin
+  // necesitar acceso al detalle del proyecto (que el rol member no tiene).
+  app.get(
+    "/companies/:companyId/tasks/mine",
+    {
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator", "member", "supervisor", "sales"])]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedParams = companyParamsSchema.safeParse(request.params);
+      const parsedQuery = myTasksQuerySchema.safeParse(request.query ?? {});
+      if (!parsedParams.success || !parsedQuery.success) {
+        return reply.status(400).send({ message: "Parámetros inválidos." });
+      }
+
+      const tasks = await listMyTasksService(
+        userId,
+        parsedParams.data.companyId,
+        parsedQuery.data.status === "all"
+      );
+      return { tasks };
+    }
+  );
+
   app.get(
     "/companies/:companyId/projects/:projectId/tasks",
     {

@@ -31,6 +31,7 @@ export const CAPABILITIES = {
   "projects.progress.edit": MANAGERS,
 
   // Tareas y avances — projects/tasks, projects/progress, storage
+  "tasks.mine": ALL_ROLES,
   "tasks.edit": ALL_ROLES,
   "tasks.delete": ["owner", "admin", "supervisor"],
   "progress.upload": ALL_ROLES,
@@ -88,6 +89,7 @@ export type QuickActionId =
   | "project"
   | "client"
   | "agenda"
+  | "tasks"
   | "invoices";
 
 /** Accesos rápidos del inicio, en el orden que más usa cada rol. */
@@ -96,8 +98,8 @@ export const HOME_QUICK_ACTIONS: Record<CompanyRole, readonly QuickActionId[]> =
   admin: ["budget", "project", "invoices", "client"],
   estimator: ["budget", "calculate", "client", "agenda"],
   sales: ["client", "agenda", "project", "invoices"],
-  supervisor: ["project", "agenda", "calculate", "client"],
-  member: ["agenda", "calculate", "client", "invoices"],
+  supervisor: ["project", "tasks", "agenda", "calculate"],
+  member: ["tasks", "agenda", "calculate", "client"],
 };
 
 const QUICK_ACTION_CAPABILITY: Record<QuickActionId, Capability> = {
@@ -106,6 +108,7 @@ const QUICK_ACTION_CAPABILITY: Record<QuickActionId, Capability> = {
   project: "projects.view",
   client: "clients.view",
   agenda: "agenda.use",
+  tasks: "tasks.mine",
   invoices: "invoices.view",
 };
 
@@ -124,5 +127,5 @@ export const HOME_FOCUS: Record<CompanyRole, string> = {
   estimator: "Tus presupuestos y cálculos, listos para cotizar.",
   sales: "Tus clientes, visitas y cobros pendientes.",
   supervisor: "Tus obras, tareas y avances del día.",
-  member: "Tu agenda y tareas del día.",
+  member: "Tus tareas asignadas y la agenda del día.",
 };

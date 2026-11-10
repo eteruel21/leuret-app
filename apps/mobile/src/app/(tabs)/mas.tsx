@@ -34,6 +34,15 @@ type OptionItem = {
 
 const baseOptions: OptionItem[] = [
   {
+    id: "my-tasks",
+    title: "Mis tareas",
+    description:
+      "Tareas que tienes asignadas en las obras.",
+    icon: "checkbox-outline" as const,
+    onPress: () => router.push("/tareas" as Href),
+    capability: "tasks.mine",
+  },
+  {
     id: "budgets",
     title: "Presupuestos",
     description:

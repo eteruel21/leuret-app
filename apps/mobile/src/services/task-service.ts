@@ -52,6 +52,33 @@ export async function listProjectTasks(companyId: string, projectId: string): Pr
   }
 }
 
+export type MyTask = ProjectTask & {
+  project: {
+    id: string;
+    name: string;
+    project_code: string | null;
+    status: string;
+  };
+};
+
+/** Tareas asignadas al usuario en la empresa (vista "Mis tareas"). */
+export async function listMyTasks(
+  companyId: string,
+  status: "open" | "all" = "open"
+): Promise<{ tasks: MyTask[]; fromCache: boolean }> {
+  const cacheKey = `my_tasks_${companyId}_${status}`;
+  try {
+    const res = await authenticatedRequest<{ tasks: MyTask[] }>(
+      `/companies/${companyId}/tasks/mine?status=${status}`
+    );
+    await cacheOfflineData(cacheKey, res.tasks);
+    return { tasks: res.tasks, fromCache: false };
+  } catch {
+    const cached = await getCachedOfflineData<MyTask[]>(cacheKey);
+    return { tasks: cached ?? [], fromCache: true };
+  }
+}
+
 export async function createProjectTask(
   companyId: string,
   projectId: string,

@@ -65,6 +65,7 @@ const QUICK_ACTIONS: Record<
   client: { icon: "person-add-outline", title: "Clientes", subtitle: "Gestionar contactos", href: "/(tabs)/clientes" as Href },
   agenda: { icon: "calendar-outline", title: "Agenda", subtitle: "Visitas y trabajos", href: "/(tabs)/agenda" as Href },
   invoices: { icon: "receipt-outline", title: "Facturas", subtitle: "Cobros y saldos", href: "/facturas" as Href },
+  tasks: { icon: "checkbox-outline", title: "Mis tareas", subtitle: "Lo que tienes asignado", href: "/tareas" as Href },
 };
 
 function QuickAction({
