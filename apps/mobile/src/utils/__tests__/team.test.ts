@@ -161,6 +161,10 @@ describe("describeAuditAction", () => {
     );
   });
 
+  it("traduce la creación de la empresa", () => {
+    expect(describeAuditAction("COMPANY_CREATED", { name: "TCT Services" }, labels)).toBe("creó la empresa");
+  });
+
   it("acciones desconocidas se muestran legibles", () => {
     expect(describeAuditAction("SOMETHING_NEW", null, labels)).toBe("something new");
   });

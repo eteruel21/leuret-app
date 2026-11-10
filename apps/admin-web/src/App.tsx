@@ -640,7 +640,7 @@ export default function App() {
         <form className="login-card" onSubmit={handleLogin}>
           <div className="login-brand">
             <Briefcase size={42} />
-            <h1>Contractor Pro</h1>
+            <h1>Leuret</h1>
             <p>Panel central de Super Admin</p>
           </div>
           {authError && <AlertBanner message={authError} />}
