@@ -157,6 +157,8 @@ describe("Portal del cliente: visibilidad y aislamiento", () => {
       await connection.query("DELETE FROM public.invoice_payments WHERE company_id = $1", [companyId]);
       await connection.query("DELETE FROM public.invoice_history WHERE company_id = $1", [companyId]);
       await connection.query("DELETE FROM public.invoices WHERE company_id = $1", [companyId]);
+      // Con triggers activos otra vez, para que los ON DELETE CASCADE limpien el resto.
+      await connection.query("SET LOCAL session_replication_role = origin");
       await connection.query("DELETE FROM public.companies WHERE id = $1", [companyId]);
       await connection.query("DELETE FROM app_auth.users WHERE id = ANY($1::uuid[])", [[ownerId, clientUserId, outsiderId]]);
       await connection.query("COMMIT");
