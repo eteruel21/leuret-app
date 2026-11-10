@@ -4,6 +4,7 @@ import {
 import type {
   Budget,
   BudgetItem,
+  BudgetItemMaterial,
   BudgetItemType,
   BudgetSection,
   BudgetWithDetails
@@ -31,6 +32,7 @@ type CreateBudgetItemInput = {
   discountPercentage?: number;
   taxable?: boolean;
   notes?: string;
+  materials?: BudgetItemMaterial[];
 };
 
 export type ClientBudgetSummary =
@@ -377,7 +379,10 @@ export async function addBudgetItem(
             taxable:
               input.taxable ?? true,
             notes:
-              input.notes?.trim() || ""
+              input.notes?.trim() || "",
+            ...(input.materials && input.materials.length > 0
+              ? { materials: input.materials.slice(0, 50) }
+              : {})
           })
         }
       );

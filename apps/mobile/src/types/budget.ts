@@ -66,6 +66,14 @@ export type BudgetSection = {
   updated_at: string;
 };
 
+export type BudgetItemMaterial = {
+  name: string;
+  quantity: number;
+  unit: string;
+  /** Costo total estimado de la línea (no unitario). */
+  cost?: number;
+};
+
 export type BudgetItem = {
   id: string;
   company_id: string;
@@ -85,6 +93,7 @@ export type BudgetItem = {
   taxable: boolean;
   sort_order: number;
   notes: string | null;
+  materials?: BudgetItemMaterial[] | null;
   created_at: string;
   updated_at: string;
 };

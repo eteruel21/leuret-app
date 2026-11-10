@@ -18,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../../constants/theme";
 import { useCompany } from "../../contexts/CompanyContext";
 import { addBudgetItem } from "../../services/budget-service";
+import { compactMaterials, material } from "../../services/budget-materials";
 import { listCatalogItems } from "../../services/catalog-service";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
@@ -324,8 +325,9 @@ export default function MdfFurnitureScreen() {
 
     const quantity = Math.max(result.quantity, 1);
     const unitPrice = result.totalCost / quantity;
+    const c = (compute(withCatalogCosts(form, tracked)) ?? result);
     const unitCost = budgetUnitCost(
-      (compute(withCatalogCosts(form, tracked)) ?? result).totalCost,
+      c.totalCost,
       quantity, unitPrice);
     const response = await addBudgetItem({
       companyId: activeCompany.id,
@@ -337,6 +339,15 @@ export default function MdfFurnitureScreen() {
       unitCost,
       unitPrice,
       taxable: true,
+      materials: compactMaterials([
+        material("Tablero MDF", c.boardsToBuy, "und.", c.mdfCost),
+        material("Fondo", c.backBoardsToBuy, "und.", c.backCost),
+        material("Canto", c.edgeLinearMeters, "m", c.edgeCost),
+        material("Bisagra", c.hinges, "und.", c.hingeCost),
+        material("Riel", c.slidePairs, "par", c.slideCost),
+        material("Tirador", c.handles, "und.", c.handleCost),
+        material("Pata", c.legs, "und.", c.legCost),
+      ]),
       notes:
         `${result.boardsToBuy} tableros MDF · ` +
         `${result.backBoardsToBuy} fondos · ` +
