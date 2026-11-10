@@ -1,4 +1,4 @@
-import { Building2, Eye, Loader2, RefreshCw, UserRound, X } from "lucide-react";
+import { Building2, Eye, History, Loader2, PauseCircle, PlayCircle, RefreshCw, UserRound, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { PlatformUser } from "../admin-data";
@@ -11,6 +11,7 @@ import {
   loadAdminCompanies,
   loadAdminCompanyDetail,
   relativeDays,
+  updateAdminCompanyStatus,
   type AdminCompany,
   type AdminCompanyDetail,
   type CompanyFilter,
@@ -27,7 +28,7 @@ interface CompaniesTabProps {
 const FILTERS: Array<{ value: CompanyFilter; label: string }> = [
   { value: "all", label: "Todas" },
   { value: "active", label: "Activas" },
-  { value: "inactive", label: "Inactivas" },
+  { value: "inactive", label: "Suspendidas" },
   { value: "new", label: "Nuevas (30 días)" },
   { value: "idle", label: "Sin actividad (30 días)" },
 ];
@@ -180,7 +181,7 @@ export function CompaniesTab({ users, onViewProfile }: CompaniesTabProps) {
                   </td>
                   <td>
                     <span className={`badge ${company.active ? "badge-active" : "badge-suspended"}`}>
-                      {company.active ? "Activa" : "Inactiva"}
+                      {company.active ? "Activa" : "Suspendida"}
                     </span>
                     {isNew(company) && <span className="badge badge-pending companies-new-badge">Nueva</span>}
                   </td>
@@ -208,6 +209,9 @@ export function CompaniesTab({ users, onViewProfile }: CompaniesTabProps) {
           companyId={selectedId}
           users={users}
           onClose={() => setSelectedId(null)}
+          onStatusChanged={(id, active) =>
+            setCompanies((current) => current.map((company) => (company.id === id ? { ...company, active } : company)))
+          }
           onViewProfile={(user) => {
             setSelectedId(null);
             onViewProfile(user);
@@ -223,14 +227,41 @@ function CompanyDetailModal({
   users,
   onClose,
   onViewProfile,
+  onStatusChanged,
 }: {
   companyId: string;
   users: PlatformUser[];
   onClose: () => void;
   onViewProfile: (user: PlatformUser) => void;
+  onStatusChanged: (companyId: string, active: boolean) => void;
 }) {
   const [detail, setDetail] = useState<AdminCompanyDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [statusFormOpen, setStatusFormOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [savingStatus, setSavingStatus] = useState(false);
+
+  async function changeStatus(active: boolean) {
+    if (!detail) return;
+    if (!active && reason.trim().length < 5) {
+      setError("Indica el motivo de la suspensión (mínimo 5 caracteres).");
+      return;
+    }
+    setSavingStatus(true);
+    setError(null);
+    try {
+      await updateAdminCompanyStatus(detail.company.id, active, reason.trim());
+      const refreshed = await loadAdminCompanyDetail(detail.company.id);
+      setDetail(refreshed);
+      onStatusChanged(detail.company.id, active);
+      setStatusFormOpen(false);
+      setReason("");
+    } catch (statusError) {
+      setError(errorMessage(statusError));
+    } finally {
+      setSavingStatus(false);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -257,7 +288,7 @@ function CompanyDetailModal({
         <div className="modal-header">
           <div>
             <h2 id="company-detail-title">{company?.name ?? "Empresa"}</h2>
-            <p>{company ? `${company.active ? "Activa" : "Inactiva"} · registrada el ${formatDate(company.createdAt)}` : "Cargando..."}</p>
+            <p>{company ? `${company.active ? "Activa" : "Suspendida"} · registrada el ${formatDate(company.createdAt)}` : "Cargando..."}</p>
           </div>
           <button className="icon-button" onClick={onClose} aria-label="Cerrar">
             <X size={19} />
@@ -288,6 +319,73 @@ function CompanyDetailModal({
                   <Value label="Dirección" value={company.address} />
                   <Value label="Moneda / zona" value={`${company.currencyCode} · ${company.timezone ?? "—"}`} />
                 </div>
+              </section>
+
+              <section className="review-section">
+                <div className="profile-section-heading">
+                  <History size={18} />
+                  <h3>Estado de la cuenta</h3>
+                </div>
+                <div className="company-status-row">
+                  <span className={`badge ${company.active ? "badge-active" : "badge-suspended"}`}>
+                    {company.active ? "Activa" : "Suspendida"}
+                  </span>
+                  <span className="company-status-help">
+                    {company.active
+                      ? "Al suspenderla, su equipo deja de poder usar la empresa en la app hasta que la reactives."
+                      : "Su equipo no puede operar. Al reactivarla recupera el acceso con los mismos datos."}
+                  </span>
+                  {company.active ? (
+                    !statusFormOpen && (
+                      <button className="button button-danger" onClick={() => setStatusFormOpen(true)}>
+                        <PauseCircle size={16} />
+                        Suspender
+                      </button>
+                    )
+                  ) : (
+                    <button className="button button-primary" disabled={savingStatus} onClick={() => void changeStatus(true)}>
+                      {savingStatus ? <Loader2 className="spin" size={16} /> : <PlayCircle size={16} />}
+                      Reactivar
+                    </button>
+                  )}
+                </div>
+
+                {company.active && statusFormOpen && (
+                  <div className="company-status-form">
+                    <label className="field">
+                      <span>Motivo de la suspensión (queda en el historial)</span>
+                      <textarea
+                        value={reason}
+                        onChange={(event) => setReason(event.target.value)}
+                        maxLength={500}
+                        rows={3}
+                        placeholder="Ej.: Falta de pago de la suscripción desde octubre."
+                      />
+                    </label>
+                    <div className="actions">
+                      <button className="button button-secondary" onClick={() => setStatusFormOpen(false)} disabled={savingStatus}>
+                        Cancelar
+                      </button>
+                      <button className="button button-danger" onClick={() => void changeStatus(false)} disabled={savingStatus}>
+                        {savingStatus ? <Loader2 className="spin" size={16} /> : <PauseCircle size={16} />}
+                        Confirmar suspensión
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {detail.statusHistory.length > 0 && (
+                  <ul className="company-status-history">
+                    {detail.statusHistory.map((entry) => (
+                      <li key={entry.id}>
+                        <strong>{entry.action === "COMPANY_SUSPENDED" ? "Suspendida" : "Reactivada"}</strong>
+                        {" por "}
+                        {entry.actorName ?? "un administrador"} · {formatDate(entry.createdAt)}
+                        {entry.reason ? <small>{entry.reason}</small> : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </section>
 
               <section className="review-section">

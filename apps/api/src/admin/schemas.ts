@@ -10,6 +10,16 @@ export const companyParamsSchema = z.object({
   companyId: uuidSchema
 });
 
+export const companyStatusSchema = z
+  .object({
+    active: z.boolean(),
+    reason: z.string().trim().max(500).default("")
+  })
+  .refine((value) => value.active || value.reason.length >= 5, {
+    message: "Indica el motivo de la suspensión (mínimo 5 caracteres).",
+    path: ["reason"]
+  });
+
 export const userSchema = z.object({
   id: z.string().optional(),
   fullName: z.string().trim().max(150),

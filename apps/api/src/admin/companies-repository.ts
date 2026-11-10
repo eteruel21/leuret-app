@@ -120,3 +120,60 @@ export async function findAdminCompanyDetailRepo(userId: string, companyId: stri
     };
   });
 }
+
+/** Suspende o reactiva una empresa y deja el motivo en su historial. */
+export async function updateAdminCompanyStatusRepo(
+  userId: string,
+  companyId: string,
+  active: boolean,
+  reason: string
+) {
+  return withUserTransaction(userId, async (client) => {
+    const updated = await client.query(
+      `
+        UPDATE public.companies
+        SET active = $2, updated_at = now()
+        WHERE id = $1
+        RETURNING id, name, active
+      `,
+      [companyId, active]
+    );
+
+    const company = updated.rows[0];
+    if (!company) return null;
+
+    await client.query(
+      `
+        INSERT INTO public.admin_audit_logs (company_id, user_id, action, target_type, target_id, metadata)
+        VALUES ($1, app.current_user_id(), $2, 'company', $1, $3)
+      `,
+      [companyId, active ? "COMPANY_REACTIVATED" : "COMPANY_SUSPENDED", JSON.stringify({ reason })]
+    );
+
+    return company;
+  });
+}
+
+export async function findAdminCompanyStatusHistoryRepo(userId: string, companyId: string) {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query(
+      `
+        SELECT
+          log.id,
+          log.action,
+          log.metadata,
+          log.created_at,
+          COALESCE(NULLIF(trim(profile.full_name), ''), auth_user.email) AS actor_name
+        FROM public.admin_audit_logs AS log
+        LEFT JOIN app_auth.users AS auth_user ON auth_user.id = log.user_id
+        LEFT JOIN public.profiles AS profile ON profile.id = log.user_id
+        WHERE log.company_id = $1
+          AND log.action IN ('COMPANY_SUSPENDED', 'COMPANY_REACTIVATED')
+        ORDER BY log.created_at DESC
+        LIMIT 20
+      `,
+      [companyId]
+    );
+    return result.rows;
+  });
+}

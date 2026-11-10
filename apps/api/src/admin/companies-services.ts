@@ -1,4 +1,9 @@
-import { findAdminCompanyDetailRepo, listAdminCompaniesRepo } from "./companies-repository.js";
+import {
+  findAdminCompanyDetailRepo,
+  findAdminCompanyStatusHistoryRepo,
+  listAdminCompaniesRepo,
+  updateAdminCompanyStatusRepo
+} from "./companies-repository.js";
 
 type Row = Record<string, any>;
 
@@ -31,8 +36,21 @@ export async function listAdminCompaniesService(userId: string) {
   return rows.map(mapAdminCompanyRow);
 }
 
+export async function updateAdminCompanyStatusService(
+  userId: string,
+  companyId: string,
+  active: boolean,
+  reason: string
+) {
+  const company = await updateAdminCompanyStatusRepo(userId, companyId, active, reason.trim());
+  return company ? { id: String(company.id), name: String(company.name), active: Boolean(company.active) } : null;
+}
+
 export async function getAdminCompanyDetailService(userId: string, companyId: string) {
-  const detail = await findAdminCompanyDetailRepo(userId, companyId);
+  const [detail, statusHistory] = await Promise.all([
+    findAdminCompanyDetailRepo(userId, companyId),
+    findAdminCompanyStatusHistoryRepo(userId, companyId)
+  ]);
   if (!detail) return null;
 
   const { company } = detail;
@@ -61,6 +79,13 @@ export async function getAdminCompanyDetailService(userId: string, companyId: st
       fullName: member.full_name ?? null,
       phone: member.phone ?? null,
       profileActive: member.profile_active ?? null
+    })),
+    statusHistory: statusHistory.map((entry: Row) => ({
+      id: String(entry.id),
+      action: String(entry.action),
+      reason: typeof entry.metadata?.reason === "string" ? entry.metadata.reason : null,
+      actorName: entry.actor_name ?? null,
+      createdAt: toIso(entry.created_at)
     })),
     recentProjects: detail.recentProjects.map((project: Row) => ({
       id: String(project.id),
