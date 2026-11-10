@@ -64,41 +64,36 @@ export async function fetchCompanyActivities(
   companyId: string,
   filters?: { date?: string; projectId?: string; clientId?: string }
 ): Promise<Appointment[]> {
-  try {
-    let url = `/companies/${companyId}/activities`;
-    const params = new URLSearchParams();
-    if (filters?.date) params.append("date", filters.date);
-    if (filters?.projectId) params.append("projectId", filters.projectId);
-    if (filters?.clientId) params.append("clientId", filters.clientId);
-    const queryString = params.toString();
-    if (queryString) url += `?${queryString}`;
+  let url = `/companies/${companyId}/activities`;
+  const params = new URLSearchParams();
+  if (filters?.date) params.append("date", filters.date);
+  if (filters?.projectId) params.append("projectId", filters.projectId);
+  if (filters?.clientId) params.append("clientId", filters.clientId);
+  const queryString = params.toString();
+  if (queryString) url += `?${queryString}`;
 
-    const res = await authenticatedRequest<{ activities: ServerActivity[] }>(url);
-    const cached = (await loadLocalData<Appointment[]>(companyAppointmentsKey(companyId))) || [];
-    const notificationById = new Map(cached.map((item) => [item.id, item.notificationId]));
-    const items = res.activities.map((activity) => ({
-      ...mapServerActivityToAppointment(activity),
-      notificationId: notificationById.get(activity.id) ?? ""
-    }));
-
-    if (!filters || (!filters.date && !filters.projectId && !filters.clientId)) {
-      await saveLocalData(companyAppointmentsKey(companyId), items);
-    }
-
-    return items;
-  } catch {
-    const cached = await loadLocalData<Appointment[]>(companyAppointmentsKey(companyId));
-    let items = Array.isArray(cached) ? cached : [];
-
-    if (filters?.date) {
-      items = items.filter((a) => a.date === filters.date);
-    }
-    if (filters?.clientId) {
-      items = items.filter((a) => a.clientId === filters.clientId);
-    }
-
-    return items;
+  // Supabase, a través de la API, es la fuente oficial de actividades.
+  // Nunca se muestra una copia antigua como una lectura exitosa cuando la API falla.
+  const res = await authenticatedRequest<{ activities: ServerActivity[] }>(url);
+  if (!Array.isArray(res.activities)) {
+    throw new Error("La API devolvió una respuesta de agenda inválida.");
   }
+
+  // La copia local solo conserva identificadores de recordatorios del dispositivo.
+  const cached = (await loadLocalData<Appointment[]>(companyAppointmentsKey(companyId))) || [];
+  const notificationById = new Map(
+    (Array.isArray(cached) ? cached : []).map((item) => [item.id, item.notificationId])
+  );
+  const items = res.activities.map((activity) => ({
+    ...mapServerActivityToAppointment(activity),
+    notificationId: notificationById.get(activity.id) ?? ""
+  }));
+
+  if (!filters || (!filters.date && !filters.projectId && !filters.clientId)) {
+    await saveLocalData(companyAppointmentsKey(companyId), items);
+  }
+
+  return items;
 }
 
 export async function createRemoteActivity(
