@@ -15,6 +15,7 @@ type ClaimedReminder = {
   due_date: string | Date;
   balance_due: string | number;
   currency_code: string | null;
+  payment_instructions: string | null;
 };
 
 export function formatReminderAmount(value: string | number, currency: string | null): string {
@@ -58,7 +59,8 @@ export async function processInvoicePaymentReminders(options: { limit?: number }
       companyPhone: reminder.company_phone,
       invoiceNumber: reminder.invoice_number,
       dueDate: formatReminderDate(reminder.due_date),
-      amount: formatReminderAmount(reminder.balance_due, reminder.currency_code)
+      amount: formatReminderAmount(reminder.balance_due, reminder.currency_code),
+      paymentInstructions: reminder.payment_instructions
     }).catch(() => ({ sent: false as const, reason: "delivery_failed" as const }));
 
     if (delivery.sent) {

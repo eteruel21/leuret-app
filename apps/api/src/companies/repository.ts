@@ -26,6 +26,7 @@ export async function findUserCompanyMembershipsRepo(userId: string) {
           'currency_code', company.currency_code,
           'tax_rate', company.tax_rate,
           'payment_reminders_enabled', company.payment_reminders_enabled,
+          'payment_instructions', company.payment_instructions,
           'timezone', company.timezone,
           'quotation_prefix', company.quotation_prefix,
           'invoice_prefix', company.invoice_prefix,
@@ -83,6 +84,7 @@ export async function updateCompanyBillingRepo(userId: string, companyId: string
           invoice_prefix = $7,
           tax_rate = $8,
           payment_reminders_enabled = COALESCE($10, payment_reminders_enabled),
+          payment_instructions = CASE WHEN $11::boolean THEN NULLIF($12::text, '') ELSE payment_instructions END,
           updated_at = now()
         WHERE id = $9
           AND EXISTS (
@@ -105,7 +107,9 @@ export async function updateCompanyBillingRepo(userId: string, companyId: string
         input.invoicePrefix || "FAC",
         input.taxRate,
         companyId,
-        input.paymentRemindersEnabled ?? null
+        input.paymentRemindersEnabled ?? null,
+        input.paymentInstructions !== undefined,
+        input.paymentInstructions ?? null
       ]
     );
     return result.rows[0] ?? null;

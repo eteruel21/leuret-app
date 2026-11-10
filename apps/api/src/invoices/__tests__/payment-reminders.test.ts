@@ -28,6 +28,7 @@ const claimedRow = (overrides: Record<string, unknown> = {}) => ({
   due_date: "2026-11-05",
   balance_due: "700.00",
   currency_code: "USD",
+  payment_instructions: "Yappy: 6000-0000",
   ...overrides
 });
 
@@ -43,6 +44,7 @@ test("recordatorios: envía cada reclamo y cuenta los enviados", async () => {
   assert.equal(email.to, "cliente@sol.com");
   assert.equal(email.invoiceNumber, "F-1");
   assert.ok(email.amount.includes("700.00"));
+  assert.equal(email.paymentInstructions, "Yappy: 6000-0000");
 });
 
 test("recordatorios: si el correo falla, libera el reclamo para reintentar", async () => {

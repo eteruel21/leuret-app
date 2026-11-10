@@ -8,7 +8,8 @@ import {
   sendVerificationEmail,
   sendPasswordResetEmail,
   buildInvitationLinks,
-  sendCompanyInvitationEmail
+  sendCompanyInvitationEmail,
+  sendInvoiceReminderEmail
 } from "../email.js";
 
 type MutableEmailEnvironment = {
@@ -249,4 +250,25 @@ test("email de invitación: sin Resend configurado no se envía", async () => {
   });
   assert.deepEqual(result, { sent: false, reason: "not_configured" });
   assert.equal(fetchMock.mock.calls.length, 0);
+});
+
+test("recordatorio de cobro: incluye las instrucciones de pago escapadas", async () => {
+  configureResend();
+  fetchMock.mockResolvedValueOnce({ ok: true });
+
+  await sendInvoiceReminderEmail({
+    to: "cliente@example.test",
+    kind: "overdue",
+    companyName: "Obras Sol",
+    invoiceNumber: "F-1",
+    dueDate: "5 de noviembre de 2026",
+    amount: "US$700.00",
+    paymentInstructions: "Yappy: 6000-0000\n<b>Banco</b> cta. 123"
+  });
+
+  const [, request] = fetchMock.mock.calls[0] as [string, { body: string }];
+  const payload = JSON.parse(request.body) as { html: string; text: string };
+  assert.ok(payload.html.includes("Cómo pagar"));
+  assert.ok(payload.html.includes("&lt;b&gt;Banco&lt;/b&gt;"));
+  assert.ok(payload.text.includes("Yappy: 6000-0000"));
 });
