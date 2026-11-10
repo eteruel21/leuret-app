@@ -12,6 +12,7 @@ import {
   listMailThreads,
   readMailMessage,
   replyToMailMessage,
+  getMailAttachmentDownload,
   MailProviderError
 } from "../mail-service.js";
 
@@ -61,6 +62,36 @@ describe("API Resend Inboxes - aislamiento de bandejas", () => {
       text: "Confirmamos recepción.",
       reply_all: false
     });
+  });
+
+
+  test("el enlace de adjunto se emite solo tras verificar su pertenencia al correo", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      calls.push(url);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => calls.length === 1
+          ? { id: EMAIL, direction: "inbound", attachments: [{ id: KEY, filename: "evidencia.pdf" }] }
+          : { download_url: "https://secure.example.com/signed-attachment", expires_at: "2026-11-10T18:00:00Z" }
+      };
+    }));
+    const response = await getMailAttachmentDownload("privacy", THREAD, EMAIL, KEY);
+    expect(response.filename).toBe("evidencia.pdf");
+    expect(response.downloadUrl).toBe("https://secure.example.com/signed-attachment");
+    expect(calls[1]).toBe(`https://api.resend.com/emails/receiving/${EMAIL}/attachments/${KEY}`);
+  });
+
+  test("bloquea adjuntos que no pertenecen al correo, sin solicitar URL", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: EMAIL, attachments: [] })
+    }));
+    await expect(getMailAttachmentDownload("legal", THREAD, EMAIL, KEY))
+      .rejects.toBeInstanceOf(MailProviderError);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   test("falla cerrado si no existe la clave de acceso administrativo", async () => {
