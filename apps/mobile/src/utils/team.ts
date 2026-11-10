@@ -136,6 +136,10 @@ export function isValidInvitationCode(code: string): boolean {
 }
 
 const AUDIT_ACTIONS: Record<string, string> = {
+  COMPANY_CREATED: "creó la empresa",
+  INVITATION_ACCEPTED: "se unió con una invitación",
+  COMPANY_SUSPENDED: "suspendió la empresa",
+  COMPANY_REACTIVATED: "reactivó la empresa",
   MEMBER_ROLE_UPDATED: "cambió el rol de un miembro",
   MEMBER_ACTIVATED: "reactivó a un miembro",
   MEMBER_DEACTIVATED: "desactivó a un miembro",
