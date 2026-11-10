@@ -155,3 +155,53 @@ export async function replyToMailMessage(
     { method: "POST", body: { text, reply_all: false }, idempotencyKey }
   );
 }
+
+export async function getMailAttachmentDownload(
+  mailbox: MailboxName,
+  threadId: string,
+  emailId: string,
+  attachmentId: string
+): Promise<{ filename: string; downloadUrl: string; expiresAt?: string }> {
+  // Verify the message belongs to the server-selected inbox and the attachment
+  // is actually listed on that message before asking Resend for a signed URL.
+  const message = await readMailMessage(mailbox, threadId, emailId);
+  if (!message || typeof message !== "object") {
+    throw new MailProviderError("No se encontró el correo.", 404);
+  }
+  const typed = message as {
+    direction?: string;
+    attachments?: Array<{ id?: string; filename?: string }>;
+  };
+  const match = typed.attachments?.find((attachment) => attachment.id === attachmentId);
+  if (!match) {
+    throw new MailProviderError("El adjunto no pertenece al correo seleccionado.", 404);
+  }
+
+  const path = typed.direction === "outbound"
+    ? `/emails/${emailId}/attachments/${attachmentId}`
+    : `/emails/receiving/${emailId}/attachments/${attachmentId}`;
+  const attachment = await requestResend(mailbox, path) as {
+    download_url?: unknown;
+    expires_at?: unknown;
+  };
+  if (typeof attachment.download_url !== "string") {
+    throw new MailProviderError("El proveedor no facilitó el enlace de descarga.");
+  }
+
+  let downloadUrl: URL;
+  try {
+    downloadUrl = new URL(attachment.download_url);
+  } catch {
+    throw new MailProviderError("El proveedor devolvió un enlace de descarga no válido.");
+  }
+  if (downloadUrl.protocol !== "https:" || downloadUrl.username || downloadUrl.password) {
+    throw new MailProviderError("El enlace de descarga no es seguro.");
+  }
+  return {
+    filename: match.filename || "adjunto",
+    downloadUrl: downloadUrl.toString(),
+    ...(typeof attachment.expires_at === "string"
+      ? { expiresAt: attachment.expires_at }
+      : {})
+  };
+}
