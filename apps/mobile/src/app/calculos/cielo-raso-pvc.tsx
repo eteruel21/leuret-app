@@ -14,6 +14,10 @@ import { addBudgetItem } from "../../services/budget-service";
 import { listCatalogItems } from "../../services/catalog-service";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
+  budgetUnitCost, rankCalculatorCatalogItems, trackCatalogPrice, withCatalogCosts,
+  type TrackedPrice,
+} from "../../services/calculators/catalog-pricing";
+import {
   calculatePvcCeiling, type PvcCeilingResult,
 } from "../../services/calculators/cielo-raso-pvc";
 import { formatDecimal, formatMoney } from "../../utils/format";
@@ -67,6 +71,8 @@ export default function PvcCeilingScreen() {
   const [target, setTarget] = useState<Target | null>(null);
   const [selected, setSelected] =
     useState<Partial<Record<Target, string>>>({});
+  const [tracked, setTracked] =
+    useState<Partial<Record<keyof Form, TrackedPrice>>>({});
 
   const calculatedArea = number(form.directArea) ||
     number(form.length) * number(form.width);
@@ -120,16 +126,23 @@ export default function PvcCeilingScreen() {
       support: "supportPrice", carrier: "carrierPrice",
       hanger: "hangerPrice", screw: "screwPrice", labor: "laborPrice",
     };
-    const price = item.sale_price > 0 ? item.sale_price : item.unit_cost;
-    update(fields[target], String(price));
+    const priced = trackCatalogPrice(item);
+    if (priced.price <= 0) {
+      Alert.alert("Precio pendiente",
+        "Este concepto aún no tiene precio. Escríbelo manualmente en la calculadora.");
+      setTarget(null);
+      return;
+    }
+    update(fields[target], String(priced.price));
+    setTracked((current) => ({ ...current, [fields[target]]: priced }));
     setSelected((current) => ({ ...current, [target]: item.name }));
     setTarget(null);
   }
 
-  function calculate() {
+  function compute(source: Form): PvcCeilingResult | null {
     if (!calculatedArea || !calculatedPerimeter) {
       setError("Introduce largo y ancho, o escribe el área y perímetro directos.");
-      return;
+      return null;
     }
     const positive: [keyof Form, string][] = [
       ["panelWidth", "ancho de la lámina"], ["panelLength", "largo de la lámina"],
@@ -139,28 +152,34 @@ export default function PvcCeilingScreen() {
       ["hangerSpacing", "separación de suspensiones"],
       ["screwsPerBox", "tornillos por caja"],
     ];
-    const invalid = positive.find(([field]) => number(form[field]) <= 0);
-    if (invalid) { setError(`Revisa el ${invalid[1]}.`); return; }
+    const invalid = positive.find(([field]) => number(source[field]) <= 0);
+    if (invalid) { setError(`Revisa el ${invalid[1]}.`); return null; }
 
-    setResult(calculatePvcCeiling({
+    return calculatePvcCeiling({
       area: calculatedArea, perimeter: calculatedPerimeter,
-      panelWidth: number(form.panelWidth), panelLength: number(form.panelLength),
-      wastePercentage: number(form.waste),
-      supportSpacing: number(form.supportSpacing),
-      supportPieceLength: number(form.supportLength),
-      carrierSpacing: number(form.carrierSpacing),
-      carrierPieceLength: number(form.carrierLength),
-      trackPieceLength: number(form.trackLength),
-      hangerSpacing: number(form.hangerSpacing),
-      screwsPerSquareMeter: number(form.screwsPerM2),
-      screwsPerBox: number(form.screwsPerBox),
+      panelWidth: number(source.panelWidth), panelLength: number(source.panelLength),
+      wastePercentage: number(source.waste),
+      supportSpacing: number(source.supportSpacing),
+      supportPieceLength: number(source.supportLength),
+      carrierSpacing: number(source.carrierSpacing),
+      carrierPieceLength: number(source.carrierLength),
+      trackPieceLength: number(source.trackLength),
+      hangerSpacing: number(source.hangerSpacing),
+      screwsPerSquareMeter: number(source.screwsPerM2),
+      screwsPerBox: number(source.screwsPerBox),
     }, {
-      panelPiece: number(form.panelPrice), trackPiece: number(form.trackPrice),
-      supportPiece: number(form.supportPrice),
-      carrierPiece: number(form.carrierPrice),
-      hangerUnit: number(form.hangerPrice), screwBox: number(form.screwPrice),
-      laborSquareMeter: number(form.laborPrice),
-    }));
+      panelPiece: number(source.panelPrice), trackPiece: number(source.trackPrice),
+      supportPiece: number(source.supportPrice),
+      carrierPiece: number(source.carrierPrice),
+      hangerUnit: number(source.hangerPrice), screwBox: number(source.screwPrice),
+      laborSquareMeter: number(source.laborPrice),
+    });
+  }
+
+  function calculate() {
+    const next = compute(form);
+    if (!next) return;
+    setResult(next);
     setError(""); setSuccess("");
   }
 
@@ -176,10 +195,13 @@ export default function PvcCeilingScreen() {
     }
     const n = (value: number) => formatDecimal(value, 0, currency);
     const unitPrice = result.totalCost / result.netArea;
+    const unitCost = budgetUnitCost(
+      (compute(withCatalogCosts(form, tracked)) ?? result).totalCost,
+      result.netArea, unitPrice);
     const response = await addBudgetItem({
       companyId: activeCompany.id, budgetId, itemType: "service",
       description: "Cielo raso PVC", unitName: "m²",
-      quantity: result.netArea, unitCost: unitPrice, unitPrice, taxable: true,
+      quantity: result.netArea, unitCost, unitPrice, taxable: true,
       notes: `${n(result.panelsToBuy)} láminas PVC · ${n(result.trackPieces)} tracks · ` +
         `${n(result.supportPieces)} studs · ${n(result.carrierPieces)} cargadores · ` +
         `${n(result.hangers)} suspensiones · ${n(result.screwBoxes)} cajas de tornillos`,
@@ -327,19 +349,26 @@ function CatalogButton({ label, value, onPress }: {
     <Ionicons name="chevron-forward" size={20} color={colors.primary} /></Pressable>;
 }
 
+
+const PICKER_KEYWORDS: Record<Target, RegExp> = {
+  panel: /pvc|panel|lamina|cielo/,
+  track: /angulo|perimetral|track|canal|moldura/,
+  support: /perfil|omega|soporte|stud/,
+  carrier: /portante|carrier|canal|perfil/,
+  hanger: /colgante|alambre|tensor|varilla roscada/,
+  screw: /tornillo|clavo|fulminante|ancla/,
+  labor: /cielo|gyps|cimbr|instalador/,
+};
+
 function CatalogPicker({ visible, target, items, loading, currency, onClose, onSelect }: {
   visible: boolean; target: Target | null; items: CatalogItemWithDetails[];
   loading: boolean; currency?: string; onClose: () => void;
   onSelect: (item: CatalogItemWithDetails) => void;
 }) {
   const [search, setSearch] = useState("");
-  const filtered = useMemo(() => items.filter((item) => {
-    const valid = target === "labor" ? item.item_type === "labor" ||
-      item.item_type === "service" : item.item_type === "material";
-    const query = search.trim().toLowerCase();
-    return valid && (!query || item.name.toLowerCase().includes(query) ||
-      (item.category?.name.toLowerCase().includes(query) ?? false));
-  }), [items, search, target]);
+  const filtered = useMemo(() => target ? rankCalculatorCatalogItems(items,
+    target === "labor" ? "labor" : "material", PICKER_KEYWORDS[target], search) : [],
+  [items, search, target]);
   return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet"
     onRequestClose={onClose}><SafeAreaView style={styles.modal}>
       <View style={styles.modalHeader}><Pressable onPress={onClose}>
@@ -349,6 +378,7 @@ function CatalogPicker({ visible, target, items, loading, currency, onClose, onS
         placeholder="Buscar por nombre o categoría" style={styles.search} />
         {loading ? <ActivityIndicator size="large" color={colors.primary} /> :
           <FlatList data={filtered} keyExtractor={(item) => item.id}
+            ListEmptyComponent={<Text style={styles.itemMeta}>No hay conceptos de este tipo en el catálogo. Cierra y escribe el precio manualmente.</Text>}
             renderItem={({ item }) => {
               const price = item.sale_price > 0 ? item.sale_price : item.unit_cost;
               return <Pressable onPress={() => onSelect(item)} style={styles.catalogItem}>

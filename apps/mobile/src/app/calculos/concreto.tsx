@@ -27,6 +27,12 @@ import { useFormulaParameters } from "../../hooks/useFormulaParameters";
 import { addBudgetItem } from "../../services/budget-service";
 import { listCatalogItems } from "../../services/catalog-service";
 import { filterCalculatorCatalogItems } from "../../services/calculators/catalog-picker";
+import {
+  budgetUnitCost,
+  trackCatalogPrice,
+  withCatalogCosts,
+  type TrackedPrice,
+} from "../../services/calculators/catalog-pricing";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
   calculateConcrete,
@@ -278,6 +284,8 @@ function ConcreteCalculatorForm({
     useState<CatalogPriceTarget | null>(null);
   const [selectedCatalogNames, setSelectedCatalogNames] =
     useState<Partial<Record<CatalogPriceTarget, string>>>({});
+  const [trackedPrices, setTrackedPrices] =
+    useState<Partial<Record<keyof FormState, TrackedPrice>>>({});
 
   useEffect(() => {
     const companyId = activeCompany?.id;
@@ -438,15 +446,22 @@ function ConcreteCalculatorForm({
     setError("");
   }
 
+  function setCatalogPrice(
+    field: keyof FormState,
+    priced: TrackedPrice,
+    priceText: string,
+  ) {
+    updateField(field, priceText);
+    setTrackedPrices((current) => ({ ...current, [field]: priced }));
+  }
+
   function handleCatalogItemSelected(
     item: CatalogItemWithDetails,
   ) {
     if (!catalogTarget) return;
 
-    const price =
-      item.sale_price > 0
-        ? item.sale_price
-        : item.unit_cost;
+    const priced = trackCatalogPrice(item);
+    const price = priced.price;
     const hasPrice = Number.isFinite(price) && price > 0;
     const priceText = String(price);
     if (!hasPrice) {
@@ -471,34 +486,111 @@ function ConcreteCalculatorForm({
     }));
 
     if (catalogTarget === "cement") {
-      if (hasPrice) updateField("cementPrice", priceText);
+      if (hasPrice) setCatalogPrice("cementPrice", priced, priceText);
     }
 
     if (catalogTarget === "sand") {
       if (isCubicMeter) {
         setSandPriceMode("cubicMeter");
-        if (hasPrice) updateField("sandCubicMeterPrice", priceText);
+        if (hasPrice) setCatalogPrice("sandCubicMeterPrice", priced, priceText);
       } else {
         setSandPriceMode("bag");
-        if (hasPrice) updateField("sandBagPrice", priceText);
+        if (hasPrice) setCatalogPrice("sandBagPrice", priced, priceText);
       }
     }
 
     if (catalogTarget === "gravel") {
       if (isCubicMeter) {
         setGravelPriceMode("cubicMeter");
-        if (hasPrice) updateField("gravelCubicMeterPrice", priceText);
+        if (hasPrice) setCatalogPrice("gravelCubicMeterPrice", priced, priceText);
       } else {
         setGravelPriceMode("bag");
-        if (hasPrice) updateField("gravelBagPrice", priceText);
+        if (hasPrice) setCatalogPrice("gravelBagPrice", priced, priceText);
       }
     }
 
     if (catalogTarget === "labor") {
-      if (hasPrice) updateField("laborPrice", priceText);
+      if (hasPrice) setCatalogPrice("laborPrice", priced, priceText);
     }
 
     setCatalogTarget(null);
+  }
+
+  function computeConcrete(source: FormState) {
+    const geometry = dimensions
+      ? {
+          length: parseNumber(source.length),
+          width: parseNumber(source.width),
+          thickness: parseNumber(source.thickness),
+        }
+      : { netVolume: parseNumber(source.netVolume) };
+
+    const cementRatio = parseNumber(source.cementRatio);
+    const sandRatio = parseNumber(source.sandRatio);
+    const gravelRatio = parseNumber(source.gravelRatio);
+
+    const wastePercentage = parseNumber(source.wastePercentage);
+    return calculateConcrete(
+      {
+        ...geometry,
+        wastePercentage,
+
+        mixCement: cementRatio,
+        mixSand: sandRatio,
+        mixGravel: gravelRatio,
+
+        cementBagWeight: parseNumber(
+          source.cementBagWeight,
+        ),
+        sandBagVolume: parseNumber(
+          source.sandBagVolume,
+        ),
+        gravelBagVolume: parseNumber(
+          source.gravelBagVolume,
+        ),
+
+        sandPriceMode,
+        gravelPriceMode,
+        cementDensityKgM3:
+          getFormulaNumber(
+            formulaParameters,
+            "cement_density_kg_m3",
+            1440,
+          ),
+        dryVolumeFactor:
+          getFormulaNumber(
+            formulaParameters,
+            "dry_volume_factor",
+            1.54,
+          ),
+        defaultAggregateBagVolume:
+          getFormulaNumber(
+            formulaParameters,
+            "aggregate_bag_volume_m3",
+            0.0142,
+          ),
+      },
+      {
+        cementBag: parseNumber(source.cementPrice),
+
+        sandCubicMeter: parseNumber(
+          source.sandCubicMeterPrice,
+        ),
+        sandBag: parseNumber(source.sandBagPrice),
+
+        gravelCubicMeter: parseNumber(
+          source.gravelCubicMeterPrice,
+        ),
+        gravelBag: parseNumber(
+          source.gravelBagPrice,
+        ),
+
+        laborCubicMeter: parseNumber(
+          source.laborPrice,
+        ),
+      },
+    );
+
   }
 
   function handleCalculate() {
@@ -558,66 +650,7 @@ function ConcreteCalculatorForm({
       return;
     }
 
-    const calculatedResult = calculateConcrete(
-      {
-        ...geometry,
-        wastePercentage,
-
-        mixCement: cementRatio,
-        mixSand: sandRatio,
-        mixGravel: gravelRatio,
-
-        cementBagWeight: parseNumber(
-          form.cementBagWeight,
-        ),
-        sandBagVolume: parseNumber(
-          form.sandBagVolume,
-        ),
-        gravelBagVolume: parseNumber(
-          form.gravelBagVolume,
-        ),
-
-        sandPriceMode,
-        gravelPriceMode,
-        cementDensityKgM3:
-          getFormulaNumber(
-            formulaParameters,
-            "cement_density_kg_m3",
-            1440,
-          ),
-        dryVolumeFactor:
-          getFormulaNumber(
-            formulaParameters,
-            "dry_volume_factor",
-            1.54,
-          ),
-        defaultAggregateBagVolume:
-          getFormulaNumber(
-            formulaParameters,
-            "aggregate_bag_volume_m3",
-            0.0142,
-          ),
-      },
-      {
-        cementBag: parseNumber(form.cementPrice),
-
-        sandCubicMeter: parseNumber(
-          form.sandCubicMeterPrice,
-        ),
-        sandBag: parseNumber(form.sandBagPrice),
-
-        gravelCubicMeter: parseNumber(
-          form.gravelCubicMeterPrice,
-        ),
-        gravelBag: parseNumber(
-          form.gravelBagPrice,
-        ),
-
-        laborCubicMeter: parseNumber(
-          form.laborPrice,
-        ),
-      },
-    );
+    const calculatedResult = computeConcrete(form);
 
     setResult(calculatedResult);
     setError("");
@@ -647,6 +680,11 @@ function ConcreteCalculatorForm({
       result.volumeWithWaste > 0
         ? result.totalCost / result.volumeWithWaste
         : 0;
+    const unitCost = budgetUnitCost(
+      computeConcrete(withCatalogCosts(form, trackedPrices)).totalCost,
+      result.volumeWithWaste,
+      unitPrice,
+    );
 
     const details = [
       `${formatNumber(result.cementBags, 2)} sacos de cemento`,
@@ -661,7 +699,7 @@ function ConcreteCalculatorForm({
       description: `Concreto · ${concreteUse.label} · mezcla ${form.cementRatio}:${form.sandRatio}:${form.gravelRatio}`,
       unitName: "m³",
       quantity: result.volumeWithWaste,
-      unitCost: unitPrice,
+      unitCost,
       unitPrice,
       taxable: true,
       notes: details,

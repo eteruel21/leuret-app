@@ -25,6 +25,12 @@ import { useCompany } from "../../contexts/CompanyContext";
 import { addBudgetItem } from "../../services/budget-service";
 import { listCatalogItems } from "../../services/catalog-service";
 import { filterCalculatorCatalogItems } from "../../services/calculators/catalog-picker";
+import {
+  budgetUnitCost,
+  trackCatalogPrice,
+  withCatalogCosts,
+  type TrackedPrice,
+} from "../../services/calculators/catalog-pricing";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
   calculateMasonry,
@@ -128,6 +134,8 @@ export default function MasonryCalculatorScreen() {
     useState<CatalogTarget | null>(null);
   const [selectedCatalogNames, setSelectedCatalogNames] =
     useState<Partial<Record<CatalogTarget, string>>>({});
+  const [trackedPrices, setTrackedPrices] =
+    useState<Partial<Record<keyof FormState, TrackedPrice>>>({});
 
   useEffect(() => {
     const companyId = activeCompany?.id;
@@ -228,8 +236,8 @@ export default function MasonryCalculatorScreen() {
   function selectCatalogItem(item: CatalogItemWithDetails) {
     if (!catalogTarget) return;
 
-    const price =
-      item.sale_price > 0 ? item.sale_price : item.unit_cost;
+    const priced = trackCatalogPrice(item);
+    const price = priced.price;
     const fieldByTarget: Record<
       CatalogTarget,
       keyof FormState
@@ -242,7 +250,9 @@ export default function MasonryCalculatorScreen() {
     };
 
     if (Number.isFinite(price) && price > 0) {
-      updateField(fieldByTarget[catalogTarget], String(price));
+      const field = fieldByTarget[catalogTarget];
+      updateField(field, String(price));
+      setTrackedPrices((current) => ({ ...current, [field]: priced }));
     } else {
       Alert.alert(
         "Precio pendiente",
@@ -254,6 +264,48 @@ export default function MasonryCalculatorScreen() {
       [catalogTarget]: item.name,
     }));
     setCatalogTarget(null);
+  }
+
+  function computeMasonry(source: FormState) {
+    const wallLength = parseNumber(source.wallLength);
+    const wallHeight = parseNumber(source.wallHeight);
+    const openingsArea = parseNumber(source.openingsArea);
+    return calculateMasonry(
+      {
+        wallLength,
+        wallHeight,
+        openingsArea,
+        blockLength: parseNumber(source.blockLength),
+        blockHeight: parseNumber(source.blockHeight),
+        blockWastePercentage: parseNumber(
+          source.blockWastePercentage,
+        ),
+        layingMortarVolumePerSquareMeter: parseNumber(
+          source.layingMortarVolumePerSquareMeter,
+        ),
+        plasterSides,
+        plasterThickness:
+          parseNumber(source.plasterThicknessCentimeters) / 100,
+        plasterWastePercentage: parseNumber(
+          source.plasterWastePercentage,
+        ),
+        mixCement: parseNumber(source.cementRatio),
+        mixSand: parseNumber(source.sandRatio),
+        cementBagWeight: parseNumber(source.cementBagWeight),
+      },
+      {
+        blockUnit: parseNumber(source.blockPrice),
+        cementBag: parseNumber(source.cementPrice),
+        sandCubicMeter: parseNumber(source.sandPrice),
+        masonryLaborSquareMeter: parseNumber(
+          source.masonryLaborPrice,
+        ),
+        plasterLaborSquareMeter: parseNumber(
+          source.plasterLaborPrice,
+        ),
+      },
+    );
+
   }
 
   function handleCalculate() {
@@ -304,41 +356,7 @@ export default function MasonryCalculatorScreen() {
       return;
     }
 
-    const calculated = calculateMasonry(
-      {
-        wallLength,
-        wallHeight,
-        openingsArea,
-        blockLength: parseNumber(form.blockLength),
-        blockHeight: parseNumber(form.blockHeight),
-        blockWastePercentage: parseNumber(
-          form.blockWastePercentage,
-        ),
-        layingMortarVolumePerSquareMeter: parseNumber(
-          form.layingMortarVolumePerSquareMeter,
-        ),
-        plasterSides,
-        plasterThickness:
-          parseNumber(form.plasterThicknessCentimeters) / 100,
-        plasterWastePercentage: parseNumber(
-          form.plasterWastePercentage,
-        ),
-        mixCement: parseNumber(form.cementRatio),
-        mixSand: parseNumber(form.sandRatio),
-        cementBagWeight: parseNumber(form.cementBagWeight),
-      },
-      {
-        blockUnit: parseNumber(form.blockPrice),
-        cementBag: parseNumber(form.cementPrice),
-        sandCubicMeter: parseNumber(form.sandPrice),
-        masonryLaborSquareMeter: parseNumber(
-          form.masonryLaborPrice,
-        ),
-        plasterLaborSquareMeter: parseNumber(
-          form.plasterLaborPrice,
-        ),
-      },
-    );
+    const calculated = computeMasonry(form);
 
     setResult(calculated);
     setError("");
@@ -367,6 +385,11 @@ export default function MasonryCalculatorScreen() {
       result.netWallArea > 0
         ? result.totalCost / result.netWallArea
         : 0;
+    const unitCost = budgetUnitCost(
+      computeMasonry(withCatalogCosts(form, trackedPrices)).totalCost,
+      result.netWallArea,
+      unitPrice,
+    );
     const notes = [
       `${formatDecimal(result.blocksToBuy, 0, currencyCode)} bloques`,
       `${formatDecimal(result.cementBagsToBuy, 0, currencyCode)} sacos de cemento`,
@@ -386,7 +409,7 @@ export default function MasonryCalculatorScreen() {
           : "Muro de bloques",
       unitName: "m²",
       quantity: result.netWallArea,
-      unitCost: unitPrice,
+      unitCost,
       unitPrice,
       taxable: true,
       notes,

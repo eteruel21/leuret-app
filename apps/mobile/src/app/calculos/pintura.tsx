@@ -12,6 +12,10 @@ import { useCompany } from "../../contexts/CompanyContext";
 import { addBudgetItem } from "../../services/budget-service";
 import { listCatalogItems } from "../../services/catalog-service";
 import type { CatalogItemWithDetails } from "../../types/catalog";
+import {
+  budgetUnitCost, rankCalculatorCatalogItems, trackCatalogPrice, withCatalogCosts,
+  type TrackedPrice,
+} from "../../services/calculators/catalog-pricing";
 import { calculatePaint, type PaintResult } from "../../services/calculators/pintura";
 import { formatDecimal, formatMoney } from "../../utils/format";
 import { loadLocalData, saveLocalData } from "../../utils/local-storage";
@@ -56,6 +60,8 @@ export default function PaintScreen() {
   const [target, setTarget] = useState<Target | null>(null);
   const [selected, setSelected] =
     useState<Partial<Record<Target, string>>>({});
+  const [tracked, setTracked] =
+    useState<Partial<Record<keyof Form, TrackedPrice>>>({});
 
   const grossArea = num(form.directArea) ||
     num(form.length) * num(form.height) * Math.max(num(form.wallCount), 1);
@@ -104,10 +110,30 @@ export default function PaintScreen() {
       paint: "paintPrice", primer: "primerPrice",
       labor: "laborPrice", supplies: "suppliesPrice",
     };
-    const price = item.sale_price > 0 ? item.sale_price : item.unit_cost;
-    update(fields[target], String(price));
+    const priced = trackCatalogPrice(item);
+    if (priced.price <= 0) {
+      Alert.alert("Precio pendiente",
+        "Este concepto aún no tiene precio. Escríbelo manualmente en la calculadora.");
+      setTarget(null);
+      return;
+    }
+    update(fields[target], String(priced.price));
+    setTracked((current) => ({ ...current, [fields[target]]: priced }));
     setSelected((current) => ({ ...current, [target]: item.name }));
     setTarget(null);
+  }
+
+  function compute(source: Form): PaintResult {
+    return calculatePaint({
+      grossArea, openingsArea: num(source.openings), coats: num(source.coats),
+      coveragePerGallon: num(source.coverage),
+      wastePercentage: num(source.waste), primerEnabled: primer,
+      primerCoats: num(source.primerCoats),
+      primerCoveragePerGallon: num(source.primerCoverage),
+    }, {
+      paintGallon: num(source.paintPrice), primerGallon: num(source.primerPrice),
+      supplies: num(source.suppliesPrice), laborSquareMeter: num(source.laborPrice),
+    });
   }
 
   function calculate() {
@@ -118,16 +144,7 @@ export default function PaintScreen() {
     if (!num(form.coverage) || (primer && !num(form.primerCoverage))) {
       setError("Revisa el rendimiento de la pintura y el primer."); return;
     }
-    setResult(calculatePaint({
-      grossArea, openingsArea: num(form.openings), coats: num(form.coats),
-      coveragePerGallon: num(form.coverage),
-      wastePercentage: num(form.waste), primerEnabled: primer,
-      primerCoats: num(form.primerCoats),
-      primerCoveragePerGallon: num(form.primerCoverage),
-    }, {
-      paintGallon: num(form.paintPrice), primerGallon: num(form.primerPrice),
-      supplies: num(form.suppliesPrice), laborSquareMeter: num(form.laborPrice),
-    }));
+    setResult(compute(form));
     setError(""); setMessage("");
   }
 
@@ -142,10 +159,12 @@ export default function PaintScreen() {
       return;
     }
     const price = result.totalCost / result.netArea;
+    const cost = budgetUnitCost(compute(withCatalogCosts(form, tracked)).totalCost,
+      result.netArea, price);
     const response = await addBudgetItem({
       companyId: activeCompany.id, budgetId, itemType: "service",
       description: `Pintura de paredes (${Math.round(num(form.coats))} manos)`,
-      unitName: "m²", quantity: result.netArea, unitCost: price,
+      unitName: "m²", quantity: result.netArea, unitCost: cost,
       unitPrice: price, taxable: true,
       notes: `${result.paintGallonsToBuy} galones de pintura` +
         (primer ? ` · ${result.primerGallonsToBuy} galones de primer` : ""),
@@ -230,17 +249,29 @@ function CatalogButton({ label, value, onPress }: { label: string; value?: strin
     <Text style={styles.label}>{label}</Text><Text style={styles.catalogValue}>{value || "Seleccionar del catálogo"}</Text></View>
     <Ionicons name="chevron-forward" size={20} color={colors.primary} /></Pressable>;
 }
+const PICKER_KEYWORDS: Record<Target, RegExp> = {
+  paint: /pintura|latex|acrilic|esmalte/,
+  primer: /sellador|primer|base/,
+  supplies: /rodillo|brocha|cinta|lija|felpa|bandeja/,
+  labor: /pint/,
+};
+
 function Picker({ visible, target, items, loading, currency, onClose, onSelect }: {
   visible: boolean; target: Target | null; items: CatalogItemWithDetails[]; loading: boolean;
   currency?: string; onClose: () => void; onSelect: (i: CatalogItemWithDetails) => void;
 }) {
-  const filtered = useMemo(() => items.filter((item) => target === "labor"
-    ? item.item_type === "labor" || item.item_type === "service"
-    : item.item_type === "material"), [items, target]);
+  const [search, setSearch] = useState("");
+  const filtered = useMemo(() => target ? rankCalculatorCatalogItems(items,
+    target === "labor" ? "labor" : "material", PICKER_KEYWORDS[target], search) : [],
+  [items, target, search]);
   return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
     <SafeAreaView style={styles.modal}><Pressable onPress={onClose}><Text style={styles.close}>Cerrar</Text></Pressable>
+      <TextInput value={search} onChangeText={setSearch} placeholder="Buscar en el catálogo"
+        style={[styles.input, styles.search]} />
       {loading ? <ActivityIndicator size="large" color={colors.primary} /> : <FlatList data={filtered}
-        keyExtractor={(i) => i.id} renderItem={({ item }) => <Pressable onPress={() => onSelect(item)} style={styles.item}>
+        keyExtractor={(i) => i.id}
+        ListEmptyComponent={<Text style={styles.small}>No hay conceptos de este tipo en el catálogo. Cierra y escribe el precio manualmente.</Text>}
+        renderItem={({ item }) => <Pressable onPress={() => onSelect(item)} style={styles.item}>
           <Text style={styles.itemName}>{item.name}</Text><Text style={styles.price}>{formatMoney(item.sale_price || item.unit_cost, currency)}</Text>
         </Pressable>} />}</SafeAreaView></Modal>;
 }
@@ -280,5 +311,7 @@ const styles = StyleSheet.create({
   modal: { flex: 1, padding: 20, backgroundColor: colors.background }, close: { color: colors.primary,
     fontWeight: "900", marginBottom: 16 }, item: { padding: 15, backgroundColor: colors.surface,
     borderRadius: radius.md, marginBottom: 10, flexDirection: "row", justifyContent: "space-between" },
-  itemName: { color: colors.text, fontWeight: "800" }, price: { color: colors.accent, fontWeight: "900" },
+  itemName: { color: colors.text, fontWeight: "800", flex: 1 },
+  search: { flex: 0, height: 48, paddingHorizontal: 12, marginBottom: 12, borderRadius: radius.md,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }, price: { color: colors.accent, fontWeight: "900" },
 });

@@ -21,6 +21,10 @@ import { addBudgetItem } from "../../services/budget-service";
 import { listCatalogItems } from "../../services/catalog-service";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
+  budgetUnitCost, rankCalculatorCatalogItems, trackCatalogPrice, withCatalogCosts,
+  type TrackedPrice,
+} from "../../services/calculators/catalog-pricing";
+import {
   calculateFlooring,
   type FlooringResult,
 } from "../../services/calculators/pisos";
@@ -106,6 +110,8 @@ export default function FlooringScreen() {
   const [target, setTarget] = useState<Target | null>(null);
   const [selected, setSelected] =
     useState<Partial<Record<Target, string>>>({});
+  const [tracked, setTracked] =
+    useState<Partial<Record<keyof Form, TrackedPrice>>>({});
 
   const grossArea =
     num(form.directArea) || num(form.length) * num(form.width);
@@ -185,10 +191,15 @@ export default function FlooringScreen() {
       labor: "laborPrice",
     };
 
-    const price =
-      item.sale_price > 0 ? item.sale_price : item.unit_cost;
-
-    update(fields[target], String(price));
+    const priced = trackCatalogPrice(item);
+    if (priced.price <= 0) {
+      Alert.alert("Precio pendiente",
+        "Este concepto aún no tiene precio. Escríbelo manualmente en la calculadora.");
+      setTarget(null);
+      return;
+    }
+    update(fields[target], String(priced.price));
+    setTracked((current) => ({ ...current, [fields[target]]: priced }));
     setSelected((current) => ({
       ...current,
       [target]: item.name,
@@ -196,71 +207,75 @@ export default function FlooringScreen() {
     setTarget(null);
   }
 
-  function calculate() {
+  function compute(source: Form): FlooringResult | null {
     if (!grossArea) {
       setError("Introduce las medidas o el área directa.");
-      return;
+      return null;
     }
 
-    if (num(form.excludedArea) >= grossArea) {
+    if (num(source.excludedArea) >= grossArea) {
       setError(
         "El área excluida debe ser menor que el área total.",
       );
-      return;
+      return null;
     }
 
     if (
-      !num(form.tileLengthCm) ||
-      !num(form.tileWidthCm) ||
-      !num(form.piecesPerBox)
+      !num(source.tileLengthCm) ||
+      !num(source.tileWidthCm) ||
+      !num(source.piecesPerBox)
     ) {
       setError(
         "Revisa las medidas del piso y las piezas por caja.",
       );
-      return;
+      return null;
     }
 
     if (
-      !num(form.adhesiveCoverage) ||
-      !num(form.groutJointWidthMm) ||
-      !num(form.groutJointDepthMm) ||
-      !num(form.groutBagKg)
+      !num(source.adhesiveCoverage) ||
+      !num(source.groutJointWidthMm) ||
+      !num(source.groutJointDepthMm) ||
+      !num(source.groutBagKg)
     ) {
       setError(
         "Revisa el rendimiento del adhesivo y los datos de boquilla.",
       );
-      return;
+      return null;
     }
 
-    setResult(
-      calculateFlooring(
+    return calculateFlooring(
         {
           grossArea,
-          excludedArea: num(form.excludedArea),
-          tileLengthCm: num(form.tileLengthCm),
-          tileWidthCm: num(form.tileWidthCm),
-          piecesPerBox: num(form.piecesPerBox),
-          wastePercentage: num(form.waste),
+          excludedArea: num(source.excludedArea),
+          tileLengthCm: num(source.tileLengthCm),
+          tileWidthCm: num(source.tileWidthCm),
+          piecesPerBox: num(source.piecesPerBox),
+          wastePercentage: num(source.waste),
           adhesiveCoveragePerBag: num(
-            form.adhesiveCoverage,
+            source.adhesiveCoverage,
           ),
           groutJointWidthMm: num(
-            form.groutJointWidthMm,
+            source.groutJointWidthMm,
           ),
           groutJointDepthMm: num(
-            form.groutJointDepthMm,
+            source.groutJointDepthMm,
           ),
-          groutBagKilograms: num(form.groutBagKg),
+          groutBagKilograms: num(source.groutBagKg),
         },
         {
-          flooringBox: num(form.floorBoxPrice),
-          adhesiveBag: num(form.adhesiveBagPrice),
-          groutBag: num(form.groutBagPrice),
-          supplies: num(form.suppliesPrice),
-          laborSquareMeter: num(form.laborPrice),
+          flooringBox: num(source.floorBoxPrice),
+          adhesiveBag: num(source.adhesiveBagPrice),
+          groutBag: num(source.groutBagPrice),
+          supplies: num(source.suppliesPrice),
+          laborSquareMeter: num(source.laborPrice),
         },
-      ),
-    );
+      );
+  }
+
+  function calculate() {
+    const next = compute(form);
+    if (!next) return;
+    setResult(next);
 
     setError("");
     setMessage("");
@@ -288,6 +303,9 @@ export default function FlooringScreen() {
     }
 
     const unitPrice = result.totalCost / result.netArea;
+    const unitCost = budgetUnitCost(
+      (compute(withCatalogCosts(form, tracked)) ?? result).totalCost,
+      result.netArea, unitPrice);
     const floorLabel =
       floorType === "ceramica" ? "Cerámica" : "Porcelanato";
 
@@ -300,7 +318,7 @@ export default function FlooringScreen() {
         `${form.tileWidthCm} cm`,
       unitName: "m²",
       quantity: result.netArea,
-      unitCost: unitPrice,
+      unitCost,
       unitPrice,
       taxable: true,
       notes:
@@ -650,6 +668,15 @@ function CatalogButton({
   );
 }
 
+
+const PICKER_KEYWORDS: Record<Target, RegExp> = {
+  floor: /ceramica|porcelanato|baldosa|piso|azulejo|vinil/,
+  adhesive: /pegamento|adhesivo|bondex|mortero/,
+  grout: /boquilla|fragua|junta|lechada/,
+  supplies: /separador|nivelador|crucet|cinta/,
+  labor: /azulej|mosaiq|ceram|piso|albanil/,
+};
+
 function Picker({
   visible,
   target,
@@ -667,15 +694,18 @@ function Picker({
   onClose: () => void;
   onSelect: (item: CatalogItemWithDetails) => void;
 }) {
+  const [search, setSearch] = useState("");
   const filtered = useMemo(
     () =>
-      items.filter((item) =>
-        target === "labor"
-          ? item.item_type === "labor" ||
-            item.item_type === "service"
-          : item.item_type === "material",
-      ),
-    [items, target],
+      target
+        ? rankCalculatorCatalogItems(
+            items,
+            target === "labor" ? "labor" : "material",
+            PICKER_KEYWORDS[target],
+            search,
+          )
+        : [],
+    [items, target, search],
   );
 
   return (
@@ -688,6 +718,12 @@ function Picker({
         <Pressable onPress={onClose}>
           <Text style={styles.close}>Cerrar</Text>
         </Pressable>
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Buscar en el catálogo"
+          style={styles.search}
+        />
 
         {loading ? (
           <ActivityIndicator
@@ -697,6 +733,11 @@ function Picker({
         ) : (
           <FlatList
             data={filtered}
+            ListEmptyComponent={
+              <Text style={styles.searchEmpty}>
+                No hay conceptos de este tipo en el catálogo. Cierra y escribe el precio manualmente.
+              </Text>
+            }
             keyExtractor={(item: CatalogItemWithDetails) =>
               item.id}
             renderItem={({
@@ -986,5 +1027,20 @@ const styles = StyleSheet.create({
   price: {
     color: colors.accent,
     fontWeight: "900",
+  },
+  search: {
+    height: 48,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.text,
+  },
+  searchEmpty: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    padding: 12,
   },
 });
