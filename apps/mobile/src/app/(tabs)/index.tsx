@@ -2,8 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect, type Href } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-
+  ActivityIndicator,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -180,8 +181,30 @@ function formatActivityDate(date: string): string { const value = new Date(`${da
 
 export default function HomeScreen() {
   const { profile } = useAuth();
-  const { activeCompany } = useCompany();
+  const { activeCompany, memberships, setActiveCompanyId } = useCompany();
   const { role, can } = usePermissions();
+  const [companySheetOpen, setCompanySheetOpen] = useState(false);
+  const [switchingCompanyId, setSwitchingCompanyId] = useState<string | null>(null);
+  const [switchError, setSwitchError] = useState<string | null>(null);
+
+  const openCompanySheet = () => { setSwitchError(null); setCompanySheetOpen(true); };
+  const closeCompanySheet = () => { if (!switchingCompanyId) setCompanySheetOpen(false); };
+
+  const handleSelectCompany = async (companyId: string) => {
+    if (companyId === activeCompany?.id) { setCompanySheetOpen(false); return; }
+    setSwitchingCompanyId(companyId);
+    setSwitchError(null);
+    try {
+      await setActiveCompanyId(companyId);
+      setCompanySheetOpen(false);
+    } catch (error) {
+      setSwitchError(error instanceof Error ? error.message : "No fue posible cambiar de empresa.");
+    } finally {
+      setSwitchingCompanyId(null);
+    }
+  };
+
+  const goToCompanyRoute = (href: Href) => { setCompanySheetOpen(false); router.push(href); };
   const quickActions = quickActionsFor(role);
   const showProjects = can("projects.view");
   // Los cobros solo se muestran a quien los gestiona (owner, admin, sales).
@@ -294,6 +317,12 @@ export default function HomeScreen() {
             entering={FadeInDown.delay(220).duration(520)}
             style={styles.companyCard}
           >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Espacio activo: ${companyName}. Cambiar de empresa o ver el equipo`}
+              onPress={openCompanySheet}
+              style={({ pressed }) => pressed && styles.companyCardPressed}
+            >
             <View style={styles.companyTop}>
               <View style={styles.companyIdentity}>
                 <View style={styles.companyIndicator}>
@@ -343,6 +372,7 @@ export default function HomeScreen() {
                 <Text style={styles.metricLabel}>Facturas</Text>
               </View>
             </View>
+            </Pressable>
           </Animated.View>
         </View>
 
@@ -541,6 +571,90 @@ export default function HomeScreen() {
           </Animated.View>
         </View>
       </ScrollView>
+      <Modal
+        visible={companySheetOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeCompanySheet}
+      >
+        <Pressable style={styles.sheetBackdrop} onPress={closeCompanySheet}>
+          <Pressable style={styles.sheet} onPress={() => undefined}>
+            <Text style={styles.sheetEyebrow}>ESPACIO DE TRABAJO</Text>
+            <Text style={styles.sheetTitle}>Tus empresas</Text>
+            <Text style={styles.sheetSubtitle}>
+              Clientes, proyectos y presupuestos se cargan según la empresa activa.
+            </Text>
+
+            <ScrollView style={styles.sheetList} contentContainerStyle={styles.sheetListContent}>
+              {memberships.filter((membership) => membership.company).map((membership) => {
+                const isActive = membership.company_id === activeCompany?.id;
+                const isSwitching = switchingCompanyId === membership.company_id;
+                return (
+                  <Pressable
+                    key={membership.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isActive, disabled: Boolean(switchingCompanyId) }}
+                    disabled={Boolean(switchingCompanyId)}
+                    onPress={() => void handleSelectCompany(membership.company_id)}
+                    style={({ pressed }) => [
+                      styles.sheetCompany,
+                      isActive && styles.sheetCompanyActive,
+                      pressed && styles.companyCardPressed,
+                    ]}
+                  >
+                    <View style={styles.sheetCompanyCopy}>
+                      <Text style={styles.sheetCompanyName} numberOfLines={1}>
+                        {membership.company?.name ?? "Empresa"}
+                      </Text>
+                      <Text style={styles.sheetCompanyRole}>
+                        {ROLE_LABELS[membership.role] ?? membership.role}
+                      </Text>
+                    </View>
+                    {isSwitching ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : isActive ? (
+                      <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
+                    ) : (
+                      <Ionicons name="swap-horizontal" size={20} color={colors.textMuted} />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            {switchError ? <Text style={styles.sheetError}>{switchError}</Text> : null}
+
+            <View style={styles.sheetActions}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => goToCompanyRoute("/equipo" as Href)}
+                style={({ pressed }) => [styles.sheetAction, pressed && styles.companyCardPressed]}
+              >
+                <Ionicons name="people-outline" size={20} color={colors.text} />
+                <Text style={styles.sheetActionText}>Equipo y roles</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => goToCompanyRoute("/equipo/unirme" as Href)}
+                style={({ pressed }) => [styles.sheetAction, pressed && styles.companyCardPressed]}
+              >
+                <Ionicons name="enter-outline" size={20} color={colors.text} />
+                <Text style={styles.sheetActionText}>Unirme a otra empresa</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </Pressable>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={closeCompanySheet}
+              style={({ pressed }) => [styles.sheetClose, pressed && styles.companyCardPressed]}
+            >
+              <Text style={styles.sheetCloseText}>Cerrar</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -738,6 +852,129 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     backgroundColor: colors.surface,
     ...shadows.raised,
+  },
+
+  companyCardPressed: {
+    opacity: 0.72,
+  },
+
+  sheetBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+  },
+
+  sheet: {
+    width: "100%",
+    maxWidth: 560,
+    alignSelf: "center",
+    maxHeight: "85%",
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    backgroundColor: colors.surface,
+  },
+
+  sheetEyebrow: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 2,
+  },
+
+  sheetTitle: {
+    marginTop: 4,
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: "900",
+  },
+
+  sheetSubtitle: {
+    marginTop: 4,
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+
+  sheetList: {
+    marginTop: spacing.md,
+    flexGrow: 0,
+  },
+
+  sheetListContent: {
+    gap: spacing.sm,
+  },
+
+  sheetCompany: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    backgroundColor: colors.background,
+  },
+
+  sheetCompanyActive: {
+    borderColor: colors.primary,
+  },
+
+  sheetCompanyCopy: {
+    flex: 1,
+  },
+
+  sheetCompanyName: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+
+  sheetCompanyRole: {
+    marginTop: 2,
+    color: colors.textMuted,
+    fontSize: 13,
+  },
+
+  sheetError: {
+    marginTop: spacing.sm,
+    color: colors.danger,
+    fontSize: 13,
+  },
+
+  sheetActions: {
+    marginTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+
+  sheetAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+
+  sheetActionText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+
+  sheetClose: {
+    marginTop: spacing.md,
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+  },
+
+  sheetCloseText: {
+    color: colors.textMuted,
+    fontSize: 15,
+    fontWeight: "700",
   },
 
   companyTop: {
