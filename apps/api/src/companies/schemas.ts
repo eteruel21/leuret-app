@@ -22,7 +22,9 @@ export const billingSchema = z.object({
   invoicePrefix: z.string().trim().min(1).max(20),
   taxRate: z.number().min(0).max(100),
   // Opcional para no romper clientes antiguos que no lo envían.
-  paymentRemindersEnabled: z.boolean().optional()
+  paymentRemindersEnabled: z.boolean().optional(),
+  // undefined = no cambiar; "" o null = borrar.
+  paymentInstructions: z.string().trim().max(1000).nullable().optional()
 });
 
 export const companyMemberParamsSchema = z.object({

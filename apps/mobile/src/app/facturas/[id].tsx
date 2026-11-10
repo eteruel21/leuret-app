@@ -156,6 +156,7 @@ export default function InvoiceDetailScreen() {
       setSharingPdf(true);
       const { error } = await shareInvoicePdf({
         invoice,
+        paymentInstructions: activeCompany.payment_instructions,
       });
 
       if (error) {

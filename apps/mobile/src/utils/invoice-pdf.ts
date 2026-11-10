@@ -11,6 +11,8 @@ import {
 
 type InvoicePdfInput = {
   invoice: InvoiceWithDetails;
+  /** Instrucciones de pago de la empresa (Yappy, banco, ACH). */
+  paymentInstructions?: string | null;
 };
 
 function escapeHtml(value: string | null | undefined) {
@@ -78,6 +80,7 @@ function renderItems(
 
 export function buildInvoiceHtml({
   invoice,
+  paymentInstructions,
 }: InvoicePdfInput) {
   const snapshot = invoice.snapshot_data;
 
@@ -417,6 +420,17 @@ export function buildInvoiceHtml({
       : ""
   }
 
+  ${
+    paymentInstructions?.trim() && invoice.status !== "paid" && invoice.status !== "cancelled"
+      ? `
+    <div style="margin-top: 24px; padding: 14px 16px; border: 1px solid #c7d7ee; border-radius: 10px; background: #f3f7fd;">
+      <div class="card-title">Cómo pagar</div>
+      <div style="white-space: pre-line; font-size: 13px; line-height: 1.5;">${escapeHtml(paymentInstructions.trim())}</div>
+    </div>
+    `
+      : ""
+  }
+
   <div class="footer">
     ¡Gracias por su preferencia!<br/>
     Si tiene alguna duda sobre esta factura, por favor contáctenos.
@@ -428,11 +442,12 @@ export function buildInvoiceHtml({
 
 export async function shareInvoicePdf({
   invoice,
+  paymentInstructions,
 }: InvoicePdfInput): Promise<{
   error: string | null;
 }> {
   try {
-    const html = buildInvoiceHtml({ invoice });
+    const html = buildInvoiceHtml({ invoice, paymentInstructions });
     const { uri } = await Print.printToFileAsync({ html });
     await Sharing.shareAsync(uri, {
       mimeType: "application/pdf",

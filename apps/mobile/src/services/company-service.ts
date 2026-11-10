@@ -117,6 +117,8 @@ export async function updateCompanyBillingDetails(
     invoicePrefix: string;
     taxRate: number;
     paymentRemindersEnabled?: boolean;
+    /** undefined = no cambiar; "" o null = borrar. */
+    paymentInstructions?: string | null;
   }
 ): Promise<{
   error: string | null;
@@ -146,7 +148,11 @@ export async function updateCompanyBillingDetails(
             "FAC",
           taxRate:
             Number(input.taxRate ?? 0),
-          paymentRemindersEnabled: input.paymentRemindersEnabled
+          paymentRemindersEnabled: input.paymentRemindersEnabled,
+          paymentInstructions:
+            input.paymentInstructions === undefined
+              ? undefined
+              : input.paymentInstructions?.trim() || null
         })
       }
     );

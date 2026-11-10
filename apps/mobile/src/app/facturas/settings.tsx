@@ -40,6 +40,9 @@ function InvoiceSettingsScreenContent() {
     String(activeCompany?.tax_rate ?? 0),
   );
   const [remindersEnabled, setRemindersEnabled] = useState(activeCompany?.payment_reminders_enabled !== false);
+  const [paymentInstructions, setPaymentInstructions] = useState(
+    activeCompany?.payment_instructions ?? ""
+  );
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
@@ -88,6 +91,7 @@ function InvoiceSettingsScreenContent() {
         invoicePrefix: invoicePrefix.trim().toUpperCase(),
         taxRate: Number.isFinite(rate) ? rate : 0,
         paymentRemindersEnabled: remindersEnabled,
+        paymentInstructions,
       });
 
       if (error) {
@@ -278,6 +282,24 @@ function InvoiceSettingsScreenContent() {
             </View>
           </View>
 
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Instrucciones de pago</Text>
+            <TextInput
+              value={paymentInstructions}
+              onChangeText={setPaymentInstructions}
+              multiline
+              maxLength={1000}
+              textAlignVertical="top"
+              placeholder={"Ej.\nYappy: 6000-0000\nBanco General · Cta. corriente 03-01-01-123456-7\nA nombre de: Mi Empresa, S.A."}
+              placeholderTextColor={colors.textMuted}
+              style={[styles.input, styles.multilineInput]}
+              accessibilityLabel="Instrucciones de pago"
+            />
+            <Text style={styles.reminderHelp}>
+              Aparecen en el PDF de cada factura y en los correos de cobro. {paymentInstructions.length}/1000
+            </Text>
+          </View>
+
           <View style={styles.reminderCard}>
             <View style={styles.reminderCopy}>
               <Text style={styles.label}>Recordatorios de cobro automáticos</Text>
@@ -318,6 +340,10 @@ function InvoiceSettingsScreenContent() {
 }
 
 const styles = StyleSheet.create({
+  multilineInput: {
+    minHeight: 110,
+    paddingTop: 12,
+  },
   reminderCard: {
     flexDirection: "row",
     alignItems: "center",

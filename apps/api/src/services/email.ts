@@ -437,6 +437,7 @@ type InvoiceReminderEmailInput = {
   invoiceNumber?: string | null;
   dueDate: string;
   amount: string;
+  paymentInstructions?: string | null;
 };
 
 /** Texto del recordatorio según el momento: cordial antes, más directo después. */
@@ -465,6 +466,10 @@ export async function sendInvoiceReminderEmail(input: InvoiceReminderEmailInput)
   const companyName = input.companyName.trim() || "tu contratista";
   const greeting = input.clientName?.trim() ? `Hola, ${input.clientName.trim()}:` : "Hola:";
   const contact = [input.companyPhone?.trim(), input.companyEmail?.trim()].filter(Boolean).join(" · ");
+  const paymentInstructions = input.paymentInstructions?.trim() || null;
+  const paymentBlockHtml = paymentInstructions
+    ? `<div style="margin: 20px 0; padding: 14px 16px; border-radius: 8px; background: #efe9de;"><strong>Cómo pagar</strong><div style="margin-top: 6px; white-space: pre-line;">${escapeHtml(paymentInstructions)}</div></div>`
+    : "";
 
   const html = `
     <!DOCTYPE html>
@@ -488,6 +493,7 @@ export async function sendInvoiceReminderEmail(input: InvoiceReminderEmailInput)
         <p>${escapeHtml(copy.lead)}</p>
         <div class="amount">${escapeHtml(input.amount)}</div>
         <div class="muted">Saldo pendiente · vence ${escapeHtml(input.dueDate)}</div>
+        ${paymentBlockHtml}
         <p>Si ya realizaste el pago, ignora este mensaje. Para cualquier consulta, comunícate con ${escapeHtml(companyName)}${contact ? `: ${escapeHtml(contact)}` : "."}</p>
         <p class="footer">Enviado por Leuret en nombre de ${escapeHtml(companyName)}.</p>
       </div>
@@ -501,7 +507,7 @@ ${greeting}
 ${copy.lead}
 
 Saldo pendiente: ${input.amount} (vence ${input.dueDate})
-
+${paymentInstructions ? `\nCómo pagar:\n${paymentInstructions}\n` : ""}
 Si ya realizaste el pago, ignora este mensaje. Consultas: ${companyName}${contact ? ` (${contact})` : ""}.
   `.trim();
 

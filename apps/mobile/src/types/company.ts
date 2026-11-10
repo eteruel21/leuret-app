@@ -26,6 +26,8 @@ export type Company = {
   tax_rate: number;
   /** Correos automáticos de cobro a clientes (antes y después del vencimiento). */
   payment_reminders_enabled?: boolean;
+  /** Cómo pagar (Yappy, banco, ACH): sale en el PDF de la factura y en los correos de cobro. */
+  payment_instructions?: string | null;
   timezone: string;
   quotation_prefix: string;
   invoice_prefix: string;
