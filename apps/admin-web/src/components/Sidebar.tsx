@@ -8,6 +8,7 @@ import {
   FileText,
   HardHat,
   LayoutDashboard,
+  Mail,
   LogOut,
   Receipt,
   Search,
@@ -60,6 +61,12 @@ const GROUPS: Array<{ label: string; items: Array<{ tab: Tab; icon: ReactNode }>
       { tab: "budgets", icon: <FileText /> },
       { tab: "invoices", icon: <Receipt /> },
       { tab: "clients", icon: <UserRound /> },
+    ],
+  },
+  {
+    label: "Comunicación",
+    items: [
+      { tab: "mail", icon: <Mail /> },
     ],
   },
   {
