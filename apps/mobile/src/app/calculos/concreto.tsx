@@ -447,7 +447,14 @@ function ConcreteCalculatorForm({
       item.sale_price > 0
         ? item.sale_price
         : item.unit_cost;
+    const hasPrice = Number.isFinite(price) && price > 0;
     const priceText = String(price);
+    if (!hasPrice) {
+      Alert.alert(
+        "Precio pendiente",
+        "Este insumo aún no tiene precio configurado. Puedes introducirlo manualmente en la calculadora."
+      );
+    }
     const unitCode = (
       item.unit?.code ??
       item.unit?.symbol ??
@@ -464,31 +471,31 @@ function ConcreteCalculatorForm({
     }));
 
     if (catalogTarget === "cement") {
-      updateField("cementPrice", priceText);
+      if (hasPrice) updateField("cementPrice", priceText);
     }
 
     if (catalogTarget === "sand") {
       if (isCubicMeter) {
         setSandPriceMode("cubicMeter");
-        updateField("sandCubicMeterPrice", priceText);
+        if (hasPrice) updateField("sandCubicMeterPrice", priceText);
       } else {
         setSandPriceMode("bag");
-        updateField("sandBagPrice", priceText);
+        if (hasPrice) updateField("sandBagPrice", priceText);
       }
     }
 
     if (catalogTarget === "gravel") {
       if (isCubicMeter) {
         setGravelPriceMode("cubicMeter");
-        updateField("gravelCubicMeterPrice", priceText);
+        if (hasPrice) updateField("gravelCubicMeterPrice", priceText);
       } else {
         setGravelPriceMode("bag");
-        updateField("gravelBagPrice", priceText);
+        if (hasPrice) updateField("gravelBagPrice", priceText);
       }
     }
 
     if (catalogTarget === "labor") {
-      updateField("laborPrice", priceText);
+      if (hasPrice) updateField("laborPrice", priceText);
     }
 
     setCatalogTarget(null);
@@ -1210,7 +1217,7 @@ function CatalogPricePicker({
                     </View>
 
                     <Text style={styles.catalogItemPrice}>
-                      {formatMoneyUtil(price, currencyCode)}
+                      {price > 0 ? formatMoneyUtil(price, currencyCode) : "Precio por definir"}
                     </Text>
                   </Pressable>
                 );
