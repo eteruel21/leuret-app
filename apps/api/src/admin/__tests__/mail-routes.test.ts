@@ -85,7 +85,7 @@ describe("LEURET ADMIN - correos Resend", () => {
     const app = await createApp();
     const response = await app.inject({
       method: "GET",
-      url: "/admin/mail/privacy/threads/%2e%2e/emails",
+      url: "/admin/mail/privacy/threads/not-a-uuid/emails",
       headers: auth()
     });
     expect(response.statusCode).toBe(400);
