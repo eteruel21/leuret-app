@@ -35,7 +35,7 @@ describe("API Resend Inboxes - aislamiento de bandejas", () => {
   test("lee únicamente la bandeja Privacidad configurada en el servidor", async () => {
     const result = await listMailThreads("privacy", "inbox");
     expect(result).toEqual({ data: [], hasMore: false });
-    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    const [url, init] = vi.mocked(fetch).mock.calls[0]!;
     expect(url).toBe(
       "https://api.resend.com/inboxes/11111111-1111-4111-8111-111111111111/threads?folders=inbox&limit=30"
     );
@@ -46,14 +46,14 @@ describe("API Resend Inboxes - aislamiento de bandejas", () => {
 
   test("lee el mensaje en la bandeja Legal sin exponer secreto en URL", async () => {
     await readMailMessage("legal", THREAD, EMAIL);
-    const [url] = vi.mocked(fetch).mock.calls[0];
+    const [url] = vi.mocked(fetch).mock.calls[0]!;
     expect(String(url)).toContain("/inboxes/22222222-2222-4222-8222-222222222222/");
     expect(String(url)).not.toContain("mock_only");
   });
 
   test("respuesta mantiene el hilo e impide destinatarios arbitrarios", async () => {
     await replyToMailMessage("legal", THREAD, EMAIL, "Confirmamos recepción.", KEY);
-    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    const [url, init] = vi.mocked(fetch).mock.calls[0]!;
     expect(url).toBe(
       `https://api.resend.com/inboxes/22222222-2222-4222-8222-222222222222/threads/${THREAD}/emails/${EMAIL}/reply`
     );
