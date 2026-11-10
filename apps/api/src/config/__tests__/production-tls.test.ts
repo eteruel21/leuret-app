@@ -8,6 +8,9 @@ import {
 
 function configureRequiredEnvironment() {
   vi.stubEnv("NODE_ENV", "production");
+  // Las reglas de TLS aplican a conexiones PostgreSQL directas; el CI
+  // corre con DATABASE_MODE=hyperdrive, así que se fija aquí.
+  vi.stubEnv("DATABASE_MODE", "postgres");
   vi.stubEnv("API_HOST", "127.0.0.1");
   vi.stubEnv("API_PORT", "3001");
   vi.stubEnv("TURNSTILE_SECRET_KEY", "1x0000000000000000000000000000000AA");
