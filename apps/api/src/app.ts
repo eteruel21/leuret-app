@@ -38,7 +38,7 @@ export async function buildApp() {
   });
 
   const app = Fastify({
-    logger: false,
+    loggerInstance: appLogger as unknown as FastifyBaseLogger,
     genReqId: (request) => {
       const ray = request.headers["cf-ray"];
       return typeof ray === "string" && ray ? ray : crypto.randomUUID();
