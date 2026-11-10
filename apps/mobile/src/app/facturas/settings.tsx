@@ -21,8 +21,9 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { updateCompanyBillingDetails } from "@/services/company-service";
 import { uploadCompanyLogo } from "@/services/media-upload-service";
 import { prepareProjectPhoto } from "@/utils/project-photo-picker";
+import { RequirePermission } from "@/components/RequirePermission";
 
-export default function InvoiceSettingsScreen() {
+function InvoiceSettingsScreenContent() {
   const { activeCompany, refreshCompanies } = useCompany();
 
   const [legalName, setLegalName] = useState(activeCompany?.legal_name ?? "");
@@ -485,3 +486,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 });
+
+export default function InvoiceSettingsScreen() {
+  return (
+    <RequirePermission capability="company.manage" section="Datos de facturación">
+      <InvoiceSettingsScreenContent />
+    </RequirePermission>
+  );
+}

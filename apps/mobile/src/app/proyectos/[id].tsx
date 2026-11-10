@@ -79,8 +79,9 @@ import {
 import { API_URL } from "@/services/api";
 import type { Appointment } from "@/utils/appointment-storage";
 import { prepareProjectPhoto, type ProjectPhotoSource } from "@/utils/project-photo-picker";
+import { RequirePermission } from "@/components/RequirePermission";
 
-export default function ProjectDetailScreen() {
+function ProjectDetailScreenContent() {
   const params = useLocalSearchParams<{
     id?: string | string[];
   }>();
@@ -1200,3 +1201,11 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
 });
+
+export default function ProjectDetailScreen() {
+  return (
+    <RequirePermission capability="projects.view" section="Detalle de proyecto">
+      <ProjectDetailScreenContent />
+    </RequirePermission>
+  );
+}

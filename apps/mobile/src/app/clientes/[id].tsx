@@ -33,6 +33,7 @@ import {
 } from "@/constants/theme";
 import { LeuretLoading } from "@/components/LeuretLoading";
 import { useCompany } from "@/contexts/CompanyContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   addClientAddress,
   createClientContact,
@@ -68,6 +69,10 @@ export default function ClientDetailScreen() {
     : params.id;
 
   const { activeCompany } = useCompany();
+  const { can } = usePermissions();
+  const canEditClient = can("clients.edit");
+  const canDeleteClientData = can("clients.delete");
+  const canCreateProject = can("projects.create");
 
   const [client, setClient] =
     useState<ClientWithDetails | null>(null);
@@ -304,7 +309,7 @@ export default function ClientDetailScreen() {
 
         <InfoSection
           title="Información"
-          actionLabel="Editar"
+          actionLabel={canEditClient ? "Editar" : undefined}
           onAction={() => setEditModalVisible(true)}
         >
           <InfoRow
@@ -337,7 +342,7 @@ export default function ClientDetailScreen() {
 
         <InfoSection
           title="Direcciones"
-          actionLabel="Agregar"
+          actionLabel={canEditClient ? "Agregar" : undefined}
           onAction={() =>
             setAddressModalVisible(true)
           }
@@ -349,11 +354,11 @@ export default function ClientDetailScreen() {
               <AddressCard
                 key={address.id}
                 address={address}
-                onMakePrimary={() =>
+                onMakePrimary={canEditClient ? () =>
                   void handleSetPrimaryAddress(address)
-                }
-                onEdit={() => setEditingAddress(address)}
-                onDelete={() => handleDeleteAddress(address)}
+                : undefined}
+                onEdit={canEditClient ? () => setEditingAddress(address) : undefined}
+                onDelete={canDeleteClientData ? () => handleDeleteAddress(address) : undefined}
               />
             ))
           )}
@@ -361,21 +366,21 @@ export default function ClientDetailScreen() {
 
         <InfoSection
           title="Contactos"
-          actionLabel="Agregar"
+          actionLabel={canEditClient ? "Agregar" : undefined}
           onAction={openNewContact}
         >
           {client.contacts.length === 0 ? (
             <EmptySmall text="Este cliente no tiene contactos." />
           ) : (
             client.contacts.map((contact) => (
-              <ContactCard key={contact.id} contact={contact} onMakePrimary={() => void handleSetPrimaryContact(contact)} onEdit={() => openEditContact(contact)} onDelete={() => handleDeleteContact(contact)} />
+              <ContactCard key={contact.id} contact={contact} onMakePrimary={canEditClient ? () => void handleSetPrimaryContact(contact) : undefined} onEdit={canEditClient ? () => openEditContact(contact) : undefined} onDelete={canDeleteClientData ? () => handleDeleteContact(contact) : undefined} />
             ))
           )}
         </InfoSection>
 
         <InfoSection
           title="Proyectos"
-          actionLabel="Crear"
+          actionLabel={canCreateProject ? "Crear" : undefined}
           onAction={() =>
             setProjectModalVisible(true)
           }
@@ -535,9 +540,9 @@ function AddressCard({
   onDelete,
 }: {
   address: ClientAddress;
-  onMakePrimary: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  onMakePrimary?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   return (
     <View style={styles.addressCard}>
@@ -552,13 +557,13 @@ function AddressCard({
               Principal
             </Text>
           </View>
-        ) : (
+        ) : onMakePrimary ? (
           <Pressable onPress={onMakePrimary}>
             <Text style={styles.linkText}>
               Hacer principal
             </Text>
           </Pressable>
-        )}
+        ) : null}
       </View>
 
       <Text style={styles.cardBody}>
@@ -571,30 +576,36 @@ function AddressCard({
         </Text>
       ) : null}
 
-      <View style={styles.addressActions}>
-        <Pressable onPress={onEdit}>
-          <Text style={styles.linkText}>Editar</Text>
-        </Pressable>
+      {onEdit || onDelete ? (
+        <View style={styles.addressActions}>
+          {onEdit ? (
+            <Pressable onPress={onEdit}>
+              <Text style={styles.linkText}>Editar</Text>
+            </Pressable>
+          ) : null}
 
-        <Pressable onPress={onDelete}>
-          <Text style={styles.dangerText}>Eliminar</Text>
-        </Pressable>
-      </View>
+          {onDelete ? (
+            <Pressable onPress={onDelete}>
+              <Text style={styles.dangerText}>Eliminar</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }
 
-function ContactCard({ contact, onMakePrimary, onEdit, onDelete }: { contact: ClientContact; onMakePrimary: () => void; onEdit: () => void; onDelete: () => void }) {
+function ContactCard({ contact, onMakePrimary, onEdit, onDelete }: { contact: ClientContact; onMakePrimary?: () => void; onEdit?: () => void; onDelete?: () => void }) {
   return (
     <View style={styles.addressCard}>
       <View style={styles.cardTopRow}>
         <Text style={styles.cardTitle}>{contact.name}</Text>
-        {contact.is_primary ? <View style={styles.badge}><Text style={styles.badgeText}>Principal</Text></View> : <Pressable onPress={onMakePrimary}><Text style={styles.linkText}>Hacer principal</Text></Pressable>}
+        {contact.is_primary ? <View style={styles.badge}><Text style={styles.badgeText}>Principal</Text></View> : onMakePrimary ? <Pressable onPress={onMakePrimary}><Text style={styles.linkText}>Hacer principal</Text></Pressable> : null}
       </View>
       {contact.position ? <Text style={styles.cardMuted}>{contact.position}</Text> : null}
       {contact.phone ? <Text style={styles.cardBody}>{contact.phone}</Text> : null}
       {contact.email ? <Text style={styles.cardMuted}>{contact.email}</Text> : null}
-      <View style={styles.addressActions}><Pressable onPress={onEdit}><Text style={styles.linkText}>Editar</Text></Pressable><Pressable onPress={onDelete}><Text style={styles.dangerText}>Eliminar</Text></Pressable></View>
+      {onEdit || onDelete ? <View style={styles.addressActions}>{onEdit ? <Pressable onPress={onEdit}><Text style={styles.linkText}>Editar</Text></Pressable> : null}{onDelete ? <Pressable onPress={onDelete}><Text style={styles.dangerText}>Eliminar</Text></Pressable> : null}</View> : null}
     </View>
   );
 }
