@@ -26,6 +26,7 @@ import { useCompany } from "../../contexts/CompanyContext";
 import { useFormulaParameters } from "../../hooks/useFormulaParameters";
 import { addBudgetItem } from "../../services/budget-service";
 import { listCatalogItems } from "../../services/catalog-service";
+import { filterCalculatorCatalogItems } from "../../services/calculators/catalog-picker";
 import type { CatalogItemWithDetails } from "../../types/catalog";
 import {
   calculateConcrete,
@@ -446,7 +447,14 @@ function ConcreteCalculatorForm({
       item.sale_price > 0
         ? item.sale_price
         : item.unit_cost;
+    const hasPrice = Number.isFinite(price) && price > 0;
     const priceText = String(price);
+    if (!hasPrice) {
+      Alert.alert(
+        "Precio pendiente",
+        "Este insumo aún no tiene precio configurado. Puedes introducirlo manualmente en la calculadora."
+      );
+    }
     const unitCode = (
       item.unit?.code ??
       item.unit?.symbol ??
@@ -463,31 +471,31 @@ function ConcreteCalculatorForm({
     }));
 
     if (catalogTarget === "cement") {
-      updateField("cementPrice", priceText);
+      if (hasPrice) updateField("cementPrice", priceText);
     }
 
     if (catalogTarget === "sand") {
       if (isCubicMeter) {
         setSandPriceMode("cubicMeter");
-        updateField("sandCubicMeterPrice", priceText);
+        if (hasPrice) updateField("sandCubicMeterPrice", priceText);
       } else {
         setSandPriceMode("bag");
-        updateField("sandBagPrice", priceText);
+        if (hasPrice) updateField("sandBagPrice", priceText);
       }
     }
 
     if (catalogTarget === "gravel") {
       if (isCubicMeter) {
         setGravelPriceMode("cubicMeter");
-        updateField("gravelCubicMeterPrice", priceText);
+        if (hasPrice) updateField("gravelCubicMeterPrice", priceText);
       } else {
         setGravelPriceMode("bag");
-        updateField("gravelBagPrice", priceText);
+        if (hasPrice) updateField("gravelBagPrice", priceText);
       }
     }
 
     if (catalogTarget === "labor") {
-      updateField("laborPrice", priceText);
+      if (hasPrice) updateField("laborPrice", priceText);
     }
 
     setCatalogTarget(null);
@@ -1105,28 +1113,10 @@ function CatalogPricePicker({
 }) {
   const [search, setSearch] = useState("");
 
-  const filteredItems = useMemo(() => {
-    const query = search.trim().toLowerCase();
-
-    return items.filter((item) => {
-      const validType =
-        target === "labor"
-          ? item.item_type === "labor" ||
-            item.item_type === "service"
-          : item.item_type === "material";
-
-      if (!validType) return false;
-      if (!query) return true;
-
-      return (
-        item.name.toLowerCase().includes(query) ||
-        (item.sku?.toLowerCase().includes(query) ?? false) ||
-        (item.category?.name
-          .toLowerCase()
-          .includes(query) ?? false)
-      );
-    });
-  }, [items, search, target]);
+  const filteredItems = useMemo(
+    () => target ? filterCalculatorCatalogItems(items, target, search) : [],
+    [items, search, target]
+  );
 
   const title =
     target === "cement"
@@ -1194,7 +1184,7 @@ function CatalogPricePicker({
                     No hay ítems compatibles
                   </Text>
                   <Text style={styles.catalogEmptyText}>
-                    Crea primero el material o la mano de obra en el catálogo.
+                    El catálogo todavía no tiene un concepto del tipo y uso adecuado. Cierra esta ventana para ingresar el precio manualmente o registra el insumo en el catálogo.
                   </Text>
                 </View>
               }
@@ -1227,7 +1217,7 @@ function CatalogPricePicker({
                     </View>
 
                     <Text style={styles.catalogItemPrice}>
-                      {formatMoneyUtil(price, currencyCode)}
+                      {price > 0 ? formatMoneyUtil(price, currencyCode) : "Precio por definir"}
                     </Text>
                   </Pressable>
                 );
