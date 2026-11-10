@@ -393,11 +393,11 @@ function CatalogButton({ label, value, onPress }: {
 }
 
 const PICKER_KEYWORDS: Record<Target, RegExp> = {
-  board: /gypsum|yeso|drywall|panel/,
+  board: /lamina de gypsum|lamina de yeso|placa de yeso|tablaroca|drywall/,
   stud: /stud|parral|montante/,
   track: /track|canal|riel/,
   screw: /tornillo|screw/,
-  tape: /cinta|malla|tape/,
+  tape: /cinta (de papel|de malla|para juntas)|tape|malla de fibra/,
   compound: /compuesto|masilla|pasta|joint/,
   labor: /gyps|cimbr|tablaroca/,
 };
@@ -421,7 +421,7 @@ function CatalogPicker({ visible, target, items, loading, currency, onClose, onS
         placeholder="Buscar por nombre o categoría" style={styles.search} />
         {loading ? <ActivityIndicator size="large" color={colors.primary} /> :
           <FlatList data={filtered} keyExtractor={(item) => item.id}
-            ListEmptyComponent={<Text style={styles.itemMeta}>No hay conceptos de este tipo en el catálogo. Cierra y escribe el precio manualmente.</Text>}
+            ListEmptyComponent={<Text style={styles.itemMeta}>No hay conceptos para este campo en el catálogo. Búscalo por otro nombre o escribe el precio manualmente.</Text>}
             renderItem={({ item }) => {
               const price = item.sale_price > 0 ? item.sale_price : item.unit_cost;
               return <Pressable onPress={() => onSelect(item)} style={styles.catalogItem}>

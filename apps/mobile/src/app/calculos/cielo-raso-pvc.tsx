@@ -361,9 +361,9 @@ function CatalogButton({ label, value, onPress }: {
 
 
 const PICKER_KEYWORDS: Record<Target, RegExp> = {
-  panel: /pvc|panel|lamina|cielo/,
+  panel: /cielo raso|tablilla|panel de pvc|lamina de pvc/,
   track: /angulo|perimetral|track|canal|moldura/,
-  support: /perfil|omega|soporte|stud/,
+  support: /perfil|omega|stud/,
   carrier: /portante|carrier|canal|perfil/,
   hanger: /colgante|alambre|tensor|varilla roscada/,
   screw: /tornillo|clavo|fulminante|ancla/,
@@ -388,7 +388,7 @@ function CatalogPicker({ visible, target, items, loading, currency, onClose, onS
         placeholder="Buscar por nombre o categoría" style={styles.search} />
         {loading ? <ActivityIndicator size="large" color={colors.primary} /> :
           <FlatList data={filtered} keyExtractor={(item) => item.id}
-            ListEmptyComponent={<Text style={styles.itemMeta}>No hay conceptos de este tipo en el catálogo. Cierra y escribe el precio manualmente.</Text>}
+            ListEmptyComponent={<Text style={styles.itemMeta}>No hay conceptos para este campo en el catálogo. Búscalo por otro nombre o escribe el precio manualmente.</Text>}
             renderItem={({ item }) => {
               const price = item.sale_price > 0 ? item.sale_price : item.unit_cost;
               return <Pressable onPress={() => onSelect(item)} style={styles.catalogItem}>

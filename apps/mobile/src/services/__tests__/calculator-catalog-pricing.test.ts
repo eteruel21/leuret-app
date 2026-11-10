@@ -21,14 +21,47 @@ const items: CalculatorPricedEntry[] = [
 describe("precios del catálogo en calculadoras", () => {
   it("la mano de obra nunca acepta partidas de servicio completas", () => {
     const labor = rankCalculatorCatalogItems(items, "labor", /pint/, "");
-    expect(labor.map((i) => i.item_type)).toEqual(["labor", "labor"]);
-    expect(labor[0].name).toBe("Pintor calificado (hora)");
+    expect(labor.map((i) => i.name)).toEqual(["Pintor calificado (hora)"]);
+    expect(rankCalculatorCatalogItems(items, "labor", null, "").map((i) => i.item_type)).toEqual(["labor", "labor"]);
   });
 
-  it("los materiales coincidentes aparecen primero sin ocultar el resto", () => {
+  it("sin búsqueda solo muestra los materiales del campo", () => {
     const paint = rankCalculatorCatalogItems(items, "material", /pintura/, "");
-    expect(paint[0].name).toContain("Pintura acrílica");
-    expect(paint).toHaveLength(3);
+    expect(paint.map((i) => i.name)).toEqual(["Pintura acrílica mate interior/exterior (galón)"]);
+  });
+
+  it("no mezcla materiales de construcción con equipos de sistemas especiales", () => {
+    const catalog: CalculatorPricedEntry[] = [
+      ...items,
+      {
+        name: "Cámara analógica bala 2 MP",
+        item_type: "material",
+        unit_cost: 24.35,
+        sale_price: 32.87,
+        category: { name: "Sistemas especiales y seguridad" }
+      },
+      {
+        name: "Detector de movimiento PIR inalámbrico",
+        item_type: "material",
+        unit_cost: 34.46,
+        sale_price: 46.52,
+        category: { name: "Sistemas especiales y seguridad" }
+      }
+    ];
+    expect(rankCalculatorCatalogItems(catalog, "material", /camara/, "").map((i) => i.name)).toEqual([
+      "Cámara analógica bala 2 MP"
+    ]);
+    expect(rankCalculatorCatalogItems(catalog, "material", /camara/, "", /sistemas especiales/).map((i) => i.name)).toEqual([
+      "Cámara analógica bala 2 MP",
+      "Detector de movimiento PIR inalámbrico"
+    ]);
+    expect(rankCalculatorCatalogItems(catalog, "material", /dvr|nvr/, "")).toEqual([]);
+  });
+
+  it("la búsqueda recorre todo el catálogo del tipo", () => {
+    expect(rankCalculatorCatalogItems(items, "material", /pintura/, "cemento").map((i) => i.name)).toEqual([
+      "Cemento Portland 42.5 kg (saco)"
+    ]);
   });
 
   it("la búsqueda ignora acentos y mayúsculas", () => {

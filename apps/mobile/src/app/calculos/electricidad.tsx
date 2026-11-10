@@ -771,14 +771,14 @@ function CatalogButton({
 
 
 const PICKER_KEYWORDS: Record<Target, RegExp> = {
-  lightingCable: /cable|thhn|alambre|conductor/,
-  powerCable: /cable|thhn|alambre|conductor/,
-  conduit: /conduit|emt|tubo|tuberia|pvc/,
+  lightingCable: /thhn|thw|alambre|conductor|cable (electrico|de cobre|#|calibre)/,
+  powerCable: /thhn|thw|alambre|conductor|cable (electrico|de cobre|#|calibre)/,
+  conduit: /conduit|\bemt\b|tubo electrico|tuberia electrica/,
   box: /caja|octogonal|cuadrada/,
   outlet: /tomacorriente|receptaculo|toma/,
   switch: /interruptor|apagador|switch/,
   breaker: /breaker|interruptor termomagnetico|disyuntor/,
-  supplies: /cinta|conector|grapa|abrazadera|tornillo/,
+  supplies: /cinta aislante|conector (electrico|pvc|emt|de resorte)|grapa|abrazadera|tornillo|wirenut/,
   standardLabor: /electric/,
   dedicatedLabor: /electric/,
 };
@@ -831,7 +831,7 @@ function Picker({
         <TextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Buscar en el catálogo"
+          placeholder="Buscar en todo el catálogo"
           style={styles.search}
         />
 
@@ -845,7 +845,7 @@ function Picker({
             data={filtered}
             ListEmptyComponent={
               <Text style={styles.searchEmpty}>
-                No hay conceptos de este tipo en el catálogo. Cierra y escribe el precio manualmente.
+                No hay conceptos para este campo en el catálogo. Búscalo por otro nombre o escribe el precio manualmente.
               </Text>
             }
             keyExtractor={(item: CatalogItemWithDetails) =>
