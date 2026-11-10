@@ -95,6 +95,27 @@ export async function notifyBudgetDecision(
   }
 }
 
+export async function notifyBudgetSent(
+  budgetValue: unknown,
+  clientUserId: string | null
+): Promise<void> {
+  const budget = asRecord(budgetValue);
+  const budgetId = textField(budget, "id");
+  const budgetNumber = textField(budget, "budget_number");
+  const displayNumber = budgetNumber ? ` ${budgetNumber}` : "";
+  const amount = formatAmount(budget?.total, textField(budget, "currency_code"));
+
+  await dispatchEventPush(
+    clientUserId,
+    "Nuevo presupuesto",
+    `Recibiste el presupuesto${displayNumber}${amount ? ` por ${amount}` : ""}. Revísalo y responde desde la app.`,
+    {
+      type: "budget.sent",
+      ...(budgetId ? { budgetId } : {})
+    }
+  );
+}
+
 export async function notifyInvoiceIssued(invoiceValue: unknown): Promise<void> {
   const invoice = asRecord(invoiceValue);
   const client = asRecord(invoice?.client);

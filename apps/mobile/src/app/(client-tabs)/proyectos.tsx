@@ -1,21 +1,23 @@
-import { useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
-import {
-  Alert,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { type Href, router, useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
+import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { FilterBar } from "@/components/client/FilterBar";
+import { StatusPill } from "@/components/client/StatusPill";
 import { LeuretEmptyState } from "@/components/LeuretEmptyState";
+import { LeuretFeedback } from "@/components/LeuretFeedback";
 import { LeuretLoading } from "@/components/LeuretLoading";
+import { MotionPressable } from "@/components/MotionPressable";
+import { colors, radius, shadows } from "@/constants/theme";
+import { useAuth } from "@/contexts/AuthContext";
+import { listProjectsForClient, type ClientProjectSummary } from "@/services/project-service";
+import { getProjectStatusLabel } from "@/types/project";
+import { isProjectActive, matchesSearch, projectStatusTone } from "@/utils/client-portal";
+import { formatShortDate } from "@/utils/format";
 
-import { colors, radius } from "../../constants/theme";
-import { useAuth } from "../../contexts/AuthContext";
-import { listProjectsForClient, type ClientProjectSummary } from "../../services/project-service";
+type Filter = "active" | "completed" | "all";
 
 export default function ClientProjectsScreen() {
   const { profile } = useAuth();
@@ -23,26 +25,18 @@ export default function ClientProjectsScreen() {
   const [projects, setProjects] = useState<ClientProjectSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>("active");
+  const [search, setSearch] = useState("");
 
   const loadProjects = useCallback(
     async (showRefresh = false) => {
       if (!profileId) return;
+      if (showRefresh) setRefreshing(true);
 
-      if (showRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      const { projects: loadedProjects, error } = await listProjectsForClient(
-        profileId,
-      );
-
-      if (error) {
-        Alert.alert("No fue posible cargar tus proyectos", error);
-      } else {
-        setProjects(loadedProjects);
-      }
+      const result = await listProjectsForClient(profileId);
+      setError(result.error);
+      if (!result.error) setProjects(result.projects);
 
       setLoading(false);
       setRefreshing(false);
@@ -56,218 +50,169 @@ export default function ClientProjectsScreen() {
     }, [loadProjects]),
   );
 
+  const counts = useMemo(
+    () => ({
+      active: projects.filter((project) => isProjectActive(project.status)).length,
+      completed: projects.filter((project) => project.status === "completed").length,
+      all: projects.length,
+    }),
+    [projects],
+  );
+
+  const visible = useMemo(
+    () =>
+      projects
+        .filter((project) =>
+          filter === "all"
+            ? true
+            : filter === "active"
+              ? isProjectActive(project.status)
+              : project.status === "completed",
+        )
+        .filter((project) => matchesSearch(search, project.name, project.project_code, project.company?.name)),
+    [projects, filter, search],
+  );
+
   if (loading) return <LeuretLoading message="Cargando proyectos…" fullScreen />;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <FlatList
-        data={projects}
+        data={visible}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => void loadProjects(true)}
-          />
-        }
+        keyboardShouldPersistTaps="handled"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadProjects(true)} />}
         ListHeaderComponent={
-          <View style={styles.header}>
-            <Text style={styles.title}>Mis Proyectos</Text>
+          <View>
+            <Text style={styles.title}>Proyectos</Text>
             <Text style={styles.subtitle}>
-              {projects.length} proyecto{projects.length === 1 ? "" : "s"} activos
+              {counts.active} en curso · {counts.completed} terminado{counts.completed === 1 ? "" : "s"}
             </Text>
+
+            {error ? (
+              <LeuretFeedback
+                tone="error"
+                title="No pudimos cargar tus proyectos"
+                message={error}
+                actionLabel="Reintentar"
+                onAction={() => void loadProjects(true)}
+                style={styles.feedback}
+              />
+            ) : null}
+
+            {projects.length > 0 ? (
+              <FilterBar
+                value={filter}
+                onChange={setFilter}
+                search={search}
+                onSearchChange={setSearch}
+                searchPlaceholder="Buscar proyecto o contratista"
+                options={[
+                  { value: "active", label: "En curso", count: counts.active },
+                  { value: "completed", label: "Terminados", count: counts.completed },
+                  { value: "all", label: "Todos", count: counts.all },
+                ]}
+              />
+            ) : null}
           </View>
         }
         ListEmptyComponent={
-          <LeuretEmptyState
-            icon="business-outline"
-            title="No tienes proyectos activos"
-            description="Los proyectos compartidos por tus contratistas se listarán aquí."
-            compact
-          />
+          error ? null : projects.length === 0 ? (
+            <LeuretEmptyState
+              icon="business-outline"
+              title="Aún no tienes proyectos"
+              description="Cuando tu contratista registre tu obra, podrás seguir su avance, fotos y visitas desde aquí."
+              compact
+            />
+          ) : (
+            <LeuretEmptyState
+              icon="search-outline"
+              title="Sin resultados"
+              description="Prueba con otro filtro o búsqueda."
+              actionLabel="Ver todos"
+              onAction={() => {
+                setFilter("all");
+                setSearch("");
+              }}
+              compact
+            />
+          )
         }
-        renderItem={({ item }) => (
-          <View style={styles.projectCard}>
-            <View style={styles.cardHeader}>
-              <View style={styles.cardInfo}>
-                <Text style={styles.projectCode}>
-                  {item.project_code || "PROYECTO"}
-                </Text>
-                <Text style={styles.projectName} numberOfLines={1}>
-                  {item.name}
-                </Text>
-                {item.company?.name && (
-                  <Text style={styles.contractorName} numberOfLines={1}>
-                    Contratista: {item.company.name}
+        renderItem={({ item }) => {
+          const progress = Math.max(0, Math.min(100, Number(item.progress_percentage) || 0));
+          return (
+            <MotionPressable
+              onPress={() => router.push({ pathname: "/cliente-proyectos/[id]", params: { id: item.id } } as Href)}
+              pressedScale={0.985}
+              accessibilityRole="button"
+              accessibilityLabel={`Proyecto ${item.name}, avance ${progress} por ciento`}
+              style={styles.card}
+            >
+              <View style={styles.cardHeader}>
+                <View style={styles.cardInfo}>
+                  <Text style={styles.code}>{item.project_code || "PROYECTO"}</Text>
+                  <Text style={styles.name} numberOfLines={2}>
+                    {item.name}
                   </Text>
-                )}
+                  {item.company?.name ? (
+                    <Text style={styles.contractor} numberOfLines={1}>
+                      {item.company.name}
+                    </Text>
+                  ) : null}
+                </View>
+                <StatusPill label={getProjectStatusLabel(item.status)} tone={projectStatusTone(item.status)} />
               </View>
 
-              <View style={styles.statusBadge}>
-                <Text style={styles.statusText}>
-                  {item.status === "in_progress"
-                    ? "En progreso"
-                    : item.status === "completed"
-                      ? "Completado"
-                      : "Verificando"}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.progressSection}>
               <View style={styles.progressHeader}>
-                <Text style={styles.progressLabel}>Progreso</Text>
-                <Text style={styles.progressValue}>
-                  {item.progress_percentage}%
-                </Text>
+                <Text style={styles.progressLabel}>Avance</Text>
+                <Text style={styles.progressValue}>{progress}%</Text>
+              </View>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${progress}%` }]} />
               </View>
 
-              <View style={styles.progressBarBg}>
-                <View
-                  style={[
-                    styles.progressBarFill,
-                    { width: `${item.progress_percentage}%` },
-                  ]}
-                />
+              <View style={styles.footer}>
+                <Text style={styles.footerText}>
+                  {item.estimated_end_date
+                    ? `Entrega estimada: ${formatShortDate(item.estimated_end_date)}`
+                    : "Sin fecha de entrega"}
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
               </View>
-            </View>
-          </View>
-        )}
+            </MotionPressable>
+          );
+        }}
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  loading: {
-    flex: 1,
-    backgroundColor: colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  content: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  header: {
-    marginBottom: 20,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: "900",
-  },
-  subtitle: {
-    marginTop: 4,
-    color: colors.textSecondary,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  empty: {
-    marginTop: 40,
-    padding: 30,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  emptyTitle: {
-    marginTop: 14,
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  emptyText: {
-    marginTop: 8,
-    color: colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: "center",
-  },
-  projectCard: {
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  content: { padding: 20, paddingBottom: 40 },
+  title: { color: colors.text, fontSize: 28, fontWeight: "900" },
+  subtitle: { marginTop: 4, marginBottom: 18, color: colors.textSecondary, fontSize: 14, fontWeight: "700" },
+  feedback: { marginBottom: 16 },
+  card: {
     padding: 16,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     backgroundColor: colors.surface,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 2,
+    ...shadows.soft,
   },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  cardInfo: {
-    flex: 1,
-    marginRight: 10,
-  },
-  projectCode: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: "800",
-    textTransform: "uppercase",
-  },
-  projectName: {
-    marginTop: 4,
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  contractorName: {
-    marginTop: 4,
-    color: colors.textSecondary,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: colors.primarySoft,
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: colors.primary,
-  },
-  progressSection: {
-    marginTop: 16,
-  },
-  progressHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  progressLabel: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  progressValue: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  progressBarBg: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.background,
-    overflow: "hidden",
-  },
-  progressBarFill: {
-    height: "100%",
-    borderRadius: 3,
-    backgroundColor: colors.primary,
-  },
+  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10 },
+  cardInfo: { flex: 1 },
+  code: { color: colors.textSecondary, fontSize: 11, fontWeight: "800", textTransform: "uppercase" },
+  name: { marginTop: 4, color: colors.text, fontSize: 16, fontWeight: "800" },
+  contractor: { marginTop: 4, color: colors.textSecondary, fontSize: 13, fontWeight: "600" },
+  progressHeader: { marginTop: 16, marginBottom: 6, flexDirection: "row", justifyContent: "space-between" },
+  progressLabel: { color: colors.textSecondary, fontSize: 12, fontWeight: "700" },
+  progressValue: { color: colors.text, fontSize: 12, fontWeight: "900" },
+  progressTrack: { height: 8, borderRadius: 4, backgroundColor: colors.steelSoft, overflow: "hidden" },
+  progressFill: { height: "100%", borderRadius: 4, backgroundColor: colors.success },
+  footer: { marginTop: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  footerText: { color: colors.textSecondary, fontSize: 12, fontWeight: "600" },
 });

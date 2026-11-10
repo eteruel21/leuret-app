@@ -66,3 +66,20 @@ export async function deleteProjectPhoto(
     { method: "DELETE" }
   );
 }
+
+/** Muestra u oculta la foto en el portal del cliente. */
+export async function setProjectPhotoSharing(
+  companyId: string,
+  projectId: string,
+  photoId: string,
+  sharedWithClient: boolean
+): Promise<ProjectPhoto> {
+  const res = await authenticatedRequest<{ photo: ProjectPhoto }>(
+    `/companies/${companyId}/projects/${projectId}/photos/${photoId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ sharedWithClient })
+    }
+  );
+  return res.photo;
+}

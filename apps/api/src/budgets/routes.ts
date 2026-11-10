@@ -20,6 +20,7 @@ import {
   createBudgetItemSchema,
   approveBudgetSchema,
   rejectBudgetSchema,
+  sendBudgetSchema,
   convertCalculationSchema,
   applyPriceUpdatesSchema
 } from "./schemas.js";
@@ -35,11 +36,12 @@ import {
   approveBudgetService,
   clientBudgetResponseError,
   rejectBudgetService,
+  sendBudgetService,
   getBudgetHistoryService,
   getBudgetPriceUpdatesService,
   applyBudgetPriceUpdatesService
 } from "./services.js";
-import { BudgetNotDraftError } from "./repository.js";
+import { BudgetNotDraftError, BudgetSendError } from "./repository.js";
 
 import { getCalculationDetailService } from "../calculations/services.js";
 
@@ -273,6 +275,41 @@ export async function registerBudgetRoutes(
         if (known) return reply.status(known.status).send({ message: known.message });
         request.log.error(safeErrorDetails(error), "No se pudo aprobar el presupuesto.");
         return reply.status(400).send({ message: "Error al aprobar el presupuesto." });
+      }
+    }
+  );
+
+  app.post(
+    "/budgets/:budgetId/send",
+    {
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator", "sales"])]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedParams = budgetParamsSchema.safeParse(request.params);
+      const parsedBody = sendBudgetSchema.safeParse(request.body);
+
+      if (!parsedParams.success || !parsedBody.success) {
+        return reply.status(400).send({ message: "Datos no válidos para enviar el presupuesto." });
+      }
+
+      try {
+        const budget = await sendBudgetService(
+          userId,
+          parsedParams.data.budgetId,
+          parsedBody.data.companyId,
+          parsedBody.data.validUntil
+        );
+        return { budget };
+      } catch (error) {
+        if (error instanceof BudgetSendError) {
+          const status = error.code === "not_found" ? 404 : error.code === "not_draft" ? 409 : 400;
+          return reply.status(status).send({ message: error.message });
+        }
+        request.log.error(safeErrorDetails(error), "No se pudo enviar el presupuesto.");
+        return reply.status(400).send({ message: "Error al enviar el presupuesto." });
       }
     }
   );

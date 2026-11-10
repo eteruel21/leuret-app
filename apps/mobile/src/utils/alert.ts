@@ -28,3 +28,43 @@ export function showAlert(
     Alert.alert(title, message, buttons);
   }
 }
+
+/**
+ * Pide confirmación en web y nativo. En web `Alert.alert` con botones no
+ * muestra nada, así que se usa `window.confirm`.
+ */
+export function confirmAction({
+  title,
+  message,
+  confirmText = "Aceptar",
+  cancelText = "Cancelar",
+  destructive = false,
+}: {
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  destructive?: boolean;
+}): Promise<boolean> {
+  if (Platform.OS === "web") {
+    return Promise.resolve(
+      typeof window !== "undefined" && window.confirm(`${title}\n\n${message}`),
+    );
+  }
+
+  return new Promise((resolve) => {
+    Alert.alert(
+      title,
+      message,
+      [
+        { text: cancelText, style: "cancel", onPress: () => resolve(false) },
+        {
+          text: confirmText,
+          style: destructive ? "destructive" : "default",
+          onPress: () => resolve(true),
+        },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) },
+    );
+  });
+}
