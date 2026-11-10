@@ -99,3 +99,14 @@ export async function sendReply(
     }
   );
 }
+
+export async function getAttachmentDownload(
+  box: MailboxName,
+  threadId: string,
+  emailId: string,
+  attachmentId: string
+): Promise<{ filename: string; downloadUrl: string; expiresAt?: string }> {
+  return authenticatedRequest(
+    `${root(box, threadId)}/emails/${encodeURIComponent(emailId)}/attachments/${encodeURIComponent(attachmentId)}`
+  );
+}
