@@ -1,6 +1,7 @@
 import {
   authenticatedRequest
 } from "@/services/api";
+import { fetchAllCatalogPages, type CatalogPage } from "./catalog-pagination";
 import type {
   CatalogCategory,
   CatalogItem,
@@ -49,13 +50,14 @@ export async function listCatalogItems(
   error: string | null;
 }> {
   try {
-    const response =
-      await authenticatedRequest<{
-        items: EffectiveCatalogRow[];
-      }>("/catalog/items");
+    const rows = await fetchAllCatalogPages((page, limit) =>
+      authenticatedRequest<CatalogPage<EffectiveCatalogRow>>(
+        `/catalog/items?page=${page}&limit=${limit}`
+      )
+    );
 
     const items =
-      response.items.map((row) => {
+      rows.map((row) => {
         const timestamp =
           row.updated_at ??
           new Date(0).toISOString();
