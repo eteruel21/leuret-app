@@ -96,3 +96,18 @@ test("Centro de control: mapea presupuestos, facturas, clientes y auditoría", (
   assert.deepEqual(audit.metadata, {});
   assert.equal(audit.companyId, null);
 });
+
+test("Acciones de soporte: valida estado de obra y motivo", async () => {
+  const { adminProjectStatusSchema, adminCancelInvoiceSchema } = await import("../schemas.js");
+  assert.equal(adminProjectStatusSchema.safeParse({ status: "paused", reason: "Cliente pidió pausa" }).success, true);
+  assert.equal(adminProjectStatusSchema.safeParse({ status: "borrada", reason: "Cliente pidió pausa" }).success, false);
+  assert.equal(adminProjectStatusSchema.safeParse({ status: "paused", reason: "ok" }).success, false);
+  assert.equal(adminCancelInvoiceSchema.safeParse({ reason: "   " }).success, false);
+});
+
+test("Acciones de soporte: solo muestra mensajes de reglas de negocio (P0001)", async () => {
+  const { businessRuleMessage } = await import("../operations-services.js");
+  assert.equal(businessRuleMessage({ code: "P0001", message: "Solo se puede anular una factura emitida o vencida." }), "Solo se puede anular una factura emitida o vencida.");
+  assert.equal(businessRuleMessage({ code: "23505", message: "duplicate key" }), null);
+  assert.equal(businessRuleMessage(new Error("conexión perdida")), null);
+});

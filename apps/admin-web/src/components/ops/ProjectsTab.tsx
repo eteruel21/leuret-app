@@ -14,8 +14,9 @@ import {
   loadProjectDetail,
   loadProjects,
   money,
+  setProjectStatus,
 } from "../../operations-data";
-import { AlertBanner, EmptyState, Table } from "../CommonUI";
+import { AlertBanner, EmptyState, SuccessBanner, Table } from "../CommonUI";
 import {
   Drawer,
   DrawerSection,
@@ -26,6 +27,7 @@ import {
   Pagination,
   ProgressBar,
   statusPill,
+  SupportAction,
   useAdminList,
   useDebounced,
   useDetail,
@@ -156,7 +158,7 @@ export function ProjectsTab({
         {page && <Pagination total={page.total} offset={offset} limit={PAGE_SIZE} onChange={setOffset} />}
       </section>
 
-      {selectedId && <ProjectDrawer id={selectedId} onClose={() => setSelectedId(null)} onNavigate={onNavigate} />}
+      {selectedId && <ProjectDrawer id={selectedId} onClose={() => setSelectedId(null)} onNavigate={onNavigate} onChanged={reload} />}
     </>
   );
 }
@@ -166,9 +168,21 @@ function isLate(project: AdminProject): boolean {
   return project.estimatedEndDate < new Date().toISOString().slice(0, 10);
 }
 
-function ProjectDrawer({ id, onClose, onNavigate }: { id: string; onClose: () => void; onNavigate: OpsNavigate }) {
-  const { detail, error } = useDetail(loadProjectDetail, id);
+function ProjectDrawer({
+  id,
+  onClose,
+  onNavigate,
+  onChanged,
+}: {
+  id: string;
+  onClose: () => void;
+  onNavigate: OpsNavigate;
+  onChanged: () => void;
+}) {
+  const { detail, error, reload } = useDetail(loadProjectDetail, id);
   const project = detail?.project;
+  const [nextStatus, setNextStatus] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
 
   return (
     <Drawer
@@ -189,6 +203,7 @@ function ProjectDrawer({ id, onClose, onNavigate }: { id: string; onClose: () =>
       }
     >
       {error && <AlertBanner message={error} />}
+      {notice && <SuccessBanner message={notice} />}
       {!detail && !error && <LoadingBlock label="Cargando obra..." />}
       {detail && project && (
         <>
@@ -297,6 +312,37 @@ function ProjectDrawer({ id, onClose, onNavigate }: { id: string; onClose: () =>
                 ))}
               </ul>
             )}
+          </DrawerSection>
+
+          <DrawerSection title="Acciones de soporte" icon={<HardHat size={17} />}>
+            <SupportAction
+              title="Cambiar el estado de la obra"
+              description={`Estado actual: ${PROJECT_STATUS[project.status]?.label ?? project.status}. Úsalo para corregir un estado a pedido de la empresa o del cliente.`}
+              buttonLabel="Cambiar estado"
+              confirmLabel="Confirmar cambio"
+              onConfirm={async (reason) => {
+                if (!nextStatus) throw new Error("Elige el nuevo estado.");
+                await setProjectStatus(project.id, nextStatus, reason);
+                setNotice(`Estado cambiado a «${PROJECT_STATUS[nextStatus]?.label ?? nextStatus}». Quedó registrado en la auditoría.`);
+                setNextStatus("");
+                reload();
+                onChanged();
+              }}
+            >
+              <label className="field">
+                <span>Nuevo estado</span>
+                <select value={nextStatus} onChange={(event) => setNextStatus(event.target.value)}>
+                  <option value="">Elige un estado...</option>
+                  {Object.entries(PROJECT_STATUS)
+                    .filter(([value]) => value !== project.status)
+                    .map(([value, entry]) => (
+                      <option key={value} value={value}>
+                        {entry.label}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            </SupportAction>
           </DrawerSection>
 
           {detail.activities.length > 0 && (

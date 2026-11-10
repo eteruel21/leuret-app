@@ -798,3 +798,27 @@ export async function adminGlobalSearchRepo(userId: string, query: string) {
     };
   });
 }
+
+// ------------------------------------------------ Acciones de soporte (039)
+
+/** Cambia el estado de una obra con motivo; la función SQL deja la auditoría. */
+export async function adminSetProjectStatusRepo(userId: string, projectId: string, status: string, reason: string) {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query<{ id: string | null }>(
+      `SELECT public.admin_set_project_status($1, $2::public.project_status, $3) AS id`,
+      [projectId, status, reason]
+    );
+    return result.rows[0]?.id ?? null;
+  });
+}
+
+/** Anula una factura emitida o vencida sin movimientos; deja historial y auditoría. */
+export async function adminCancelInvoiceRepo(userId: string, invoiceId: string, reason: string) {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query<{ id: string | null }>(
+      `SELECT public.admin_cancel_invoice($1, $2) AS id`,
+      [invoiceId, reason]
+    );
+    return result.rows[0]?.id ?? null;
+  });
+}

@@ -1,7 +1,9 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { requireSuperAdmin } from "./authorize.js";
 import {
+  adminCancelInvoiceSchema,
   adminListQuerySchema,
+  adminProjectStatusSchema,
   adminSearchQuerySchema,
   entityParamsSchema,
   revokeSessionsSchema,
@@ -9,6 +11,7 @@ import {
 } from "./schemas.js";
 import {
   adminGlobalSearchService,
+  businessRuleMessage,
   getAdminBudgetDetailService,
   getAdminInvoiceDetailService,
   getAdminOverviewService,
@@ -21,7 +24,12 @@ import {
   listAdminUserSessionsService,
   revokeAdminUserSessionsService
 } from "./operations-services.js";
-import type { ListFilters } from "./operations-repository.js";
+import {
+  adminCancelInvoiceRepo,
+  adminSetProjectStatusRepo,
+  type ListFilters
+} from "./operations-repository.js";
+
 
 const noStore = (reply: FastifyReply) => reply.header("Cache-Control", "private, no-store");
 
@@ -124,5 +132,62 @@ export async function registerAdminOperationsRoutes(app: FastifyInstance): Promi
       "Sesiones de usuario cerradas desde el panel."
     );
     return { success: true, revokedCount: result.revokedCount };
+  });
+
+  app.post("/admin/projects/:id/status", { preHandler: requireSuperAdmin }, async (request, reply) => {
+    const params = entityParamsSchema.safeParse(request.params);
+    const body = adminProjectStatusSchema.safeParse(request.body);
+    if (!params.success || !body.success) {
+      return reply.status(400).send({
+        message: body.success ? "La obra indicada no es válida." : body.error.issues[0]?.message ?? "Datos no válidos."
+      });
+    }
+
+    try {
+      const projectId = await adminSetProjectStatusRepo(
+        request.authenticatedUser!.id,
+        params.data.id,
+        body.data.status,
+        body.data.reason
+      );
+      if (!projectId) {
+        return reply.status(404).send({ message: "No se encontró la obra." });
+      }
+      request.log.warn(
+        { projectId, status: body.data.status, adminId: request.authenticatedUser!.id },
+        "Estado de obra cambiado desde el panel."
+      );
+      return { success: true };
+    } catch (error) {
+      const message = businessRuleMessage(error);
+      if (message) return reply.status(409).send({ message });
+      throw error;
+    }
+  });
+
+  app.post("/admin/invoices/:id/cancel", { preHandler: requireSuperAdmin }, async (request, reply) => {
+    const params = entityParamsSchema.safeParse(request.params);
+    const body = adminCancelInvoiceSchema.safeParse(request.body);
+    if (!params.success || !body.success) {
+      return reply.status(400).send({
+        message: body.success ? "La factura indicada no es válida." : body.error.issues[0]?.message ?? "Datos no válidos."
+      });
+    }
+
+    try {
+      const invoiceId = await adminCancelInvoiceRepo(request.authenticatedUser!.id, params.data.id, body.data.reason);
+      if (!invoiceId) {
+        return reply.status(404).send({ message: "No se encontró la factura." });
+      }
+      request.log.warn(
+        { invoiceId, adminId: request.authenticatedUser!.id },
+        "Factura anulada desde el panel."
+      );
+      return { success: true };
+    } catch (error) {
+      const message = businessRuleMessage(error);
+      if (message) return reply.status(409).send({ message });
+      throw error;
+    }
   });
 }

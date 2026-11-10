@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { BellRing, CreditCard, History, Receipt, ReceiptText } from "lucide-react";
+import { BellRing, CreditCard, History, Receipt, ReceiptText, ShieldAlert } from "lucide-react";
 
 import type { Company } from "../../admin-data";
 import {
   INVOICE_STATUS,
   PAYMENT_METHOD,
   REMINDER_KIND,
+  cancelInvoice,
   dateTime,
   day,
   downloadCsv,
@@ -13,7 +14,7 @@ import {
   loadInvoices,
   money,
 } from "../../operations-data";
-import { AlertBanner, EmptyState, Table } from "../CommonUI";
+import { AlertBanner, EmptyState, SuccessBanner, Table } from "../CommonUI";
 import {
   Drawer,
   DrawerSection,
@@ -24,6 +25,7 @@ import {
   Pagination,
   StatusPill,
   statusPill,
+  SupportAction,
   useAdminList,
   useDebounced,
   useDetail,
@@ -172,13 +174,35 @@ export function InvoicesTab({
         {page && <Pagination total={page.total} offset={offset} limit={PAGE_SIZE} onChange={setOffset} />}
       </section>
 
-      {selectedId && <InvoiceDrawer id={selectedId} onClose={() => setSelectedId(null)} onNavigate={onNavigate} />}
+      {selectedId && <InvoiceDrawer id={selectedId} onClose={() => setSelectedId(null)} onNavigate={onNavigate} onChanged={reload} />}
     </>
   );
 }
 
-function InvoiceDrawer({ id, onClose, onNavigate }: { id: string; onClose: () => void; onNavigate: OpsNavigate }) {
-  const { detail, error } = useDetail(loadInvoiceDetail, id);
+function cancelBlockReason(invoice: { status: string; totalPaid: number; totalCredit: number }): string | null {
+  if (invoice.status === "cancelled") return "La factura ya está anulada.";
+  if (!["issued", "overdue"].includes(invoice.status)) {
+    return "Solo se puede anular una factura emitida o vencida sin pagos.";
+  }
+  if (invoice.totalPaid > 0 || invoice.totalCredit > 0) {
+    return "Tiene pagos o notas de crédito: la empresa debe revertirlos o emitir una nota de crédito.";
+  }
+  return null;
+}
+
+function InvoiceDrawer({
+  id,
+  onClose,
+  onNavigate,
+  onChanged,
+}: {
+  id: string;
+  onClose: () => void;
+  onNavigate: OpsNavigate;
+  onChanged: () => void;
+}) {
+  const { detail, error, reload } = useDetail(loadInvoiceDetail, id);
+  const [notice, setNotice] = useState<string | null>(null);
   const invoice = detail?.invoice;
   const currency = invoice?.currencyCode ?? "USD";
 
@@ -206,6 +230,7 @@ function InvoiceDrawer({ id, onClose, onNavigate }: { id: string; onClose: () =>
       }
     >
       {error && <AlertBanner message={error} />}
+      {notice && <SuccessBanner message={notice} />}
       {!detail && !error && <LoadingBlock label="Cargando factura..." />}
       {detail && invoice && (
         <>
@@ -322,6 +347,23 @@ function InvoiceDrawer({ id, onClose, onNavigate }: { id: string; onClose: () =>
               </ul>
             </DrawerSection>
           )}
+
+          <DrawerSection title="Acciones de soporte" icon={<ShieldAlert size={17} />}>
+            <SupportAction
+              title="Anular la factura"
+              description="La factura queda anulada para la empresa y el cliente. No se puede deshacer."
+              buttonLabel="Anular factura"
+              confirmLabel="Confirmar anulación"
+              danger
+              disabledReason={cancelBlockReason(invoice)}
+              onConfirm={async (reason) => {
+                await cancelInvoice(invoice.id, reason);
+                setNotice("Factura anulada. Quedó en su historial y en la auditoría.");
+                reload();
+                onChanged();
+              }}
+            />
+          </DrawerSection>
 
           <DrawerSection title="Historial" icon={<History size={17} />}>
             {detail.history.length === 0 ? (
