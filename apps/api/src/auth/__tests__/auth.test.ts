@@ -3,7 +3,7 @@ import { buildApp } from "../../app.js";
 import { adminPool } from "../../db/test-db.js";
 import type { FastifyInstance } from "fastify";
 import { installTurnstileTestMock } from "./turnstile-test-helper.js";
-import { hashSecureToken } from "../tokens.js";
+import { generateSecureToken, hashSecureToken } from "../tokens.js";
 
 describe("T-053: Suite de Pruebas de Autenticación (Auth)", () => {
   let app: FastifyInstance;
@@ -76,9 +76,34 @@ describe("T-053: Suite de Pruebas de Autenticación (Auth)", () => {
     expect(body.message).toContain("correo");
   });
 
-  it("3. Confirmar correo y hacer Login exitoso (POST /auth/login)", async () => {
-    // Confirm email directly in test database using adminPool
-    await adminPool.query("UPDATE app_auth.users SET email_confirmed_at = now() WHERE id = $1", [userId]);
+  it("3. Verificar correo con enlace de un solo uso y hacer Login exitoso", async () => {
+    const { token, hash } = generateSecureToken();
+    await adminPool.query(
+      `INSERT INTO app_auth.tokens (user_id, token_type, token_hash, expires_at)
+       VALUES ($1, 'email_verification', $2, now() + interval '24 hours')`,
+      [userId, hash]
+    );
+
+    const verifyResponse = await app.inject({
+      method: "POST",
+      url: "/auth/verify-email",
+      payload: { token }
+    });
+    expect(verifyResponse.statusCode).toBe(200);
+    expect(JSON.parse(verifyResponse.body).success).toBe(true);
+
+    const verifiedUser = await adminPool.query(
+      "SELECT email_confirmed_at FROM app_auth.users WHERE id = $1",
+      [userId]
+    );
+    expect(verifiedUser.rows[0].email_confirmed_at).not.toBeNull();
+
+    const reusedLink = await app.inject({
+      method: "POST",
+      url: "/auth/verify-email",
+      payload: { token }
+    });
+    expect(reusedLink.statusCode).toBe(400);
 
     const res = await app.inject({
       method: "POST",
