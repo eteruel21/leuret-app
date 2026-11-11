@@ -21,6 +21,30 @@ const updateProfileSchema = z.object({
     .nullable()
 });
 
+const updateAvatarSchema = z.object({
+  avatarUrl: z.string().trim().max(1000).nullable()
+});
+
+/**
+ * La foto de perfil solo puede apuntar a la imagen que el propio usuario
+ * subió con POST /profile/media (ruta pública servida por esta API).
+ */
+export function isOwnAvatarUrl(value: string, userId: string): boolean {
+  let parsed: URL;
+
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    return false;
+  }
+
+  return parsed.pathname === `/storage/public/profile-media/${userId}/avatar`;
+}
+
 const updateContractorSchema = z.object({
   businessName: z.string().trim().max(180).nullable(),
   idDocument: z.string().trim().max(100),
@@ -190,6 +214,71 @@ export async function registerProfileRoutes(
 
       return {
         success: true
+      };
+    }
+  );
+
+  app.patch(
+    "/profile/avatar",
+    {
+      preHandler: authenticateRequest
+    },
+    async (request, reply) => {
+      const userId =
+        request.authenticatedUser?.id;
+
+      if (!userId) {
+        return reply.status(401).send({
+          message: "Se requiere autenticación."
+        });
+      }
+
+      const parsedBody =
+        updateAvatarSchema.safeParse(request.body);
+
+      const avatarUrl = parsedBody.success
+        ? parsedBody.data.avatarUrl || null
+        : null;
+
+      if (
+        !parsedBody.success ||
+        (avatarUrl !== null && !isOwnAvatarUrl(avatarUrl, userId))
+      ) {
+        return reply.status(400).send({
+          message: "La foto de perfil no es válida."
+        });
+      }
+
+      const updated = await withUserTransaction(
+        userId,
+        async (client) => {
+          const result = await client.query<{
+            id: string;
+          }>(
+            `
+              UPDATE public.profiles
+              SET
+                avatar_url = $1,
+                updated_at = now()
+              WHERE id = app.current_user_id()
+              RETURNING id
+            `,
+            [avatarUrl]
+          );
+
+          return result.rows[0] ?? null;
+        }
+      );
+
+      if (!updated) {
+        return reply.status(404).send({
+          message: "No se encontró el perfil."
+        });
+      }
+
+      return {
+        success: true,
+        avatarUrl
       };
     }
   );

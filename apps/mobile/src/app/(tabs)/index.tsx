@@ -31,6 +31,7 @@ import {
   spacing,
   typography,
 } from "@/constants/theme";
+import { UserAvatar } from "@/components/UserAvatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
@@ -282,7 +283,12 @@ export default function HomeScreen() {
                 pressed && styles.avatarPressed,
               ]}
             >
-              <Text style={styles.avatarText}>{initial}</Text>
+              <UserAvatar
+                fallback={initial}
+                size={40}
+                textStyle={styles.avatarText}
+                uri={profile?.avatar_url}
+              />
             </Pressable>
           </Animated.View>
 
@@ -793,6 +799,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceRaised,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
 
   avatarPressed: {

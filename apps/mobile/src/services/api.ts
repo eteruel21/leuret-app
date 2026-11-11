@@ -470,6 +470,18 @@ export async function updateOwnProfile(
   );
 }
 
+export async function updateOwnAvatar(
+  avatarUrl: string | null
+): Promise<void> {
+  await authenticatedRequest(
+    "/profile/avatar",
+    {
+      method: "PATCH",
+      body: JSON.stringify({ avatarUrl })
+    }
+  );
+}
+
 export async function updateContractorProfile(
   input: Record<string, unknown>
 ): Promise<void> {
