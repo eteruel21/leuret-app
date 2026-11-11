@@ -13,6 +13,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { usePriceContribution } from "../../components/AddPriceModal";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors, radius } from "../../constants/theme";
@@ -129,6 +130,7 @@ export default function AirConditioningScreen() {
 
   const { activeCompany } = useCompany();
   const currency = activeCompany?.currency_code;
+  const { requestPrice, priceModal } = usePriceContribution();
   const [form, setForm] = useState<Form>(initial);
   const [result, setResult] =
     useState<AirConditioningResult | null>(null);
@@ -228,20 +230,27 @@ export default function AirConditioningScreen() {
       coreDrilling: "coreDrillingPrice",
     };
 
-    const priced = trackCatalogPrice(item);
-    if (priced.price <= 0) {
-      Alert.alert("Precio pendiente",
-        "Este concepto aún no tiene precio. Escríbelo manualmente en la calculadora.");
-      setTarget(null);
+    const field = fields[target];
+    const pickerTarget = target;
+    setTarget(null);
+
+    const apply = (source: CatalogItemWithDetails) => {
+      const priced = trackCatalogPrice(source);
+      update(field, String(priced.price));
+      setTracked((current) => ({ ...current, [field]: priced }));
+      setSelected((current) => ({ ...current, [pickerTarget]: source.name }));
+    };
+
+    // Sin precio: el usuario lo agrega y queda como aporte para el catálogo.
+    if (trackCatalogPrice(item).price <= 0) {
+      requestPrice(item, (priced) => {
+        setItems((current) => current.map((entry) => (entry.id === priced.id ? priced : entry)));
+        apply(priced);
+      });
       return;
     }
-    update(fields[target], String(priced.price));
-    setTracked((current) => ({ ...current, [fields[target]]: priced }));
-    setSelected((current) => ({
-      ...current,
-      [target]: item.name,
-    }));
-    setTarget(null);
+
+    apply(item);
   }
 
   function compute(source: Form): AirConditioningResult | null {
@@ -565,6 +574,7 @@ export default function AirConditioningScreen() {
         onClose={() => setTarget(null)}
         onSelect={choose}
       />
+      {priceModal}
     </SafeAreaView>
   );
 }
@@ -750,10 +760,7 @@ function Picker({
               >
                 <Text style={styles.itemName}>{item.name}</Text>
                 <Text style={styles.price}>
-                  {formatMoney(
-                    item.sale_price || item.unit_cost,
-                    currency,
-                  )}
+                  {((item.sale_price || item.unit_cost) > 0 ? formatMoney(item.sale_price || item.unit_cost, currency) : "Sin precio · agregar")}
                 </Text>
               </Pressable>
             )}

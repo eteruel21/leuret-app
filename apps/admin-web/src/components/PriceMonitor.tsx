@@ -22,6 +22,7 @@ const KIND_LABELS: Record<PriceAlertKind, string> = {
 const SOURCE_LABELS: Record<string, string> = {
   panel_super_admin: "Panel admin",
   ajuste_masivo: "Ajuste masivo",
+  aporte_usuarios: "Aportes de usuarios",
 };
 
 function sourceLabel(source: string | null) {

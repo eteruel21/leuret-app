@@ -81,6 +81,17 @@ export const catalogItemQuerySchema = z.object({
   categoryName: z.string().trim().optional()
 });
 
+const optionalText = (max: number) =>
+  z.string().trim().max(max).optional().nullable().transform((value) => value || null);
+
+/** Precio que un usuario aporta para un insumo del catálogo de plataforma. */
+export const priceContributionSchema = z.object({
+  unitCost: z.number().positive().max(999999.99),
+  salePrice: z.number().positive().max(999999.99).optional().nullable(),
+  storeName: optionalText(120),
+  notes: optionalText(500)
+});
+
 
 export const priceRegionSchema = z.object({
   regionCode: z

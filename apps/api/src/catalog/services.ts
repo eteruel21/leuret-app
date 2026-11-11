@@ -13,7 +13,9 @@ import {
   deactivateCatalogYieldRepo,
   findPriceRegionsRepo,
   setUserPriceRegionRepo,
+  submitPriceContributionRepo,
   type CreateItemInput,
+  type PriceContributionInput,
   type CreateCategoryInput,
   type CreateYieldInput,
   type PricingInput
@@ -30,6 +32,14 @@ export async function getPlatformCatalogItemsService(
   } = {}
 ) {
   return findPlatformCatalogItems(userId, options);
+}
+
+export async function submitPriceContributionService(
+  userId: string,
+  itemId: string,
+  input: PriceContributionInput
+) {
+  return submitPriceContributionRepo(userId, itemId, input);
 }
 
 export async function setPersonalCatalogPricingService(userId: string, itemId: string, input: PricingInput) {

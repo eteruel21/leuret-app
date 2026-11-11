@@ -184,3 +184,27 @@ export const adminProjectStatusSchema = z.object({
 export const adminCancelInvoiceSchema = z.object({
   reason: z.string().trim().min(5, "Indica el motivo (mínimo 5 caracteres).").max(500)
 });
+
+// ----- Aportes de precio de los usuarios
+
+export const priceContributionsQuerySchema = z.object({
+  status: z.enum(["pending", "approved", "rejected"]).optional().default("pending"),
+  search: z.string().trim().max(120).optional()
+});
+
+export const priceContributionItemParamsSchema = z.object({
+  itemId: z.string().uuid()
+});
+
+export const priceContributionReviewSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("approve"),
+    unitCost: z.number().positive().max(999999.99),
+    salePrice: z.number().positive().max(999999.99).optional().nullable(),
+    reason: z.string().trim().max(500).optional().nullable()
+  }),
+  z.object({
+    action: z.literal("reject"),
+    reason: z.string().trim().min(5, "Indica el motivo (mínimo 5 caracteres).").max(500)
+  })
+]);

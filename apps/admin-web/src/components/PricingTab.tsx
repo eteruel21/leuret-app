@@ -16,6 +16,7 @@ import {
   type ItemType,
 } from "../admin-data";
 import { Field, SectionHeader, SelectField, Table, TextField } from "./CommonUI";
+import { PriceContributions } from "./PriceContributions";
 import { PriceMonitor } from "./PriceMonitor";
 import { formatMoney } from "../utils/helpers";
 
@@ -179,6 +180,8 @@ export function PricingTab({
           Aplicar ajuste
         </button>
       </form>
+
+      <PriceContributions onApproved={onReload} />
 
       <PriceMonitor
         onOpenItem={(itemId) => {

@@ -132,6 +132,88 @@ export function buildShoppingList(items: BudgetItem[]): ShoppingList {
   };
 }
 
+type MatchableCatalogItem = {
+  id: string;
+  name: string;
+  item_type: string;
+  sku?: string | null;
+  category?: { name: string } | null;
+};
+
+const STOP_WORDS = new Set(["con", "para", "por", "del", "las", "los", "una", "unidad", "unidades"]);
+
+function words(value: string): string[] {
+  return normalizeCatalogText(value)
+    .split(/[^a-z0-9#]+/)
+    .filter((word) => word.length >= 3 && !STOP_WORDS.has(word));
+}
+
+/**
+ * Busca en el catálogo los insumos que más se parecen a una línea de la lista
+ * de compras (por palabras en común), para que el usuario elija a cuál
+ * agregarle el precio. Con búsqueda, filtra por el texto escrito.
+ * Solo materiales y equipos; la mano de obra no va en la lista de compras.
+ */
+export function rankCatalogMatches<T extends MatchableCatalogItem>(
+  lineName: string,
+  items: T[],
+  search = "",
+  limit = 30,
+): T[] {
+  const candidates = items.filter(
+    (item) => item.item_type === "material" || item.item_type === "equipment",
+  );
+  const query = normalizeCatalogText(search);
+
+  if (query) {
+    return candidates
+      .filter((item) =>
+        [item.name, item.sku ?? "", item.category?.name ?? ""].some((value) =>
+          normalizeCatalogText(value).includes(query),
+        ),
+      )
+      .slice(0, limit);
+  }
+
+  const target = words(lineName);
+  if (!target.length) return [];
+
+  return candidates
+    .map((item, index) => {
+      const itemWords = new Set(words(item.name));
+      const score = target.filter((word) =>
+        [...itemWords].some((candidate) => candidate.startsWith(word) || word.startsWith(candidate)),
+      ).length;
+      return { item, index, score };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, limit)
+    .map((entry) => entry.item);
+}
+
+/**
+ * Aplica a la lista los costos unitarios que el usuario agregó en la sesión
+ * (por clave de línea) a las líneas que no tenían costo.
+ */
+export function withAddedUnitCosts(
+  list: ShoppingList,
+  unitCosts: Record<string, number>,
+): ShoppingList {
+  const lines = list.lines.map((line) => {
+    const unitCost = unitCosts[line.key];
+    if (line.cost !== null || !unitCost || unitCost <= 0) return line;
+    return { ...line, cost: roundTo(unitCost * line.quantity, 2) };
+  });
+
+  return {
+    ...list,
+    lines,
+    knownCost: roundTo(lines.reduce((sum, line) => sum + (line.cost ?? 0), 0), 2),
+    linesWithoutCost: lines.filter((line) => line.cost === null).length,
+  };
+}
+
 export function formatQuantity(value: number): string {
   const rounded = roundTo(value, 2);
   return Number.isInteger(rounded)
