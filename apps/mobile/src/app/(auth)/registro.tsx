@@ -570,7 +570,7 @@ export default function RegisterScreen() {
               secureTextEntry={!showPassword}
               autoCapitalize="none"
               rightIcon={showPassword ? "eye-off-outline" : "eye-outline"}
-              onRightIconPress={() => setShowPassword(!showPassword)}
+              onRightIconPress={() => setShowPassword((current) => !current)}
             />
 
             <PasswordStrengthIndicator password={password} />
@@ -584,7 +584,7 @@ export default function RegisterScreen() {
               secureTextEntry={!showConfirmPassword}
               autoCapitalize="none"
               rightIcon={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
-              onRightIconPress={() => setShowConfirmPassword(!showConfirmPassword)}
+              onRightIconPress={() => setShowConfirmPassword((current) => !current)}
             />
 
             {/* Aceptaciones y verificación de seguridad */}
@@ -756,20 +756,28 @@ function FormField({
         />
 
         <TextInput
+          key={Platform.OS === "web" && rightIcon ? (secureTextEntry ? "masked" : "unmasked") : undefined}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
           placeholderTextColor={colors.textMuted}
           keyboardType={keyboardType}
           secureTextEntry={secureTextEntry}
+          autoComplete={rightIcon ? "new-password" : undefined}
           autoCapitalize={autoCapitalize}
           autoCorrect={false}
           style={styles.input}
         />
 
         {rightIcon && (
-          <Pressable onPress={onRightIconPress} hitSlop={12}>
-            <Ionicons name={rightIcon} size={18} color={colors.textSecondary} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={secureTextEntry ? "Mostrar contraseña" : "Ocultar contraseña"}
+            onPress={onRightIconPress}
+            hitSlop={8}
+            style={styles.passwordVisibilityButton}
+          >
+            <Ionicons name={rightIcon} size={21} color={colors.textSecondary} />
           </Pressable>
         )}
       </View>
@@ -1071,6 +1079,15 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.text,
     fontSize: 14,
+    minWidth: 0,
+  },
+
+  passwordVisibilityButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
   },
 
   formGroup: {
