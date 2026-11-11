@@ -235,7 +235,6 @@ export default function ConcreteCalculatorScreen() {
           </View>
         </View>
       </ScrollView>
-      {priceModal}
     </SafeAreaView>
   );
 }
@@ -1116,6 +1115,7 @@ function ConcreteCalculatorForm({
           onSelect={handleCatalogItemSelected}
         />
       ) : null}
+      {priceModal}
     </SafeAreaView>
   );
 }
