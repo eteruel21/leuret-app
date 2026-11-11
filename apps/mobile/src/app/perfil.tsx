@@ -19,11 +19,19 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors, layout, radius, shadows } from "@/constants/theme";
 import { ProfileOverview } from "@/components/ProfileOverview";
+import { UserAvatar } from "@/components/UserAvatar";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   deleteOwnAccount,
   exportAccountData,
+  updateOwnAvatar,
 } from "@/services/api";
+import { uploadProfileMedia } from "@/services/media-upload-service";
+import { confirmAction, showAlert } from "@/utils/alert";
+import {
+  prepareAvatarPhoto,
+  type AvatarPhotoSource,
+} from "@/utils/avatar-photo-picker";
 import {
   loadOwnProfileDetails,
   type UserProfileDetails
@@ -34,7 +42,8 @@ const PRIVACY_URL = "https://admin.leurettech.com/legal/privacy";
 const DATA_RIGHTS_EMAIL = "privacidad@leurettech.com";
 
 export default function ProfileScreen() {
-  const { profile, user, updateProfile, signOut } = useAuth();
+  const { profile, user, updateProfile, refreshProfile, signOut } = useAuth();
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
   const [phone, setPhone] = useState(profile?.phone ?? "");
   const [saving, setSaving] = useState(false);
@@ -91,6 +100,80 @@ export default function ProfileScreen() {
     () => (fullName.trim().charAt(0) || "P").toUpperCase(),
     [fullName],
   );
+
+  const avatarUrl = profile?.avatar_url ?? null;
+
+  const uploadAvatar = async (source: AvatarPhotoSource) => {
+    let photo: Awaited<ReturnType<typeof prepareAvatarPhoto>>;
+    try {
+      photo = await prepareAvatarPhoto(source);
+    } catch (error) {
+      showAlert(
+        "No se pudo abrir la foto",
+        error instanceof Error ? error.message : "Inténtalo nuevamente."
+      );
+      return;
+    }
+    if (!photo) return;
+
+    setAvatarBusy(true);
+    try {
+      const url = await uploadProfileMedia({
+        mediaType: "avatar",
+        fileData: photo.fileData,
+        mimeType: photo.mimeType,
+      });
+      await updateOwnAvatar(url);
+      await refreshProfile();
+    } catch (error) {
+      showAlert(
+        "No se pudo actualizar la foto",
+        error instanceof Error ? error.message : "Inténtalo nuevamente."
+      );
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
+  const handleChangeAvatar = () => {
+    if (avatarBusy) return;
+
+    if (Platform.OS === "web") {
+      void uploadAvatar("library");
+      return;
+    }
+
+    Alert.alert("Foto de perfil", "Elige de dónde tomar la foto.", [
+      { text: "Galería", onPress: () => void uploadAvatar("library") },
+      { text: "Cámara", onPress: () => void uploadAvatar("camera") },
+      { text: "Cancelar", style: "cancel" },
+    ]);
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (avatarBusy || !avatarUrl) return;
+
+    const confirmed = await confirmAction({
+      title: "Quitar foto de perfil",
+      message: "Se mostrará la inicial de tu nombre en su lugar.",
+      confirmText: "Quitar",
+      destructive: true,
+    });
+    if (!confirmed) return;
+
+    setAvatarBusy(true);
+    try {
+      await updateOwnAvatar(null);
+      await refreshProfile();
+    } catch (error) {
+      showAlert(
+        "No se pudo quitar la foto",
+        error instanceof Error ? error.message : "Inténtalo nuevamente."
+      );
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
 
   const hasChanges =
     fullName.trim() !== (profile?.full_name ?? "").trim() ||
@@ -261,8 +344,43 @@ export default function ProfileScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initial}</Text>
+          <Pressable
+            accessibilityLabel={avatarUrl ? "Cambiar foto de perfil" : "Agregar foto de perfil"}
+            accessibilityRole="button"
+            disabled={avatarBusy}
+            onPress={handleChangeAvatar}
+            style={({ pressed }) => [styles.avatarButton, pressed && styles.avatarPressed]}
+          >
+            <UserAvatar
+              fallback={initial}
+              size={82}
+              style={styles.avatar}
+              textStyle={styles.avatarText}
+              uri={avatarUrl}
+            />
+            {avatarBusy ? (
+              <View style={styles.avatarOverlay}>
+                <ActivityIndicator color={colors.textLight} />
+              </View>
+            ) : null}
+            <View style={styles.avatarBadge}>
+              <Ionicons name="camera" size={14} color={colors.textLight} />
+            </View>
+          </Pressable>
+          <View style={styles.avatarActions}>
+            <Pressable disabled={avatarBusy} hitSlop={6} onPress={handleChangeAvatar}>
+              <Text style={styles.avatarActionText}>
+                {avatarUrl ? "Cambiar foto" : "Agregar foto"}
+              </Text>
+            </Pressable>
+            {avatarUrl ? (
+              <>
+                <Text style={styles.avatarActionDivider}>·</Text>
+                <Pressable disabled={avatarBusy} hitSlop={6} onPress={() => void handleRemoveAvatar()}>
+                  <Text style={[styles.avatarActionText, styles.avatarActionDanger]}>Quitar</Text>
+                </Pressable>
+              </>
+            ) : null}
           </View>
           <Text style={styles.title}>Información personal</Text>
           <Text style={styles.subtitle}>
@@ -438,6 +556,32 @@ const styles = StyleSheet.create({
     ...shadows.soft,
   },
   avatarText: { color: colors.textLight, fontSize: 30, fontWeight: "900" },
+  avatarButton: { width: 82, height: 82 },
+  avatarPressed: { opacity: 0.8 },
+  avatarOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 41,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarBadge: {
+    position: "absolute",
+    right: -2,
+    bottom: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: colors.background,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarActions: { marginTop: 10, flexDirection: "row", alignItems: "center", gap: 8 },
+  avatarActionText: { color: colors.primary, fontSize: 13, fontWeight: "800" },
+  avatarActionDanger: { color: colors.danger },
+  avatarActionDivider: { color: colors.textMuted, fontSize: 13 },
   title: { marginTop: 18, color: colors.text, fontSize: 24, fontWeight: "900" },
   subtitle: {
     maxWidth: 360,

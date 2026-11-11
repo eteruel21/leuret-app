@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LeuretButton } from "@/components/LeuretButton";
 import { colors, radius } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
+import { UserAvatar } from "@/components/UserAvatar";
 import { confirmAction, showAlert } from "@/utils/alert";
 import { formatDate } from "@/utils/format";
 
@@ -53,9 +54,13 @@ export default function ClientAccountScreen() {
         <Text style={styles.title}>Mi cuenta</Text>
 
         <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials(profile?.full_name)}</Text>
-          </View>
+          <UserAvatar
+            fallback={initials(profile?.full_name)}
+            size={64}
+            style={styles.avatar}
+            textStyle={styles.avatarText}
+            uri={profile?.avatar_url}
+          />
           <View style={styles.profileInfo}>
             <Text style={styles.name}>{profile?.full_name || "Cliente"}</Text>
             <Text style={styles.email}>{user?.email || "Sin correo"}</Text>
