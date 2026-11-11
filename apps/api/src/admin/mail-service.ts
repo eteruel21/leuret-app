@@ -1,6 +1,7 @@
 import { env } from "../config/env.js";
 
 export type MailboxName = "privacy" | "legal";
+export type MailFolderName = "inbox" | "sent" | "trash";
 
 type MailboxConfig = { id: string; address: string };
 
@@ -37,7 +38,7 @@ function configuration(mailbox: MailboxName): { apiKey: string; inbox: MailboxCo
 async function requestResend(
   mailbox: MailboxName,
   path: string,
-  options: { method?: "GET" | "PATCH" | "POST"; body?: unknown; idempotencyKey?: string } = {}
+  options: { method?: "GET" | "PATCH" | "POST" | "DELETE"; body?: unknown; idempotencyKey?: string } = {}
 ): Promise<unknown> {
   const { apiKey } = configuration(mailbox);
   let response: Response;
@@ -103,7 +104,7 @@ function page(data: unknown): { data: unknown[]; hasMore: boolean } {
 
 export async function listMailThreads(
   mailbox: MailboxName,
-  folder: "inbox" | "sent",
+  folder: MailFolderName,
   cursor?: string
 ): Promise<{ data: unknown[]; hasMore: boolean }> {
   const qs = new URLSearchParams({ folders: folder, limit: "30" });
@@ -139,6 +140,31 @@ export async function markMailThreadRead(
   await requestResend(mailbox, `${basePath(mailbox)}/threads/${threadId}`, {
     method: "PATCH",
     body: { read: true }
+  });
+}
+
+/**
+ * Mueve la conversación a la papelera de Resend. Resend la borra de forma
+ * definitiva a los 30 días; mientras tanto se puede restaurar.
+ */
+export async function deleteMailThread(
+  mailbox: MailboxName,
+  threadId: string
+): Promise<{ deleted: boolean }> {
+  const result = await requestResend(mailbox, `${basePath(mailbox)}/threads/${threadId}`, {
+    method: "DELETE"
+  }) as { deleted?: unknown } | null;
+  return { deleted: result?.deleted !== false };
+}
+
+/** Saca la conversación de la papelera y anula su borrado programado. */
+export async function restoreMailThread(
+  mailbox: MailboxName,
+  threadId: string
+): Promise<void> {
+  await requestResend(mailbox, `${basePath(mailbox)}/threads/${threadId}`, {
+    method: "PATCH",
+    body: { folder: "inbox" }
   });
 }
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Inbox, Send, Mail, RefreshCw, Paperclip, Loader2 } from "lucide-react";
+import { Inbox, Send, Mail, RefreshCw, Paperclip, Loader2, Trash2, RotateCcw } from "lucide-react";
 import {
   type MailboxName,
   type MailFolder,
@@ -11,10 +11,18 @@ import {
   getMessage,
   getAttachmentDownload,
   markRead,
+  deleteThread,
+  restoreThread,
   sendReply
 } from "../mail-api";
 import { errorMessage } from "../utils/helpers";
 import "./mail.css";
+
+const FOLDERS: { id: MailFolder; name: string; icon: typeof Inbox }[] = [
+  { id: "inbox", name: "Recibidos", icon: Inbox },
+  { id: "sent", name: "Enviados", icon: Send },
+  { id: "trash", name: "Papelera", icon: Trash2 }
+];
 
 const BOXES: { id: MailboxName; name: string; address: string }[] = [
   { id: "privacy", name: "Privacidad", address: "privacidad@leurettech.com" },
@@ -68,6 +76,7 @@ export function MailTab() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [sending, setSending] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [movingThreadId, setMovingThreadId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [refreshNumber, setRefreshNumber] = useState(0);
@@ -230,6 +239,52 @@ export function MailTab() {
     }
   }
 
+  /**
+   * Quita la conversación de la carpeta actual. No abre la siguiente de forma
+   * automática para no marcarla como leída sin que el administrador la abra.
+   */
+  function removeFromList(threadId: string) {
+    setThreads((items) => items.filter((thread) => thread.id !== threadId));
+    setSelectedThreadId((current) => (current === threadId ? null : current));
+  }
+
+  async function handleDelete(thread: MailThread) {
+    if (movingThreadId) return;
+    const confirmed = window.confirm(
+      `¿Eliminar la conversación «${thread.subject || "(Sin asunto)"}»?\n\n` +
+      "Se moverá a la Papelera y se borrará definitivamente en 30 días. Hasta entonces puedes restaurarla."
+    );
+    if (!confirmed) return;
+    setMovingThreadId(thread.id);
+    setError(null);
+    setNotice(null);
+    try {
+      await deleteThread(mailbox, thread.id);
+      removeFromList(thread.id);
+      setNotice("Conversación movida a la Papelera. Puedes restaurarla durante 30 días.");
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setMovingThreadId(null);
+    }
+  }
+
+  async function handleRestore(thread: MailThread) {
+    if (movingThreadId) return;
+    setMovingThreadId(thread.id);
+    setError(null);
+    setNotice(null);
+    try {
+      await restoreThread(mailbox, thread.id);
+      removeFromList(thread.id);
+      setNotice("Conversación restaurada en Recibidos.");
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setMovingThreadId(null);
+    }
+  }
+
   async function handleReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedThreadId || !message || !replyText.trim() || sending) return;
@@ -268,6 +323,8 @@ export function MailTab() {
     ? (message.reply_to?.length ? message.reply_to.join(", ") : message.from ?? "Remitente")
     : (message?.to ?? []).join(", ");
   const currentBox = BOXES.find((item) => item.id === mailbox)!;
+  const currentFolder = FOLDERS.find((item) => item.id === folder)!;
+  const inTrash = folder === "trash";
 
   return (
     <section className="mail-section" aria-label="Gestión de correo electrónico">
@@ -288,25 +345,29 @@ export function MailTab() {
         </button>
       </div>
       <div className="mail-folder-tabs" role="group" aria-label="Carpeta">
-        <button type="button" className={folder === "inbox" ? "selected" : ""} onClick={() => setFolder("inbox")}>
-          <Inbox size={16} /> Recibidos
-        </button>
-        <button type="button" className={folder === "sent" ? "selected" : ""} onClick={() => setFolder("sent")}>
-          <Send size={16} /> Enviados
-        </button>
+        {FOLDERS.map(({ id, name, icon: Icon }) => (
+          <button key={id} type="button" className={folder === id ? "selected" : ""}
+            onClick={() => setFolder(id)} aria-pressed={folder === id}>
+            <Icon size={16} /> {name}
+          </button>
+        ))}
       </div>
       {error && <div role="alert" className="mail-alert">{error}</div>}
       {notice && <div role="status" className="mail-notice">{notice}</div>}
       <div className="mail-workspace">
         <aside className="mail-thread-list" aria-label="Lista de correos">
           <div className="mail-pane-heading">
-            <strong>{folder === "inbox" ? "Recibidos" : "Enviados"} · {currentBox.name}</strong>
-            <small>{threads.length} conversaciones</small>
+            <strong>{currentFolder.name} · {currentBox.name}</strong>
+            <small>
+              {threads.length} conversaciones
+              {inTrash && " · se borran definitivamente a los 30 días"}
+            </small>
           </div>
           {isLoadingList && <p className="mail-placeholder"><Loader2 className="spin" size={18}/> Cargando correos...</p>}
           {!isLoadingList && threads.length === 0 && <p className="mail-placeholder">No hay correos en esta carpeta.</p>}
           {threads.map((thread) => (
-            <button key={thread.id} type="button"
+            <div key={thread.id} className={`mail-thread-row ${selectedThreadId === thread.id ? "selected" : ""}`}>
+            <button type="button"
               className={`mail-thread ${selectedThreadId === thread.id ? "selected" : ""}`}
               onClick={() => { setSelectedThreadId(thread.id); setNotice(null); }}>
               <span className="mail-thread-title">
@@ -319,6 +380,16 @@ export function MailTab() {
                 {thread.has_attachment && <Paperclip size={14} aria-label="Incluye adjunto"/>}
               </span>
             </button>
+            <button type="button" className="mail-thread-action"
+              onClick={() => void (inTrash ? handleRestore(thread) : handleDelete(thread))}
+              disabled={movingThreadId !== null}
+              title={inTrash ? "Restaurar en Recibidos" : "Eliminar conversación"}
+              aria-label={`${inTrash ? "Restaurar" : "Eliminar"} «${thread.subject || "Sin asunto"}»`}>
+              {movingThreadId === thread.id
+                ? <Loader2 size={15} className="spin"/>
+                : inTrash ? <RotateCcw size={15}/> : <Trash2 size={15}/>}
+            </button>
+            </div>
           ))}
           {hasMoreThreads && (
             <button className="mail-more" onClick={() => void loadMoreThreads()} disabled={isLoadingMore}>
@@ -333,9 +404,26 @@ export function MailTab() {
             </div>
           ) : (
             <>
-              <div className="mail-pane-heading">
-                <strong>{selectedThread?.subject || "(Sin asunto)"}</strong>
-                <small>{messages.length} mensajes en esta conversación</small>
+              <div className="mail-pane-heading mail-reader-heading">
+                <div>
+                  <strong>{selectedThread?.subject || "(Sin asunto)"}</strong>
+                  <small>{messages.length} mensajes en esta conversación</small>
+                </div>
+                {selectedThread && (
+                  inTrash ? (
+                    <button type="button" className="button button-secondary"
+                      onClick={() => void handleRestore(selectedThread)} disabled={movingThreadId !== null}>
+                      {movingThreadId === selectedThread.id ? <Loader2 size={16} className="spin"/> : <RotateCcw size={16}/>}
+                      Restaurar
+                    </button>
+                  ) : (
+                    <button type="button" className="button mail-delete-button"
+                      onClick={() => void handleDelete(selectedThread)} disabled={movingThreadId !== null || sending}>
+                      {movingThreadId === selectedThread.id ? <Loader2 size={16} className="spin"/> : <Trash2 size={16}/>}
+                      Eliminar
+                    </button>
+                  )
+                )}
               </div>
               {isLoadingThread && <p className="mail-placeholder"><Loader2 size={18} className="spin"/> Abriendo correo...</p>}
               {messages.length > 0 && (
@@ -379,6 +467,11 @@ export function MailTab() {
                       <small>Abre archivos únicamente si conoces y confías en el remitente.</small>
                     </div>
                   )}
+                  {inTrash ? (
+                    <p className="mail-trash-hint">
+                      Esta conversación está en la Papelera. Restáurala para responder.
+                    </p>
+                  ) : (
                   <form className="mail-reply-form" onSubmit={(event) => void handleReply(event)}>
                     <label htmlFor="admin-mail-reply">Responder por correo a {recipient}</label>
                     <textarea id="admin-mail-reply" value={replyText} rows={6} maxLength={20000}
@@ -395,6 +488,7 @@ export function MailTab() {
                       </button>
                     </div>
                   </form>
+                  )}
                 </article>
               )}
             </>

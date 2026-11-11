@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   readMailMessage: vi.fn(),
   getMailAttachmentDownload: vi.fn(),
   markMailThreadRead: vi.fn(),
+  deleteMailThread: vi.fn(),
+  restoreMailThread: vi.fn(),
   replyToMailMessage: vi.fn()
 }));
 
@@ -52,6 +54,8 @@ describe("LEURET ADMIN - correos Resend", () => {
     mocks.getMailAttachmentDownload.mockResolvedValue({ filename: "archivo.pdf", downloadUrl: "https://example.com/signed" });
     mocks.markMailThreadRead.mockResolvedValue(undefined);
     mocks.replyToMailMessage.mockResolvedValue({ id: "email-outbound-1" });
+    mocks.deleteMailThread.mockResolvedValue({ deleted: true });
+    mocks.restoreMailThread.mockResolvedValue(undefined);
   });
 
   test("bloquea la lectura sin superadministrador", async () => {
@@ -160,6 +164,64 @@ describe("LEURET ADMIN - correos Resend", () => {
     });
     expect(response.statusCode).toBe(403);
     expect(mocks.replyToMailMessage).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  test("eliminar exige superadministrador", async () => {
+    const app = await createApp();
+    const response = await app.inject({
+      method: "DELETE",
+      url: `/admin/mail/privacy/threads/${THREAD_ID}`
+    });
+    expect(response.statusCode).toBe(403);
+    expect(mocks.deleteMailThread).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  test("eliminar valida el buzón y el identificador", async () => {
+    const app = await createApp();
+    const badBox = await app.inject({ method: "DELETE", url: `/admin/mail/otro/threads/${THREAD_ID}`, headers: auth() });
+    const badId = await app.inject({ method: "DELETE", url: "/admin/mail/legal/threads/not-a-uuid", headers: auth() });
+    expect(badBox.statusCode).toBe(400);
+    expect(badId.statusCode).toBe(400);
+    expect(mocks.deleteMailThread).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  test("elimina la conversación (papelera) de la bandeja indicada", async () => {
+    const app = await createApp();
+    const response = await app.inject({
+      method: "DELETE",
+      url: `/admin/mail/legal/threads/${THREAD_ID}`,
+      headers: auth()
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(response.json()).toEqual({ success: true, deleted: true });
+    expect(mocks.deleteMailThread).toHaveBeenCalledWith("legal", THREAD_ID);
+    await app.close();
+  });
+
+  test("restaura una conversación de la papelera", async () => {
+    const app = await createApp();
+    const blocked = await app.inject({ method: "POST", url: `/admin/mail/privacy/threads/${THREAD_ID}/restore` });
+    expect(blocked.statusCode).toBe(403);
+    const response = await app.inject({
+      method: "POST",
+      url: `/admin/mail/privacy/threads/${THREAD_ID}/restore`,
+      headers: auth()
+    });
+    expect(response.statusCode).toBe(200);
+    expect(mocks.restoreMailThread).toHaveBeenCalledTimes(1);
+    expect(mocks.restoreMailThread).toHaveBeenCalledWith("privacy", THREAD_ID);
+    await app.close();
+  });
+
+  test("lista la papelera", async () => {
+    const app = await createApp();
+    const response = await app.inject({ method: "GET", url: "/admin/mail/privacy/threads?folder=trash", headers: auth() });
+    expect(response.statusCode).toBe(200);
+    expect(mocks.listMailThreads).toHaveBeenCalledWith("privacy", "trash", undefined);
     await app.close();
   });
 });
