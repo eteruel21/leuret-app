@@ -8,6 +8,8 @@ import {
   readMailMessage,
   getMailAttachmentDownload,
   markMailThreadRead,
+  deleteMailThread,
+  restoreMailThread,
   replyToMailMessage
 } from "./mail-service.js";
 
@@ -23,7 +25,7 @@ const attachmentParamsSchema = emailParamsSchema.extend({
   attachmentId: z.uuid()
 });
 const querySchema = z.object({
-  folder: z.enum(["inbox", "sent"]).default("inbox"),
+  folder: z.enum(["inbox", "sent", "trash"]).default("inbox"),
   after: z.uuid().optional()
 });
 const cursorSchema = z.object({
@@ -109,6 +111,42 @@ export async function registerAdminMailRoutes(app: FastifyInstance): Promise<voi
     }
     try {
       await markMailThreadRead(params.data.mailbox, params.data.threadId);
+      return { success: true };
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
+  app.delete("/admin/mail/:mailbox/threads/:threadId", { preHandler: requireSuperAdmin }, async (request, reply) => {
+    reply.header("Cache-Control", "private, no-store");
+    const params = threadParamsSchema.safeParse(request.params);
+    if (!params.success) {
+      return reply.status(400).send({ message: "Conversación no válida." });
+    }
+    try {
+      const result = await deleteMailThread(params.data.mailbox, params.data.threadId);
+      request.log.warn(
+        { mailbox: params.data.mailbox, threadId: params.data.threadId, adminId: request.authenticatedUser?.id },
+        "Conversación de correo enviada a la papelera desde el panel."
+      );
+      return { success: true, deleted: result.deleted };
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
+  app.post("/admin/mail/:mailbox/threads/:threadId/restore", { preHandler: requireSuperAdmin }, async (request, reply) => {
+    reply.header("Cache-Control", "private, no-store");
+    const params = threadParamsSchema.safeParse(request.params);
+    if (!params.success) {
+      return reply.status(400).send({ message: "Conversación no válida." });
+    }
+    try {
+      await restoreMailThread(params.data.mailbox, params.data.threadId);
+      request.log.info(
+        { mailbox: params.data.mailbox, threadId: params.data.threadId, adminId: request.authenticatedUser?.id },
+        "Conversación de correo restaurada desde la papelera."
+      );
       return { success: true };
     } catch (error) {
       return fail(reply, error);

@@ -17,6 +17,19 @@
 .mail-thread { width:100%; display:grid; gap:7px; padding:17px 18px; border:0; border-bottom:1px solid #1d3045; background:transparent; color:#cedae9; text-align:left; }
 .mail-thread:hover, .mail-thread.selected { background:#162a3d; }
 .mail-thread.selected { box-shadow:inset 3px 0 #22c55e; }
+.mail-thread-row { position:relative; }
+.mail-thread-row .mail-thread { padding-right:52px; }
+.mail-thread-action { position:absolute; top:12px; right:12px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; border:1px solid transparent; border-radius:8px; background:transparent; color:#7f93aa; opacity:0; transition:opacity .15s, background .15s, color .15s; }
+.mail-thread-row:hover .mail-thread-action, .mail-thread-row.selected .mail-thread-action, .mail-thread-action:focus-visible { opacity:1; }
+.mail-thread-action:hover:not(:disabled) { color:#fecaca; background:#351b27; border-color:#783247; }
+.mail-thread-action:disabled { cursor:not-allowed; }
+@media (hover: none) { .mail-thread-action { opacity:1; } }
+.mail-reader-heading { flex-direction:row; align-items:center; justify-content:space-between; gap:12px; }
+.mail-reader-heading > div { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.mail-reader-heading .button { flex:none; }
+.mail-delete-button { color:#fecaca; background:#2a1620; border:1px solid #783247; }
+.mail-delete-button:hover:not(:disabled) { background:#3d1d2b; }
+.mail-trash-hint { margin:16px 0 0; padding:12px 14px; border-radius:9px; border:1px dashed #2b4059; color:#93a8bf; font-size:13px; }
 .mail-thread-title { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .mail-thread-title strong { color:#f8fafc; line-height:1.4; word-break:break-word; }
 .mail-thread-from { font-size:12px; color:#a3b7ce; overflow-wrap:anywhere; }

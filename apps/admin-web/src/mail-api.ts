@@ -1,7 +1,7 @@
 import { authenticatedRequest } from "./api";
 
 export type MailboxName = "privacy" | "legal";
-export type MailFolder = "inbox" | "sent";
+export type MailFolder = "inbox" | "sent" | "trash";
 
 export interface MailThread {
   id: string;
@@ -82,6 +82,19 @@ export async function getMessage(
 export async function markRead(box: MailboxName, threadId: string): Promise<void> {
   await authenticatedRequest(`${root(box, threadId)}/read`, {
     method: "PATCH"
+  });
+}
+
+/** Mueve la conversación a la papelera (Resend la borra a los 30 días). */
+export async function deleteThread(box: MailboxName, threadId: string): Promise<void> {
+  await authenticatedRequest(root(box, threadId), { method: "DELETE" });
+}
+
+/** Devuelve una conversación de la papelera a Recibidos. */
+export async function restoreThread(box: MailboxName, threadId: string): Promise<void> {
+  await authenticatedRequest(`${root(box, threadId)}/restore`, {
+    method: "POST",
+    body: JSON.stringify({})
   });
 }
 

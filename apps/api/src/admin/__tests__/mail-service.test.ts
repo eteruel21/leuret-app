@@ -12,6 +12,8 @@ import {
   listMailThreads,
   readMailMessage,
   replyToMailMessage,
+  deleteMailThread,
+  restoreMailThread,
   getMailAttachmentDownload,
   MailProviderError
 } from "../mail-service.js";
@@ -64,6 +66,36 @@ describe("API Resend Inboxes - aislamiento de bandejas", () => {
     });
   });
 
+  test("eliminar envía la conversación a la papelera de su propia bandeja", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ object: "inbox_thread", id: THREAD, deleted: true })
+    }));
+    await expect(deleteMailThread("privacy", THREAD)).resolves.toEqual({ deleted: true });
+    const [url, init] = vi.mocked(fetch).mock.calls[0]!;
+    expect(url).toBe(
+      `https://api.resend.com/inboxes/11111111-1111-4111-8111-111111111111/threads/${THREAD}`
+    );
+    expect(init?.method).toBe("DELETE");
+    expect(init?.body).toBeUndefined();
+  });
+
+  test("restaurar devuelve la conversación a Recibidos", async () => {
+    await restoreMailThread("legal", THREAD);
+    const [url, init] = vi.mocked(fetch).mock.calls[0]!;
+    expect(url).toBe(
+      `https://api.resend.com/inboxes/22222222-2222-4222-8222-222222222222/threads/${THREAD}`
+    );
+    expect(init?.method).toBe("PATCH");
+    expect(JSON.parse(String(init?.body))).toEqual({ folder: "inbox" });
+  });
+
+  test("lista la papelera", async () => {
+    await listMailThreads("legal", "trash");
+    const [url] = vi.mocked(fetch).mock.calls[0]!;
+    expect(String(url)).toContain("folders=trash");
+  });
 
   test("el enlace de adjunto se emite solo tras verificar su pertenencia al correo", async () => {
     const calls: string[] = [];
