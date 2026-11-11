@@ -559,7 +559,11 @@ const styles = StyleSheet.create({
   avatarButton: { width: 82, height: 82 },
   avatarPressed: { opacity: 0.8 },
   avatarOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     borderRadius: 41,
     backgroundColor: "rgba(15, 23, 42, 0.45)",
     alignItems: "center",
