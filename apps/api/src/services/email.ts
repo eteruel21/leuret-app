@@ -76,7 +76,10 @@ export function buildPasswordResetLinks(token: string) {
 
 export async function sendVerificationEmail({ to, fullName, token }: VerificationEmailInput): Promise<EmailDeliveryResult> {
   const name = fullName?.trim() || "Usuario";
-  const { deepLink, webLink } = buildVerificationLinks(token);
+  const safeName = name.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[character] ?? character);
+  const { webLink } = buildVerificationLinks(token);
 
   const html = `
     <!DOCTYPE html>
@@ -91,8 +94,6 @@ export async function sendVerificationEmail({ to, fullName, token }: Verificatio
         .brand { font-size: 24px; font-weight: 700; color: #0f172a; text-decoration: none; }
         .title { font-size: 20px; font-weight: 600; color: #0f172a; margin-top: 0; }
         .btn-primary { display: inline-block; background-color: #2563eb; color: #ffffff !important; font-weight: 600; padding: 14px 28px; border-radius: 8px; text-decoration: none; margin: 16px 0; text-align: center; }
-        .btn-secondary { display: inline-block; background-color: #f1f5f9; color: #334155 !important; font-weight: 600; padding: 10px 20px; border-radius: 8px; text-decoration: none; margin-top: 8px; text-align: center; }
-        .code-box { background-color: #f1f5f9; font-family: monospace; font-size: 16px; padding: 12px; border-radius: 6px; text-align: center; letter-spacing: 2px; margin: 16px 0; word-break: break-all; }
         .footer { font-size: 12px; color: #64748b; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px; text-align: center; }
       </style>
     </head>
@@ -102,17 +103,15 @@ export async function sendVerificationEmail({ to, fullName, token }: Verificatio
           <span class="brand">🏗️ Leuret</span>
         </div>
         <h2 class="title">Verificación de Cuenta</h2>
-        <p>Hola, <strong>${name}</strong>:</p>
+        <p>Hola, <strong>${safeName}</strong>:</p>
         <p>Gracias por registrarte en Leuret. Por favor, confirma tu correo electrónico para activar tu cuenta:</p>
         
         <div style="text-align: center; margin: 24px 0;">
-          <a href="${deepLink}" class="btn-primary">Abrir en la App Móvil</a>
-          <br />
-          <a href="${webLink}" class="btn-secondary">Confirmar en Navegador Web</a>
+          <a href="${webLink}" class="btn-primary">Verificar</a>
         </div>
 
-        <p>O copia tu token de verificación directamente en la aplicación:</p>
-        <div class="code-box">${token}</div>
+        <p>Al verificar tu correo, podrás volver a Leuret App y continuar tu registro.</p>
+        <p>Este enlace vence en 24 horas y solo puede utilizarse una vez.</p>
 
         <p class="footer">Si no creaste esta cuenta, puedes ignorar este mensaje.<br />© Leuret</p>
       </div>
@@ -125,13 +124,11 @@ Hola ${name},
 
 Gracias por registrarte en Leuret. Confirma tu correo para activar tu cuenta.
 
-Abrir en App Móvil:
-${deepLink}
-
-Abrir en Navegador Web:
+Verificar mi correo:
 ${webLink}
 
-Token de Verificación: ${token}
+Este enlace vence en 24 horas y solo puede utilizarse una vez.
+Después de verificar, vuelve a Leuret App para continuar.
   `.trim();
 
   return deliverWithResend({
