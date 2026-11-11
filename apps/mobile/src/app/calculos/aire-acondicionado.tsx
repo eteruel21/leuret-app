@@ -668,15 +668,15 @@ function CatalogButton({
 
 
 const PICKER_KEYWORDS: Record<Target, RegExp> = {
-  equipment: /aire acondicionado|split|inverter|btu|minisplit/,
-  copper: /cobre|tuberia de cobre|linea/,
-  cable: /cable|thhn|alambre|conductor/,
-  drain: /drenaje|pvc|manguera|tubo/,
-  bracket: /soporte|base|bracket|rack/,
+  equipment: /^aire acondicionado|minisplit|mini split|^split/,
+  copper: /tuberia de cobre|tubo de cobre|cobre flexible|linea de cobre|par de cobre/,
+  cable: /thhn|thw|alambre|conductor|cable (electrico|de cobre|#|calibre)/,
+  drain: /drenaje|manguera|tubo pvc/,
+  bracket: /bracket|\brack\b|soporte.*(condens|aire|split|equipo)|base.*(condens|aire|split)/,
   breaker: /breaker|disyuntor|termomagnetico/,
-  disconnect: /desconectador|disconnect|cuchilla/,
+  disconnect: /desconectador|desconexion|disconnect|cuchilla/,
   refrigerant: /refrigerante|gas|r-?410|r-?32/,
-  supplies: /cinta|aislante|armaflex|tornillo|silicon/,
+  supplies: /cinta (aislante|de vinil)|aislante termico|armaflex|tornillo|silicon/,
   labor: /refrigeracion|aire|tecnico|electric/,
   coreDrilling: /perfor|core|boquete/,
 };
@@ -725,7 +725,7 @@ function Picker({
         <TextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Buscar en el catálogo"
+          placeholder="Buscar en todo el catálogo"
           style={styles.search}
         />
 
@@ -739,7 +739,7 @@ function Picker({
             data={filtered}
             ListEmptyComponent={
               <Text style={styles.searchEmpty}>
-                No hay conceptos de este tipo en el catálogo. Cierra y escribe el precio manualmente.
+                No hay conceptos para este campo en el catálogo. Búscalo por otro nombre o escribe el precio manualmente.
               </Text>
             }
             keyExtractor={(item) => item.id}

@@ -735,6 +735,7 @@ export default function SpecialSystemsScreen() {
       <Picker
         visible={Boolean(target)}
         target={target}
+        systemType={systemType}
         items={items}
         loading={loading}
         currency={currency}
@@ -843,23 +844,61 @@ function CatalogButton({
 }
 
 
-const PICKER_KEYWORDS: Record<Target, RegExp> = {
-  deviceA: /camara|sensor|detector|parlante|lector|equipo/,
-  deviceB: /camara|sensor|detector|parlante|lector|equipo/,
-  deviceC: /camara|sensor|detector|parlante|lector|equipo/,
-  deviceD: /camara|sensor|detector|parlante|lector|equipo/,
-  deviceE: /camara|sensor|detector|parlante|lector|equipo/,
-  cable: /cable|utp|cat ?6|coaxial|alambre/,
-  conduit: /conduit|emt|tubo|tuberia|canaleta/,
-  box: /caja|registro/,
-  supplies: /conector|rj45|cinta|grapa|tornillo/,
+/**
+ * Palabras clave de cada equipo según el sistema. El selector solo muestra los
+ * conceptos que coinciden; así las cámaras no se mezclan con cemento o arena.
+ * Escribir en el buscador sigue recorriendo todo el catálogo.
+ */
+const DEVICE_KEYWORDS: Record<SpecialSystemType, Record<DeviceTarget, RegExp>> = {
+  cctv: {
+    deviceA: /^camara|camara (ip|analogica|domo|bala|bullet|ptz|wifi|turret)/,
+    deviceB: /balun|transceptor|conector (bnc|rj45)/,
+    deviceC: /\bdvr\b|\bnvr\b|grabador/,
+    deviceD: /disco duro|\bhdd\b/,
+    deviceE: /switch|fuente|adaptador de corriente|inyector poe/,
+  },
+  alarm: {
+    deviceA: /detector de movimiento|\bpir\b/,
+    deviceB: /contacto magnetico/,
+    deviceC: /panel de alarma|kit de alarma/,
+    deviceD: /sirena(?!.*incendio)/,
+    deviceE: /teclado/,
+  },
+  fire: {
+    deviceA: /detector de humo/,
+    deviceB: /detector termico|detector de calor|detector de temperatura/,
+    deviceC: /panel de incendio|central de incendio/,
+    deviceD: /estrobo|sirena.*incendio/,
+    deviceE: /estacion manual/,
+  },
+  access: {
+    deviceA: /lector|terminal de (control de )?acceso|biometric/,
+    deviceB: /cerradura|electroiman|chapa magnetica/,
+    deviceC: /controladora|controlador de acceso/,
+    deviceD: /boton de salida/,
+    deviceE: /fuente/,
+  },
+};
+
+const ACCESSORY_KEYWORDS: Record<Exclude<Target, DeviceTarget>, RegExp> = {
+  cable: /cable (utp|coaxial|siames|de alarma|thhn)|\butp\b/,
+  conduit: /conduit|\bemt\b|tubo electrico|canaleta/,
+  box: /caja (cuadrada|octagonal|rectangular|de registro|de paso)|registro/,
+  supplies: /conector|rj45|cinta aislante|grapa|soporte|amarra/,
   installationLabor: /electric|tecnico|instalador/,
   programmingLabor: /program|tecnico|configur/,
 };
 
+function pickerKeywords(systemType: SpecialSystemType, target: Target): RegExp {
+  return target in DEVICE_KEYWORDS[systemType]
+    ? DEVICE_KEYWORDS[systemType][target as DeviceTarget]
+    : ACCESSORY_KEYWORDS[target as Exclude<Target, DeviceTarget>];
+}
+
 function Picker({
   visible,
   target,
+  systemType,
   items,
   loading,
   currency,
@@ -868,6 +907,7 @@ function Picker({
 }: {
   visible: boolean;
   target: Target | null;
+  systemType: SpecialSystemType;
   items: CatalogItemWithDetails[];
   loading: boolean;
   currency?: string;
@@ -885,11 +925,11 @@ function Picker({
         ? rankCalculatorCatalogItems(
             items,
             laborTarget ? "labor" : "material",
-            PICKER_KEYWORDS[target],
+            pickerKeywords(systemType, target),
             search,
           )
         : [],
-    [items, target, search],
+    [items, target, search, systemType, laborTarget],
   );
 
   return (
@@ -905,9 +945,14 @@ function Picker({
         <TextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Buscar en el catálogo"
+          placeholder="Buscar en todo el catálogo"
           style={styles.search}
         />
+        {!search ? (
+          <Text style={styles.searchHint}>
+            Solo se muestran conceptos de este campo. Escribe para buscar en todo el catálogo.
+          </Text>
+        ) : null}
 
         {loading ? (
           <ActivityIndicator
@@ -919,7 +964,9 @@ function Picker({
             data={filtered}
             ListEmptyComponent={
               <Text style={styles.searchEmpty}>
-                No hay conceptos de este tipo en el catálogo. Cierra y escribe el precio manualmente.
+                {search
+                  ? "No hay conceptos que coincidan con la búsqueda."
+                  : "Tu catálogo aún no tiene conceptos para este campo. Búscalo por otro nombre o escribe el precio manualmente."}
               </Text>
             }
             keyExtractor={(item: CatalogItemWithDetails) => item.id}
@@ -932,7 +979,12 @@ function Picker({
                 onPress={() => onSelect(item)}
                 style={styles.item}
               >
-                <Text style={styles.itemName}>{item.name}</Text>
+                <View style={styles.flex}>
+                  <Text style={styles.itemName}>{item.name}</Text>
+                  {item.category?.name ? (
+                    <Text style={styles.itemMeta}>{item.category.name}</Text>
+                  ) : null}
+                </View>
                 <Text style={styles.price}>
                   {formatMoney(
                     item.sale_price || item.unit_cost,
@@ -1202,9 +1254,20 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: "800",
   },
+  itemMeta: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 3,
+  },
+  searchHint: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginBottom: 10,
+  },
   price: {
     color: colors.accent,
     fontWeight: "900",
+    marginLeft: 12,
   },
   search: {
     height: 48,

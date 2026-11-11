@@ -679,8 +679,8 @@ function CatalogButton({
 const PICKER_KEYWORDS: Record<Target, RegExp> = {
   floor: /ceramica|porcelanato|baldosa|piso|azulejo|vinil/,
   adhesive: /pegamento|adhesivo|bondex|mortero/,
-  grout: /boquilla|fragua|junta|lechada/,
-  supplies: /separador|nivelador|crucet|cinta/,
+  grout: /boquilla|fragua|lechada/,
+  supplies: /separador|nivelador|crucet|cuna/,
   labor: /azulej|mosaiq|ceram|piso|albanil/,
 };
 
@@ -728,7 +728,7 @@ function Picker({
         <TextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Buscar en el catálogo"
+          placeholder="Buscar en todo el catálogo"
           style={styles.search}
         />
 
@@ -742,7 +742,7 @@ function Picker({
             data={filtered}
             ListEmptyComponent={
               <Text style={styles.searchEmpty}>
-                No hay conceptos de este tipo en el catálogo. Cierra y escribe el precio manualmente.
+                No hay conceptos para este campo en el catálogo. Búscalo por otro nombre o escribe el precio manualmente.
               </Text>
             }
             keyExtractor={(item: CatalogItemWithDetails) =>

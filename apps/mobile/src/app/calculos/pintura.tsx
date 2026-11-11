@@ -258,7 +258,7 @@ function CatalogButton({ label, value, onPress }: { label: string; value?: strin
 const PICKER_KEYWORDS: Record<Target, RegExp> = {
   paint: /pintura|latex|acrilic|esmalte/,
   primer: /sellador|primer|base/,
-  supplies: /rodillo|brocha|cinta|lija|felpa|bandeja/,
+  supplies: /rodillo|brocha|cinta (de pintor|masking)|masking|lija|felpa|bandeja/,
   labor: /pint/,
 };
 
@@ -272,11 +272,11 @@ function Picker({ visible, target, items, loading, currency, onClose, onSelect }
   [items, target, search]);
   return <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
     <SafeAreaView style={styles.modal}><Pressable onPress={onClose}><Text style={styles.close}>Cerrar</Text></Pressable>
-      <TextInput value={search} onChangeText={setSearch} placeholder="Buscar en el catálogo"
+      <TextInput value={search} onChangeText={setSearch} placeholder="Buscar en todo el catálogo"
         style={[styles.input, styles.search]} />
       {loading ? <ActivityIndicator size="large" color={colors.primary} /> : <FlatList data={filtered}
         keyExtractor={(i) => i.id}
-        ListEmptyComponent={<Text style={styles.small}>No hay conceptos de este tipo en el catálogo. Cierra y escribe el precio manualmente.</Text>}
+        ListEmptyComponent={<Text style={styles.small}>No hay conceptos para este campo en el catálogo. Búscalo por otro nombre o escribe el precio manualmente.</Text>}
         renderItem={({ item }) => <Pressable onPress={() => onSelect(item)} style={styles.item}>
           <Text style={styles.itemName}>{item.name}</Text><Text style={styles.price}>{formatMoney(item.sale_price || item.unit_cost, currency)}</Text>
         </Pressable>} />}</SafeAreaView></Modal>;

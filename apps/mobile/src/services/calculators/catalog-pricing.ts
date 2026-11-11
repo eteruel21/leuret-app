@@ -54,28 +54,41 @@ export function trackCatalogPrice(item: Pick<CalculatorPricedEntry, "unit_cost" 
 
 /**
  * Filtra y ordena los conceptos del catálogo para un campo de la calculadora.
- * Solo devuelve el tipo correcto; los que coinciden con las palabras clave van
- * primero, y el resto queda disponible por si el catálogo usa otro nombre.
+ *
+ * - Sin búsqueda: solo muestra los conceptos del tipo correcto que pertenecen a
+ *   ese campo, es decir, cuyo nombre coincide con `keywords` o cuya categoría
+ *   coincide con `categories`. Así, al elegir una cámara no aparecen cemento ni
+ *   arena.
+ * - Con búsqueda: busca en todo el catálogo del tipo correcto (nombre, SKU y
+ *   categoría), por si la empresa usa otro nombre para el concepto.
+ *
+ * En ambos casos los que coinciden por nombre van primero.
  */
 export function rankCalculatorCatalogItems<T extends CalculatorPricedEntry>(
   items: T[],
   kind: CalculatorPickerKind,
   keywords: RegExp | null,
-  search = ""
+  search = "",
+  categories: RegExp | null = null
 ): T[] {
   const query = normalizeCatalogText(search);
+  const nameMatches = (item: T) => Boolean(keywords && keywords.test(normalizeCatalogText(item.name)));
+  const categoryMatches = (item: T) =>
+    Boolean(categories && categories.test(normalizeCatalogText(item.category?.name ?? "")));
+
   const allowed = items.filter((item) => {
     if (item.item_type !== kind) return false;
-    if (!query) return true;
-    return [item.name, item.sku ?? "", item.category?.name ?? ""].some((value) =>
-      normalizeCatalogText(value).includes(query)
-    );
+    if (query) {
+      return [item.name, item.sku ?? "", item.category?.name ?? ""].some((value) =>
+        normalizeCatalogText(value).includes(query)
+      );
+    }
+    if (!keywords && !categories) return true;
+    return nameMatches(item) || categoryMatches(item);
   });
 
-  const score = (item: T) => (keywords && keywords.test(normalizeCatalogText(item.name)) ? 0 : 1);
-
   return allowed
-    .map((item, index) => ({ item, index, rank: score(item) }))
+    .map((item, index) => ({ item, index, rank: nameMatches(item) ? 0 : 1 }))
     .sort((a, b) => a.rank - b.rank || a.index - b.index)
     .map(({ item }) => item);
 }

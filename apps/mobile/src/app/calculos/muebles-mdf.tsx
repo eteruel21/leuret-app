@@ -599,13 +599,13 @@ function CatalogButton({
 
 const PICKER_KEYWORDS: Record<Target, RegExp> = {
   mdf: /mdf|melamina|aglomerado|tablero/,
-  back: /fondo|hdf|mdf 3|masonite/,
-  edge: /canto|tapacanto|pvc/,
+  back: /fondo|hdf|masonite|mdf (1\/4|1\/8|3 ?mm)/,
+  edge: /canto|tapacanto/,
   hinge: /bisagra/,
   slide: /corredera|riel|telescop/,
   handle: /halador|jaladera|manija|tirador/,
   leg: /pata|nivelador/,
-  supplies: /tornillo|pegamento|cola|minifix|tarugo/,
+  supplies: /tornillo|pegamento (de contacto|blanco|para madera)|cola|minifix|tarugo/,
   labor: /carpint|ebanist/,
   installation: /carpint|instalador|ebanist/,
 };
@@ -650,7 +650,7 @@ function Picker({
         <TextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Buscar en el catálogo"
+          placeholder="Buscar en todo el catálogo"
           style={styles.search}
         />
         {loading ? (
@@ -660,7 +660,7 @@ function Picker({
             data={filtered}
             ListEmptyComponent={
               <Text style={styles.searchEmpty}>
-                No hay conceptos de este tipo en el catálogo. Cierra y escribe el precio manualmente.
+                No hay conceptos para este campo en el catálogo. Búscalo por otro nombre o escribe el precio manualmente.
               </Text>
             }
             keyExtractor={(item) => item.id}
