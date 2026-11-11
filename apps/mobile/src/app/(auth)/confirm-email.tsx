@@ -152,13 +152,6 @@ export default function ConfirmEmailScreen() {
                 <Text style={styles.helpText}>
                   La aprobación del administrador, cuando corresponda, es un proceso separado.
                 </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  style={styles.primaryButton}
-                  onPress={() => router.replace("/(auth)/login")}
-                >
-                  <Text style={styles.primaryButtonText}>Ir a iniciar sesión</Text>
-                </Pressable>
               </View>
             ) : null}
 
@@ -293,15 +286,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 16
   },
-  primaryButton: {
-    minHeight: 48,
-    width: "100%",
-    paddingHorizontal: 18,
-    backgroundColor: colors.primary,
-    borderRadius: radius.md,
-    alignItems: "center",
-    justifyContent: "center"
-  },
   secondaryButton: {
     minHeight: 48,
     borderWidth: 1,
@@ -318,10 +302,5 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6
-  },
-  primaryButtonText: {
-    color: colors.textInverse,
-    fontSize: 16,
-    fontWeight: "600"
   }
 });
