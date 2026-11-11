@@ -47,6 +47,28 @@ async function effectivePrice(userId: string, itemId: string) {
   });
 }
 
+/**
+ * Cuenta los aportes que ve un usuario con el rol de la API. Los tests se
+ * conectan como superusuario (que no aplica RLS), así que se cambia de rol
+ * dentro de una transacción para probar las políticas.
+ */
+async function visibleContributionsAs(userId: string, itemId: string) {
+  const client = await adminPool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SET LOCAL ROLE contractor_api");
+    await client.query("SELECT set_config('app.user_id', $1, true)", [userId]);
+    const result = await client.query<{ user_id: string }>(
+      "SELECT user_id FROM public.catalog_price_contributions WHERE catalog_item_id = $1 AND status = 'pending'",
+      [itemId]
+    );
+    await client.query("ROLLBACK");
+    return result.rows.map((row) => row.user_id);
+  } finally {
+    client.release();
+  }
+}
+
 describe("Aportes de precio de los usuarios al catálogo", () => {
   const suffix = Math.floor(Math.random() * 1_000_000);
   let superAdminId: string;
@@ -112,8 +134,11 @@ describe("Aportes de precio de los usuarios al catálogo", () => {
       notes: null
     });
 
-    const visible = await listPriceContributionRowsRepo(firstUserId, "pending", String(suffix));
-    expect(visible).toHaveLength(1);
+    expect(await visibleContributionsAs(firstUserId, groutId)).toEqual([firstUserId]);
+    expect(await visibleContributionsAs(secondUserId, groutId)).toEqual([secondUserId]);
+    expect((await visibleContributionsAs(superAdminId, groutId)).sort()).toEqual(
+      [firstUserId, secondUserId].sort()
+    );
 
     await expect(
       reviewPriceContributionsRepo(firstUserId, groutId, { action: "approve", unitCost: 2 })
