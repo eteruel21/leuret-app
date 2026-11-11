@@ -76,9 +76,10 @@ export function buildPasswordResetLinks(token: string) {
 
 export async function sendVerificationEmail({ to, fullName, token }: VerificationEmailInput): Promise<EmailDeliveryResult> {
   const name = fullName?.trim() || "Usuario";
-  const safeName = name.replace(/[&<>"']/g, (character) => ({
+  const htmlEntities: Record<string, string> = {
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  })[character] ?? character);
+  };
+  const safeName = name.replace(/[&<>"']/g, (character) => htmlEntities[character] ?? character);
   const { webLink } = buildVerificationLinks(token);
 
   const html = `
