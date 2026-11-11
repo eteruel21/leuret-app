@@ -160,6 +160,39 @@ test("email: una entrega Resend exitosa informa sent true", async () => {
   );
 });
 
+test("email: confirmación con un solo botón web, sin token visible ni deep link", async () => {
+  configureResend();
+  fetchMock.mockResolvedValueOnce({ ok: true });
+
+  const token = "verification-secret-example";
+  const result = await sendVerificationEmail({
+    to: "testuser@example.test",
+    fullName: "Ana <Prueba> & Co.",
+    token
+  });
+
+  assert.deepEqual(result, { sent: true });
+  assert.equal(fetchMock.mock.calls.length, 1);
+
+  const [, request] = fetchMock.mock.calls[0] as [string, { body: string }];
+  const payload = JSON.parse(request.body) as { html: string; text: string };
+  const expectedUrl = "https://app.leurettech.com/confirm-email?token=verification-secret-example";
+
+  assert.equal((payload.html.match(/<a\b[^>]*href=/g) ?? []).length, 1);
+  assert.ok(payload.html.includes(`href="${expectedUrl}"`));
+  assert.ok(payload.html.includes(">Verificar</a>"));
+  assert.ok(payload.html.includes("Ana &lt;Prueba&gt; &amp; Co."));
+  assert.ok(!payload.html.includes("Ana <Prueba> & Co."));
+  assert.ok(!payload.html.includes("leuret://"));
+  assert.ok(!payload.html.includes("code-box"));
+  assert.ok(!payload.html.includes(">Token de Verificación"));
+  assert.ok(payload.html.includes("24 horas"));
+
+  assert.ok(payload.text.includes(expectedUrl));
+  assert.ok(!payload.text.includes("leuret://"));
+  assert.ok(!payload.text.includes("Token de Verificación:"));
+});
+
 test("email: Resend responde con error y se informa delivery_failed", async () => {
   configureResend();
 
