@@ -33,6 +33,8 @@ import {
 import { formatDecimal, formatMoney } from "../../utils/format";
 import { loadLocalData, saveLocalData } from "../../utils/local-storage";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
+import { useSavedCalculation } from "@/components/SaveCalculation";
+import type { BudgetLineDraft } from "@/services/budget-service";
 
 type Target =
   | "equipment"
@@ -322,19 +324,9 @@ export default function AirConditioningScreen() {
     setMessage("");
   }
 
-  async function addToBudget(chosenBudgetId?: unknown) {
-    if (!result) return;
-
-    if (!activeCompany) return;
-
-    const targetBudgetId =
-      typeof chosenBudgetId === "string" ? chosenBudgetId : budgetId;
-
-    if (!targetBudgetId) {
-      requestBudget((id) => void addToBudget(id));
-      return;
-    }
-
+  /** Partida del resultado actual: se usa al agregar al presupuesto y al guardar el cálculo. */
+  function buildBudgetLine(): BudgetLineDraft | null {
+    if (!result) return null;
     const unitPrice = result.totalCost / result.unitCount;
     const c = (compute(withCatalogCosts(form, tracked)) ?? result);
     const unitCost = budgetUnitCost(
@@ -346,9 +338,7 @@ export default function AirConditioningScreen() {
       currency,
     );
 
-    const response = await addBudgetItem({
-      companyId: activeCompany.id,
-      budgetId: targetBudgetId,
+    return {
       itemType: "service",
       description:
         `Suministro e instalación de aire acondicionado ` +
@@ -373,6 +363,43 @@ export default function AirConditioningScreen() {
         ` · ${formatDecimal(result.extraCopperMeters, 2, currency)} m de cobre adicional` +
         ` · ${formatDecimal(result.cableMeters, 2, currency)} m de cable` +
         ` · ${result.drainPieces} piezas de drenaje`,
+    };
+  }
+
+  const { saveButton, saveModal } = useSavedCalculation({
+    formulaCode: "air-conditioning",
+    ready: loaded,
+    snapshot: () => ({ form, selected, tracked }),
+    restore: (saved) => {
+      if (saved.form) setForm((current) => ({ ...current, ...saved.form }));
+      if (saved.selected !== undefined) setSelected(saved.selected);
+      if (saved.tracked !== undefined) setTracked(saved.tracked);
+    },
+    onRestored: () => calculate(),
+    buildLine: buildBudgetLine,
+    totalCost: result?.totalCost,
+  });
+
+  async function addToBudget(chosenBudgetId?: unknown) {
+    if (!result) return;
+
+    if (!activeCompany) return;
+
+    const targetBudgetId =
+      typeof chosenBudgetId === "string" ? chosenBudgetId : budgetId;
+
+    if (!targetBudgetId) {
+      requestBudget((id) => void addToBudget(id));
+      return;
+    }
+
+    const line = buildBudgetLine();
+    if (!line) return;
+
+    const response = await addBudgetItem({
+      companyId: activeCompany.id,
+      budgetId: targetBudgetId,
+      ...line,
     });
 
     if (response.error) {
@@ -417,6 +444,7 @@ export default function AirConditioningScreen() {
       edges={["left", "right", "bottom"]}
     >
       {budgetPicker}
+      {saveModal}
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -555,6 +583,7 @@ export default function AirConditioningScreen() {
             onAdd={addToBudget}
           />
         ) : null}
+        {result ? saveButton : null}
 
         {message ? (
           <Text style={styles.success}>{message}</Text>

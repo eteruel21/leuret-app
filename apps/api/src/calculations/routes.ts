@@ -37,8 +37,8 @@ export async function registerCalculationRoutes(app: FastifyInstance): Promise<v
         return reply.status(400).send({ message: "Parámetros de consulta no válidos." });
       }
 
-      const { companyId, projectId, clientId } = parsedQuery.data;
-      const calculations = await getCompanyCalculationsService(userId, companyId, projectId, clientId);
+      const { companyId, projectId, clientId, limit } = parsedQuery.data;
+      const calculations = await getCompanyCalculationsService(userId, companyId, projectId, clientId, limit);
 
       return { calculations };
     }

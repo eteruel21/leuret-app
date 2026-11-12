@@ -83,6 +83,7 @@ import { API_URL } from "@/services/api";
 import type { Appointment } from "@/utils/appointment-storage";
 import { prepareProjectPhoto, type ProjectPhotoSource } from "@/utils/project-photo-picker";
 import { RequirePermission } from "@/components/RequirePermission";
+import { SavedCalculationsSection } from "@/components/SavedCalculationsSection";
 
 function ProjectDetailScreenContent() {
   const params = useLocalSearchParams<{
@@ -832,6 +833,10 @@ function ProjectDetailScreenContent() {
             ))
           )}
         </InfoSection>
+
+        <View style={styles.sectionCard}>
+          <SavedCalculationsSection projectId={project.id} />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

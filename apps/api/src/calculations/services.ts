@@ -14,9 +14,10 @@ export async function getCompanyCalculationsService(
   userId: string,
   companyId: string,
   projectId?: string,
-  clientId?: string
+  clientId?: string,
+  limit?: number
 ) {
-  return findCompanyCalculationsRepo(userId, companyId, projectId, clientId);
+  return findCompanyCalculationsRepo(userId, companyId, projectId, clientId, limit);
 }
 
 export async function getCalculationDetailService(userId: string, calculationId: string, companyId: string) {

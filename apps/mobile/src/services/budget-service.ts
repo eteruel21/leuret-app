@@ -35,6 +35,9 @@ type CreateBudgetItemInput = {
   materials?: BudgetItemMaterial[];
 };
 
+/** Partida lista para agregar a cualquier presupuesto (sin empresa ni presupuesto). */
+export type BudgetLineDraft = Omit<CreateBudgetItemInput, "companyId" | "budgetId">;
+
 export type ClientBudgetSummary =
   Budget & {
     project: {
@@ -557,6 +560,25 @@ export async function sendBudget(
     const response = await authenticatedRequest<{ budget: BudgetRow }>(`/budgets/${budgetId}/send`, {
       method: "POST",
       body: JSON.stringify({ companyId, validUntil })
+    });
+    return { budget: normalizeBudget(response.budget), error: null };
+  } catch (error) {
+    return { budget: null, error: errorMessage(error) };
+  }
+}
+
+/**
+ * Vuelve a borrador un presupuesto enviado, visto, rechazado o vencido para
+ * editarlo. La API sube la versión; hay que reenviarlo al cliente.
+ */
+export async function reopenBudget(
+  companyId: string,
+  budgetId: string
+): Promise<{ budget: Budget | null; error: string | null }> {
+  try {
+    const response = await authenticatedRequest<{ budget: BudgetRow }>(`/budgets/${budgetId}/reopen`, {
+      method: "POST",
+      body: JSON.stringify({ companyId })
     });
     return { budget: normalizeBudget(response.budget), error: null };
   } catch (error) {

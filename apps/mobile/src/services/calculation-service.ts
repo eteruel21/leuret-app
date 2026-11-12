@@ -22,7 +22,7 @@ export interface SavedCalculation {
   input_data: Record<string, any>;
   price_data: Record<string, any>;
   results_data: Record<string, any>;
-  total_cost: number;
+  total_cost: number | string;
   created_at: string;
   project?: { name: string; project_code: string } | null;
   client?: { name: string } | null;
@@ -39,11 +39,13 @@ export async function saveCalculation(params: SaveCalculationParams): Promise<Sa
 export async function fetchCompanyCalculations(
   companyId: string,
   projectId?: string,
-  clientId?: string
+  clientId?: string,
+  limit?: number
 ): Promise<SavedCalculation[]> {
   const searchParams = new URLSearchParams({ companyId });
   if (projectId) searchParams.set("projectId", projectId);
   if (clientId) searchParams.set("clientId", clientId);
+  if (limit) searchParams.set("limit", String(limit));
 
   const data = await authenticatedRequest<{ calculations: SavedCalculation[] }>(
     `/calculations?${searchParams.toString()}`

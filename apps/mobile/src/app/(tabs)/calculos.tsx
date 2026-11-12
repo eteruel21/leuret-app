@@ -10,6 +10,7 @@ import { FadeInUp } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { MotionPressable } from "@/components/MotionPressable";
+import { SavedCalculationsSection } from "@/components/SavedCalculationsSection";
 import { CALCULATORS as categories, type CalculationCategory } from "@/constants/calculators";
 
 import {
@@ -148,12 +149,19 @@ export default function CalculationsScreen() {
             </MotionPressable>
           ))}
         </View>
+
+        <View style={styles.savedSection}>
+          <SavedCalculationsSection limit={5} title="Guardados recientemente" hideNewButton />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  savedSection: {
+    marginTop: 24,
+  },
   safeArea: {
     flex: 1,
     backgroundColor: colors.surfaceDark,

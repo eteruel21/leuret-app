@@ -25,6 +25,8 @@ import {
 import { formatDecimal, formatMoney } from "../../utils/format";
 import { loadLocalData, saveLocalData } from "../../utils/local-storage";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
+import { useSavedCalculation } from "@/components/SaveCalculation";
+import type { BudgetLineDraft } from "@/services/budget-service";
 
 type Target = "panel" | "track" | "support" | "carrier" |
   "hanger" | "screw" | "labor";
@@ -199,25 +201,18 @@ export default function PvcCeilingScreen() {
     setError(""); setSuccess("");
   }
 
-  async function addToBudget(chosenBudgetId?: unknown) {
-    if (!result) return;
-    if (!activeCompany) return;
-
-    const targetBudgetId =
-      typeof chosenBudgetId === "string" ? chosenBudgetId : budgetId;
-
-    if (!targetBudgetId) {
-      requestBudget((id) => void addToBudget(id));
-      return;
-    }
+  /** Partida del resultado actual: se usa al agregar al presupuesto y al guardar el cálculo. */
+  function buildBudgetLine(): BudgetLineDraft | null {
+    if (!result) return null;
     const n = (value: number) => formatDecimal(value, 0, currency);
     const unitPrice = result.totalCost / result.netArea;
     const c = (compute(withCatalogCosts(form, tracked)) ?? result);
     const unitCost = budgetUnitCost(
       c.totalCost,
       result.netArea, unitPrice);
-    const response = await addBudgetItem({
-      companyId: activeCompany.id, budgetId: targetBudgetId, itemType: "service",
+
+    return {
+      itemType: "service",
       description: "Cielo raso PVC", unitName: "m²",
       quantity: result.netArea, unitCost, unitPrice, taxable: true,
       materials: compactMaterials([
@@ -231,6 +226,42 @@ export default function PvcCeilingScreen() {
       notes: `${n(result.panelsToBuy)} láminas PVC · ${n(result.trackPieces)} tracks · ` +
         `${n(result.supportPieces)} studs · ${n(result.carrierPieces)} cargadores · ` +
         `${n(result.hangers)} suspensiones · ${n(result.screwBoxes)} cajas de tornillos`,
+    };
+  }
+
+  const { saveButton, saveModal } = useSavedCalculation({
+    formulaCode: "pvc",
+    ready: settingsLoaded,
+    snapshot: () => ({ form, selected, tracked }),
+    restore: (saved) => {
+      if (saved.form) setForm((current) => ({ ...current, ...saved.form }));
+      if (saved.selected !== undefined) setSelected(saved.selected);
+      if (saved.tracked !== undefined) setTracked(saved.tracked);
+    },
+    onRestored: () => calculate(),
+    buildLine: buildBudgetLine,
+    totalCost: result?.totalCost,
+  });
+
+  async function addToBudget(chosenBudgetId?: unknown) {
+    if (!result) return;
+    if (!activeCompany) return;
+
+    const targetBudgetId =
+      typeof chosenBudgetId === "string" ? chosenBudgetId : budgetId;
+
+    if (!targetBudgetId) {
+      requestBudget((id) => void addToBudget(id));
+      return;
+    }
+
+    const line = buildBudgetLine();
+    if (!line) return;
+
+    const response = await addBudgetItem({
+      companyId: activeCompany.id,
+      budgetId: targetBudgetId,
+      ...line,
     });
     if (response.error) Alert.alert("No fue posible agregar la partida", response.error);
     else setSuccess("La partida fue guardada en el presupuesto.");
@@ -260,6 +291,7 @@ export default function PvcCeilingScreen() {
 
   return <SafeAreaView style={styles.safe} edges={["left", "right", "bottom"]}>
       {budgetPicker}
+      {saveModal}
     <KeyboardAvoidingView style={styles.flex}
       behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -331,6 +363,7 @@ export default function PvcCeilingScreen() {
             setResult(null); setError(""); }} style={styles.secondary}>
             <Text style={styles.secondaryText}>Limpiar medidas</Text></Pressable></View>
         {result ? <Results result={result} currency={currency} onAdd={addToBudget} /> : null}
+        {result ? saveButton : null}
         {success ? <Message text={success} /> : null}
       </ScrollView>
     </KeyboardAvoidingView>

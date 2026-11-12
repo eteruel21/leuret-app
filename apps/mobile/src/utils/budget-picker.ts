@@ -1,10 +1,15 @@
 import type { Budget, BudgetStatus } from "@/types/budget";
 
-/** Estados en los que la API ya no acepta agregar ni quitar partidas. */
-const LOCKED_STATUSES: readonly BudgetStatus[] = ["approved", "cancelled"];
-
+/** Solo los borradores aceptan agregar o quitar partidas (igual que la API). */
 export function budgetAcceptsItems(status: BudgetStatus): boolean {
-  return !LOCKED_STATUSES.includes(status);
+  return status === "draft";
+}
+
+/** Estados desde los que «Editar presupuesto» lo vuelve a borrador. */
+const REOPENABLE_STATUSES: readonly BudgetStatus[] = ["sent", "viewed", "rejected", "expired"];
+
+export function budgetCanReopen(status: BudgetStatus): boolean {
+  return REOPENABLE_STATUSES.includes(status);
 }
 
 function normalize(value: string | null | undefined): string {
@@ -16,9 +21,8 @@ function normalize(value: string | null | undefined): string {
 }
 
 /**
- * Presupuestos a los que una calculadora puede agregar partidas (todos menos
- * aprobados y cancelados). Filtra por número o nombre; primero los borradores
- * y, dentro de cada grupo, del más reciente al más antiguo.
+ * Presupuestos a los que una calculadora puede agregar partidas: los
+ * borradores. Filtra por número o nombre, del más reciente al más antiguo.
  */
 export function editableBudgets(budgets: Budget[], search = ""): Budget[] {
   const term = normalize(search);
@@ -29,9 +33,5 @@ export function editableBudgets(budgets: Budget[], search = ""): Budget[] {
       normalize(budget.budget_number).includes(term) ||
       normalize(budget.title).includes(term),
     )
-    .sort((a, b) => {
-      const draftOrder = Number(b.status === "draft") - Number(a.status === "draft");
-      if (draftOrder !== 0) return draftOrder;
-      return (b.updated_at ?? "").localeCompare(a.updated_at ?? "");
-    });
+    .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""));
 }

@@ -16,7 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "@/constants/theme";
 import { useCompany } from "@/contexts/CompanyContext";
 import { listBudgetsByCompany } from "@/services/budget-service";
-import { formatMoney, getBudgetStatusLabel, type Budget } from "@/types/budget";
+import { formatMoney, type Budget } from "@/types/budget";
 import { editableBudgets } from "@/utils/budget-picker";
 
 type BudgetPickerModalProps = {
@@ -26,8 +26,8 @@ type BudgetPickerModalProps = {
 };
 
 /**
- * Lista los presupuestos de la empresa activa que aceptan partidas (todos
- * menos aprobados y cancelados) para elegir dónde guardar una calculadora.
+ * Lista los presupuestos en borrador de la empresa activa para elegir dónde
+ * guardar una partida. Los enviados se editan primero con «Editar presupuesto».
  */
 export function BudgetPickerModal({ visible, onClose, onSelect }: BudgetPickerModalProps) {
   const { activeCompany } = useCompany();
@@ -70,7 +70,7 @@ export function BudgetPickerModal({ visible, onClose, onSelect }: BudgetPickerMo
           <View style={styles.headerCopy}>
             <Text style={styles.title}>Elige un presupuesto</Text>
             <Text style={styles.subtitle}>
-              La partida se agregará al presupuesto que elijas. Los aprobados y cancelados no aceptan partidas nuevas.
+              La partida se agregará al presupuesto que elijas. Solo aparecen borradores: para cambiar uno enviado, ábrelo y toca «Editar presupuesto».
             </Text>
           </View>
           <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Cerrar">
@@ -108,7 +108,7 @@ export function BudgetPickerModal({ visible, onClose, onSelect }: BudgetPickerMo
               <View style={styles.center}>
                 <Ionicons name="document-text-outline" size={34} color={colors.textMuted} />
                 <Text style={styles.emptyTitle}>
-                  {search.trim() ? "Ningún presupuesto coincide" : "No tienes presupuestos abiertos"}
+                  {search.trim() ? "Ningún borrador coincide" : "No tienes presupuestos en borrador"}
                 </Text>
                 <Text style={styles.message}>
                   Crea un presupuesto desde una obra y vuelve a la calculadora para agregar la partida.
@@ -130,10 +130,7 @@ export function BudgetPickerModal({ visible, onClose, onSelect }: BudgetPickerMo
                 accessibilityRole="button"
               >
                 <View style={styles.rowCopy}>
-                  <Text style={styles.rowNumber}>
-                    {item.budget_number}
-                    {item.status === "draft" ? "" : ` · ${getBudgetStatusLabel(item.status)}`}
-                  </Text>
+                  <Text style={styles.rowNumber}>{item.budget_number}</Text>
                   <Text style={styles.rowTitle} numberOfLines={2}>{item.title}</Text>
                 </View>
                 <View style={styles.rowAside}>

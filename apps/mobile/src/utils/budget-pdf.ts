@@ -338,7 +338,7 @@ export function buildBudgetHtml({
     <div class="doc-box">
       <div class="doc-label">Presupuesto</div>
       <div class="doc-number">
-        ${escapeHtml(budget.budget_number)}
+        ${escapeHtml(budget.budget_number)}${budget.version > 1 ? ` · v${budget.version}` : ""}
       </div>
       <div class="status">
         ${escapeHtml(getBudgetStatusLabel(budget.status))}
