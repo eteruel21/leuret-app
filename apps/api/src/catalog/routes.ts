@@ -24,7 +24,8 @@ import {
   createYieldSchema,
   deactivateYieldSchema,
   catalogItemQuerySchema,
-  priceRegionSchema
+  priceRegionSchema,
+  priceContributionSchema
 } from "./schemas.js";
 
 import {
@@ -41,8 +42,18 @@ import {
   createCatalogYieldService,
   deactivateCatalogYieldService,
   getPriceRegionsService,
-  setUserPriceRegionService
+  setUserPriceRegionService,
+  submitPriceContributionService
 } from "./services.js";
+
+/** Errores que lanzan las funciones SQL del catálogo con un código conocido. */
+function databaseErrorCode(error: unknown): string | null {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    return typeof code === "string" ? code : null;
+  }
+  return null;
+}
 
 function authenticatedUserId(
   request: FastifyRequest,
@@ -84,6 +95,50 @@ export async function registerCatalogRoutes(
       });
 
       return result;
+    }
+  );
+
+  // Cualquier usuario activo puede aportar el precio de un insumo. Le sirve de
+  // inmediato como precio personal y queda pendiente de revisión del
+  // superadministrador para el catálogo de todos.
+  app.post(
+    "/catalog/items/:itemId/price-contributions",
+    {
+      preHandler: [authenticateRequest, requireActiveUser]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedParams = itemParamsSchema.safeParse(request.params);
+      const parsedBody = priceContributionSchema.safeParse(request.body);
+
+      if (!parsedParams.success || !parsedBody.success) {
+        return reply.status(400).send({
+          message: "Escribe un precio mayor que cero. La tienda admite 120 caracteres y la nota 500."
+        });
+      }
+
+      try {
+        const result = await submitPriceContributionService(
+          userId,
+          parsedParams.data.itemId,
+          parsedBody.data
+        );
+        return reply.status(201).send(result);
+      } catch (error) {
+        const code = databaseErrorCode(error);
+        if (code === "P0002") {
+          return reply.status(404).send({ message: "El insumo no existe o está inactivo." });
+        }
+        if (code === "22023") {
+          return reply.status(400).send({ message: "El precio no es válido." });
+        }
+        if (code === "42501") {
+          return reply.status(403).send({ message: "Tu cuenta no puede aportar precios." });
+        }
+        throw error;
+      }
     }
   );
 

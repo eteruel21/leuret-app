@@ -18,6 +18,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { usePriceContribution } from "../../components/AddPriceModal";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors, radius } from "../../constants/theme";
@@ -118,6 +119,7 @@ export default function MasonryCalculatorScreen() {
     : params.budgetId;
   const { activeCompany } = useCompany();
   const currencyCode = activeCompany?.currency_code;
+  const { requestPrice, priceModal } = usePriceContribution();
 
   const [form, setForm] = useState<FormState>(initialForm);
   const [plasterSides, setPlasterSides] =
@@ -234,11 +236,26 @@ export default function MasonryCalculatorScreen() {
     setBudgetMessage("");
   }
 
-  function selectCatalogItem(item: CatalogItemWithDetails) {
-    if (!catalogTarget) return;
+  function selectCatalogItem(
+    item: CatalogItemWithDetails,
+    target: CatalogTarget | null = catalogTarget,
+  ) {
+    if (!target) return;
 
     const priced = trackCatalogPrice(item);
     const price = priced.price;
+
+    // Sin precio: el usuario lo agrega y queda como aporte para el catálogo.
+    if (!(Number.isFinite(price) && price > 0)) {
+      setCatalogTarget(null);
+      requestPrice(item, (updated) => {
+        setCatalogItems((current) =>
+          current.map((entry) => (entry.id === updated.id ? updated : entry)),
+        );
+        selectCatalogItem(updated, target);
+      });
+      return;
+    }
     const fieldByTarget: Record<
       CatalogTarget,
       keyof FormState
@@ -250,19 +267,12 @@ export default function MasonryCalculatorScreen() {
       plasterLabor: "plasterLaborPrice",
     };
 
-    if (Number.isFinite(price) && price > 0) {
-      const field = fieldByTarget[catalogTarget];
-      updateField(field, String(price));
-      setTrackedPrices((current) => ({ ...current, [field]: priced }));
-    } else {
-      Alert.alert(
-        "Precio pendiente",
-        "Este insumo aún no tiene precio configurado. Introduce el precio manualmente en la calculadora."
-      );
-    }
+    const field = fieldByTarget[target];
+    updateField(field, String(price));
+    setTrackedPrices((current) => ({ ...current, [field]: priced }));
     setSelectedCatalogNames((current) => ({
       ...current,
-      [catalogTarget]: item.name,
+      [target]: item.name,
     }));
     setCatalogTarget(null);
   }
@@ -807,6 +817,7 @@ export default function MasonryCalculatorScreen() {
           onSelect={selectCatalogItem}
         />
       ) : null}
+      {priceModal}
     </SafeAreaView>
   );
 }
@@ -1044,7 +1055,7 @@ function CatalogPicker({
                       </Text>
                     </View>
                     <Text style={styles.catalogItemPrice}>
-                      {price > 0 ? formatMoney(price, currencyCode) : "Precio por definir"}
+                      {price > 0 ? formatMoney(price, currencyCode) : "Sin precio · agregar"}
                     </Text>
                   </Pressable>
                 );

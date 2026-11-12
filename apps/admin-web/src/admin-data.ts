@@ -305,3 +305,74 @@ export async function loadPriceHistory(input: {
   );
   return response.entries;
 }
+
+// ----- Aportes de precio de los usuarios
+
+export type PriceContributionStatus = "pending" | "approved" | "rejected";
+
+export type PriceContributionEntry = {
+  id: string;
+  unitCost: number;
+  storeName: string | null;
+  notes: string | null;
+  regionCode: string | null;
+  status: PriceContributionStatus;
+  contributorName: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+  reviewNotes: string | null;
+};
+
+export type PriceContributionGroup = {
+  itemId: string;
+  name: string;
+  code: string | null;
+  itemType: string;
+  categoryName: string | null;
+  unitSymbol: string | null;
+  currentUnitCost: number;
+  currentSalePrice: number;
+  currentMarkup: number;
+  count: number;
+  medianCost: number;
+  minCost: number;
+  maxCost: number;
+  suggestedSalePrice: number;
+  changePercentage: number | null;
+  widespread: boolean;
+  stores: string[];
+  latestAt: string;
+  entries: PriceContributionEntry[];
+};
+
+export type PriceContributionsResponse = {
+  status: PriceContributionStatus;
+  totalContributions: number;
+  totalItems: number;
+  truncated: boolean;
+  groups: PriceContributionGroup[];
+};
+
+export async function loadPriceContributions(input: {
+  status?: PriceContributionStatus;
+  search?: string;
+} = {}): Promise<PriceContributionsResponse> {
+  const params = new URLSearchParams();
+  params.set("status", input.status ?? "pending");
+  if (input.search?.trim()) params.set("search", input.search.trim());
+  return authenticatedRequest<PriceContributionsResponse>(
+    `/admin/price-contributions?${params.toString()}`
+  );
+}
+
+export async function reviewPriceContributions(
+  itemId: string,
+  input:
+    | { action: "approve"; unitCost: number; salePrice: number; reason?: string }
+    | { action: "reject"; reason: string }
+): Promise<{ success: boolean; reviewed: number }> {
+  return authenticatedRequest<{ success: boolean; reviewed: number }>(
+    `/admin/price-contributions/${encodeURIComponent(itemId)}/review`,
+    { method: "POST", body: JSON.stringify(input) }
+  );
+}

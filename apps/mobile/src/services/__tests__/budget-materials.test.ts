@@ -3,7 +3,9 @@ import {
   buildShoppingList,
   compactMaterials,
   material,
+  rankCatalogMatches,
   shoppingListText,
+  withAddedUnitCosts,
 } from "../budget-materials";
 import type { BudgetItem } from "../../types/budget";
 
@@ -96,5 +98,38 @@ describe("buildShoppingList", () => {
     });
     expect(text).toContain("• 6 gal — Pintura (B/.120.00)");
     expect(text).toContain("Costo estimado: B/.120.00");
+  });
+});
+
+describe("precios agregados en la lista de compras", () => {
+  const catalog = [
+    { id: "1", name: "Boquilla (fragua) para cerámica y porcelanato 5 kg (bolsa)", item_type: "material" },
+    { id: "2", name: "Cemento Portland 42.5 kg (saco)", item_type: "material" },
+    { id: "3", name: "Mano de obra de colocación de cerámica o porcelanato (m²)", item_type: "labor" },
+    { id: "4", name: "Cerámica de piso 60 x 60 cm (m²)", item_type: "material" },
+  ];
+
+  it("sugiere los insumos con más palabras en común y deja fuera la mano de obra", () => {
+    const ranked = rankCatalogMatches("Boquilla para cerámica", catalog);
+    expect(ranked.map((entry) => entry.id)).toEqual(["1", "4"]);
+  });
+
+  it("con búsqueda filtra por el texto escrito", () => {
+    expect(rankCatalogMatches("Boquilla", catalog, "portland").map((entry) => entry.id)).toEqual(["2"]);
+  });
+
+  it("aplica el costo agregado solo a las líneas sin costo", () => {
+    const list = buildShoppingList([
+      item({ description: "Piso", item_type: "service", materials: [
+        { name: "Boquilla", quantity: 3, unit: "bolsa" },
+        { name: "Cerámica", quantity: 10, unit: "m²", cost: 99.9 },
+      ] }),
+    ]);
+    const boquilla = list.lines.find((line) => line.name === "Boquilla")!;
+    const priced = withAddedUnitCosts(list, { [boquilla.key]: 4.5 });
+
+    expect(priced.lines.find((line) => line.name === "Boquilla")?.cost).toBe(13.5);
+    expect(priced.knownCost).toBe(113.4);
+    expect(priced.linesWithoutCost).toBe(0);
   });
 });

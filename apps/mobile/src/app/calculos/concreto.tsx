@@ -19,6 +19,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { usePriceContribution } from "../../components/AddPriceModal";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors, radius } from "../../constants/theme";
@@ -254,6 +255,7 @@ function ConcreteCalculatorForm({
     : params.budgetId;
 
   const { activeCompany } = useCompany();
+  const { requestPrice, priceModal } = usePriceContribution();
   const {
     parameters: formulaParameters,
   } = useFormulaParameters(
@@ -458,18 +460,25 @@ function ConcreteCalculatorForm({
 
   function handleCatalogItemSelected(
     item: CatalogItemWithDetails,
+    target: CatalogPriceTarget | null = catalogTarget,
   ) {
-    if (!catalogTarget) return;
+    if (!target) return;
 
     const priced = trackCatalogPrice(item);
     const price = priced.price;
     const hasPrice = Number.isFinite(price) && price > 0;
     const priceText = String(price);
+
+    // Sin precio: el usuario lo agrega y queda como aporte para el catálogo.
     if (!hasPrice) {
-      Alert.alert(
-        "Precio pendiente",
-        "Este insumo aún no tiene precio configurado. Puedes introducirlo manualmente en la calculadora."
-      );
+      setCatalogTarget(null);
+      requestPrice(item, (updated) => {
+        setCatalogItems((current) =>
+          current.map((entry) => (entry.id === updated.id ? updated : entry)),
+        );
+        handleCatalogItemSelected(updated, target);
+      });
+      return;
     }
     const unitCode = (
       item.unit?.code ??
@@ -483,14 +492,14 @@ function ConcreteCalculatorForm({
 
     setSelectedCatalogNames((current) => ({
       ...current,
-      [catalogTarget]: item.name,
+      [target]: item.name,
     }));
 
-    if (catalogTarget === "cement") {
+    if (target === "cement") {
       if (hasPrice) setCatalogPrice("cementPrice", priced, priceText);
     }
 
-    if (catalogTarget === "sand") {
+    if (target === "sand") {
       if (isCubicMeter) {
         setSandPriceMode("cubicMeter");
         if (hasPrice) setCatalogPrice("sandCubicMeterPrice", priced, priceText);
@@ -500,7 +509,7 @@ function ConcreteCalculatorForm({
       }
     }
 
-    if (catalogTarget === "gravel") {
+    if (target === "gravel") {
       if (isCubicMeter) {
         setGravelPriceMode("cubicMeter");
         if (hasPrice) setCatalogPrice("gravelCubicMeterPrice", priced, priceText);
@@ -510,7 +519,7 @@ function ConcreteCalculatorForm({
       }
     }
 
-    if (catalogTarget === "labor") {
+    if (target === "labor") {
       if (hasPrice) setCatalogPrice("laborPrice", priced, priceText);
     }
 
@@ -1106,6 +1115,7 @@ function ConcreteCalculatorForm({
           onSelect={handleCatalogItemSelected}
         />
       ) : null}
+      {priceModal}
     </SafeAreaView>
   );
 }
@@ -1266,7 +1276,7 @@ function CatalogPricePicker({
                     </View>
 
                     <Text style={styles.catalogItemPrice}>
-                      {price > 0 ? formatMoneyUtil(price, currencyCode) : "Precio por definir"}
+                      {price > 0 ? formatMoneyUtil(price, currencyCode) : "Sin precio · agregar"}
                     </Text>
                   </Pressable>
                 );

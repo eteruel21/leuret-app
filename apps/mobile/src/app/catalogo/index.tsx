@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { usePriceContribution } from "@/components/AddPriceModal";
 import { LeuretLoading } from "@/components/LeuretLoading";
 import { colors, radius, shadows } from "@/constants/theme";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -36,7 +37,11 @@ import type {
 } from "@/types/catalog";
 import { getCatalogItemTypeLabel } from "@/types/catalog";
 
-type Filter = CatalogItemType | "all";
+type Filter = CatalogItemType | "all" | "missing";
+
+function hasNoPrice(item: CatalogItemWithDetails) {
+  return item.unit_cost <= 0 && item.sale_price <= 0;
+}
 
 const FILTERS: { label: string; value: Filter }[] = [
   { label: "Todos", value: "all" },
@@ -44,6 +49,7 @@ const FILTERS: { label: string; value: Filter }[] = [
   { label: "Mano de obra", value: "labor" },
   { label: "Equipos", value: "equipment" },
   { label: "Servicios", value: "service" },
+  { label: "Sin precio", value: "missing" },
 ];
 
 export default function CatalogScreen() {
@@ -53,6 +59,8 @@ export default function CatalogScreen() {
     useState<CatalogItemWithDetails | null>(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const { requestPrice, priceModal } = usePriceContribution();
+  const missingCount = useMemo(() => items.filter(hasNoPrice).length, [items]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [regions, setRegions] = useState<PriceRegion[]>([]);
@@ -100,7 +108,9 @@ export default function CatalogScreen() {
     const query = search.trim().toLowerCase();
 
     return items.filter((item) => {
-      if (filter !== "all" && item.item_type !== filter) {
+      if (filter === "missing") {
+        if (!hasNoPrice(item)) return false;
+      } else if (filter !== "all" && item.item_type !== filter) {
         return false;
       }
 
@@ -258,7 +268,9 @@ export default function CatalogScreen() {
                         selected && styles.filterTextSelected,
                       ]}
                     >
-                      {option.label}
+                      {option.value === "missing" && missingCount > 0
+                        ? `${option.label} (${missingCount})`
+                        : option.label}
                     </Text>
                   </Pressable>
                 );
@@ -288,6 +300,13 @@ export default function CatalogScreen() {
           <CatalogPriceCard
             item={item}
             onEdit={() => setEditingItem(item)}
+            onAddPrice={() =>
+              requestPrice(item, (priced) =>
+                setItems((current) =>
+                  current.map((entry) => (entry.id === priced.id ? priced : entry)),
+                ),
+              )
+            }
           />
         )}
       />
@@ -366,6 +385,7 @@ export default function CatalogScreen() {
           await loadCatalog(true);
         }}
       />
+      {priceModal}
     </SafeAreaView>
   );
 }
@@ -379,11 +399,14 @@ function formatFactor(value: number) {
 function CatalogPriceCard({
   item,
   onEdit,
+  onAddPrice,
 }: {
   item: CatalogItemWithDetails;
   onEdit: () => void;
+  onAddPrice: () => void;
 }) {
   const salePrice = item.sale_price || item.unit_cost;
+  const missingPrice = hasNoPrice(item);
 
   return (
     <View style={styles.card}>
@@ -438,20 +461,35 @@ function CatalogPriceCard({
         </View>
       )}
 
+      {missingPrice ? (
+        <View style={styles.missingRow}>
+          <Ionicons name="alert-circle-outline" size={16} color={colors.warning} />
+          <Text style={styles.missingText}>
+            Este insumo aún no tiene precio. Agrega lo que te cuesta: lo usas de inmediato y ayuda a
+            completar el catálogo de todos.
+          </Text>
+        </View>
+      ) : null}
+
       <Pressable
-        onPress={onEdit}
+        onPress={missingPrice ? onAddPrice : onEdit}
         style={({ pressed }) => [
           styles.editButton,
+          missingPrice && styles.addPriceButton,
           pressed && styles.pressed,
         ]}
       >
         <Ionicons
-          name="create-outline"
+          name={missingPrice ? "add-circle-outline" : "create-outline"}
           size={18}
-          color={colors.primary}
+          color={missingPrice ? colors.textLight : colors.primary}
         />
-        <Text style={styles.editButtonText}>
-          {item.has_override ? "Editar mi precio" : "Personalizar para mí"}
+        <Text style={[styles.editButtonText, missingPrice && styles.addPriceButtonText]}>
+          {missingPrice
+            ? "Agregar precio"
+            : item.has_override
+              ? "Editar mi precio"
+              : "Personalizar para mí"}
         </Text>
       </Pressable>
     </View>
@@ -865,6 +903,17 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   editButtonText: { color: colors.primary, fontWeight: "900" },
+  addPriceButton: { backgroundColor: colors.accent, borderColor: colors.accent },
+  addPriceButtonText: { color: colors.textLight },
+  missingRow: {
+    flexDirection: "row",
+    gap: 8,
+    padding: 10,
+    marginTop: 12,
+    borderRadius: radius.md,
+    backgroundColor: colors.warningSoft,
+  },
+  missingText: { flex: 1, color: colors.text, fontSize: 12, lineHeight: 17 },
   empty: { alignItems: "center", paddingVertical: 60 },
   emptyTitle: { color: colors.text, fontSize: 18, fontWeight: "900", marginTop: 12 },
   emptyText: { color: colors.textSecondary, marginTop: 4 },

@@ -6,6 +6,7 @@ import {
   Modal, Platform, Pressable, ScrollView, StyleSheet, Text,
   TextInput, View,
 } from "react-native";
+import { usePriceContribution } from "../../components/AddPriceModal";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors, radius } from "../../constants/theme";
@@ -62,6 +63,7 @@ export default function PvcCeilingScreen() {
     ? params.budgetId[0] : params.budgetId;
   const { activeCompany } = useCompany();
   const currency = activeCompany?.currency_code;
+  const { requestPrice, priceModal } = usePriceContribution();
   const [form, setForm] = useState<Form>(initial);
   const [result, setResult] = useState<PvcCeilingResult | null>(null);
   const [error, setError] = useState("");
@@ -127,17 +129,27 @@ export default function PvcCeilingScreen() {
       support: "supportPrice", carrier: "carrierPrice",
       hanger: "hangerPrice", screw: "screwPrice", labor: "laborPrice",
     };
-    const priced = trackCatalogPrice(item);
-    if (priced.price <= 0) {
-      Alert.alert("Precio pendiente",
-        "Este concepto aún no tiene precio. Escríbelo manualmente en la calculadora.");
-      setTarget(null);
+    const field = fields[target];
+    const pickerTarget = target;
+    setTarget(null);
+
+    const apply = (source: CatalogItemWithDetails) => {
+      const priced = trackCatalogPrice(source);
+      update(field, String(priced.price));
+      setTracked((current) => ({ ...current, [field]: priced }));
+      setSelected((current) => ({ ...current, [pickerTarget]: source.name }));
+    };
+
+    // Sin precio: el usuario lo agrega y queda como aporte para el catálogo.
+    if (trackCatalogPrice(item).price <= 0) {
+      requestPrice(item, (priced) => {
+        setItems((current) => current.map((entry) => (entry.id === priced.id ? priced : entry)));
+        apply(priced);
+      });
       return;
     }
-    update(fields[target], String(priced.price));
-    setTracked((current) => ({ ...current, [fields[target]]: priced }));
-    setSelected((current) => ({ ...current, [target]: item.name }));
-    setTarget(null);
+
+    apply(item);
   }
 
   function compute(source: Form): PvcCeilingResult | null {
@@ -320,6 +332,7 @@ export default function PvcCeilingScreen() {
     {target ? <CatalogPicker visible target={target} items={items}
       loading={catalogLoading} currency={currency} onClose={() => setTarget(null)}
       onSelect={choose} /> : null}
+    {priceModal}
   </SafeAreaView>;
 }
 
@@ -394,7 +407,7 @@ function CatalogPicker({ visible, target, items, loading, currency, onClose, onS
               return <Pressable onPress={() => onSelect(item)} style={styles.catalogItem}>
                 <View style={styles.flex}><Text style={styles.itemName}>{item.name}</Text>
                   <Text style={styles.itemMeta}>{item.unit?.symbol || "unidad"}</Text></View>
-                <Text style={styles.itemPrice}>{formatMoney(price, currency)}</Text></Pressable>;
+                <Text style={styles.itemPrice}>{price > 0 ? formatMoney(price, currency) : "Sin precio · agregar"}</Text></Pressable>;
             }} />}
       </View></SafeAreaView></Modal>;
 }

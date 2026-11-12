@@ -12,7 +12,7 @@ import type {
   Unit
 } from "@/types/catalog";
 
-type EffectiveCatalogRow = {
+export type EffectiveCatalogRow = {
   id: string;
   sku: string | null;
   name: string;
@@ -35,6 +35,88 @@ type EffectiveCatalogRow = {
   updated_at: string | null;
 };
 
+export function mapEffectiveCatalogRow(
+  row: EffectiveCatalogRow,
+  companyId: string
+): CatalogItemWithDetails {
+  const timestamp =
+    row.updated_at ??
+    new Date(0).toISOString();
+
+  const unit: Unit = {
+    id:
+      `platform-unit:${row.unit_symbol ?? "und"}`,
+    company_id: companyId,
+    code: row.unit_symbol ?? "und",
+    name: row.unit_name ?? "Unidad",
+    symbol:
+      row.unit_symbol ?? "und.",
+    unit_type: "unit",
+    conversion_factor: 1,
+    active: true,
+    created_at: timestamp,
+    updated_at: timestamp
+  };
+
+  const category:
+    | CatalogCategory
+    | null =
+    row.category_name
+      ? {
+          id:
+            `platform-category:${row.category_name}`,
+          company_id: companyId,
+          parent_id: null,
+          name: row.category_name,
+          description: null,
+          active: true,
+          created_at: timestamp,
+          updated_at: timestamp
+        }
+      : null;
+
+  return {
+    id: row.id,
+    company_id: companyId,
+    item_type:
+      row.item_type ?? "material",
+    category_id:
+      category?.id ?? null,
+    sku: row.sku,
+    name: row.name,
+    description: row.description,
+    unit_id: unit.id,
+    unit_cost:
+      Number(row.unit_cost ?? 0),
+    sale_price:
+      Number(row.sale_price ?? 0),
+    waste_percentage:
+      Number(
+        row.waste_percentage ?? 0
+      ),
+    default_unit_cost:
+      Number(
+        row.default_unit_cost ?? 0
+      ),
+    default_sale_price:
+      Number(
+        row.default_sale_price ?? 0
+      ),
+    default_waste_percentage:
+      Number(
+        row.default_waste_percentage ??
+          0
+      ),
+    has_override:
+      Boolean(row.has_override),
+    active: Boolean(row.active),
+    created_at: timestamp,
+    updated_at: timestamp,
+    unit,
+    category
+  };
+}
+
 function errorMessage(
   error: unknown
 ): string {
@@ -56,85 +138,7 @@ export async function listCatalogItems(
       )
     );
 
-    const items =
-      rows.map((row) => {
-        const timestamp =
-          row.updated_at ??
-          new Date(0).toISOString();
-
-        const unit: Unit = {
-          id:
-            `platform-unit:${row.unit_symbol ?? "und"}`,
-          company_id: companyId,
-          code: row.unit_symbol ?? "und",
-          name: row.unit_name ?? "Unidad",
-          symbol:
-            row.unit_symbol ?? "und.",
-          unit_type: "unit",
-          conversion_factor: 1,
-          active: true,
-          created_at: timestamp,
-          updated_at: timestamp
-        };
-
-        const category:
-          | CatalogCategory
-          | null =
-          row.category_name
-            ? {
-                id:
-                  `platform-category:${row.category_name}`,
-                company_id: companyId,
-                parent_id: null,
-                name: row.category_name,
-                description: null,
-                active: true,
-                created_at: timestamp,
-                updated_at: timestamp
-              }
-            : null;
-
-        return {
-          id: row.id,
-          company_id: companyId,
-          item_type:
-            row.item_type ?? "material",
-          category_id:
-            category?.id ?? null,
-          sku: row.sku,
-          name: row.name,
-          description: row.description,
-          unit_id: unit.id,
-          unit_cost:
-            Number(row.unit_cost ?? 0),
-          sale_price:
-            Number(row.sale_price ?? 0),
-          waste_percentage:
-            Number(
-              row.waste_percentage ?? 0
-            ),
-          default_unit_cost:
-            Number(
-              row.default_unit_cost ?? 0
-            ),
-          default_sale_price:
-            Number(
-              row.default_sale_price ?? 0
-            ),
-          default_waste_percentage:
-            Number(
-              row.default_waste_percentage ??
-                0
-            ),
-          has_override:
-            Boolean(row.has_override),
-          active: Boolean(row.active),
-          created_at: timestamp,
-          updated_at: timestamp,
-          unit,
-          category
-        };
-      });
+    const items = rows.map((row) => mapEffectiveCatalogRow(row, companyId));
 
     return {
       items,
@@ -145,6 +149,42 @@ export async function listCatalogItems(
       items: [],
       error: errorMessage(error)
     };
+  }
+}
+
+/**
+ * Aporta el precio de un insumo del catálogo de plataforma. El usuario lo usa
+ * de inmediato (precio personal) y queda pendiente de revisión para todos.
+ * Devuelve el insumo con el precio nuevo.
+ */
+export async function submitPriceContribution(input: {
+  companyId: string;
+  itemId: string;
+  unitCost: number;
+  salePrice?: number | null;
+  storeName?: string | null;
+  notes?: string | null;
+}): Promise<{ item: CatalogItemWithDetails | null; error: string | null }> {
+  try {
+    const response = await authenticatedRequest<{
+      contributionId: string | null;
+      item: EffectiveCatalogRow | null;
+    }>(`/catalog/items/${input.itemId}/price-contributions`, {
+      method: "POST",
+      body: JSON.stringify({
+        unitCost: input.unitCost,
+        salePrice: input.salePrice ?? null,
+        storeName: input.storeName?.trim() || null,
+        notes: input.notes?.trim() || null,
+      }),
+    });
+
+    return {
+      item: response.item ? mapEffectiveCatalogRow(response.item, input.companyId) : null,
+      error: null,
+    };
+  } catch (error) {
+    return { item: null, error: errorMessage(error) };
   }
 }
 

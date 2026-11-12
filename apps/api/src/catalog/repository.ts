@@ -4,13 +4,15 @@ import type {
   createItemSchema,
   createCategorySchema,
   createYieldSchema,
-  pricingSchema
+  pricingSchema,
+  priceContributionSchema
 } from "./schemas.js";
 
 export type CreateItemInput = z.infer<typeof createItemSchema>;
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type CreateYieldInput = z.infer<typeof createYieldSchema>;
 export type PricingInput = z.infer<typeof pricingSchema>;
+export type PriceContributionInput = z.infer<typeof priceContributionSchema>;
 
 export async function findPlatformCatalogItems(
   userId: string,
@@ -79,6 +81,40 @@ export async function setPersonalCatalogPricingRepo(userId: string, itemId: stri
       `,
       [itemId, input.unitCost, input.salePrice, input.wastePercentage]
     );
+  });
+}
+
+/**
+ * Guarda el precio que aporta el usuario: queda como su precio personal y
+ * como aporte pendiente de revisión para el catálogo de todos.
+ * Devuelve el insumo con el precio que el usuario verá de ahora en adelante.
+ */
+export async function submitPriceContributionRepo(
+  userId: string,
+  itemId: string,
+  input: PriceContributionInput
+) {
+  return withUserTransaction(userId, async (client) => {
+    const contribution = await client.query<{ id: string }>(
+      `
+        SELECT public.submit_catalog_price_contribution($1, $2, $3, $4, $5) AS id
+      `,
+      [itemId, input.unitCost, input.salePrice ?? null, input.storeName, input.notes]
+    );
+
+    const item = await client.query(
+      `
+        SELECT item.*
+        FROM public.effective_platform_catalog_prices AS item
+        WHERE item.id = $1
+      `,
+      [itemId]
+    );
+
+    return {
+      contributionId: contribution.rows[0]?.id ?? null,
+      item: item.rows[0] ?? null
+    };
   });
 }
 

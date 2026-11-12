@@ -841,3 +841,8 @@ button.kpi-card:hover { transform: translateY(-2px); border-color: #2f4a67; }
 .support-action-form .actions { justify-content: flex-end; }
 .support-action-error { margin: 0; font-size: 12px; }
 @media (max-width: 760px) { .support-action-head { flex-wrap: wrap; } .support-action-head .button { width: 100%; } }
+
+/* Precios aportados por usuarios */
+.inline-price-input { width: 96px; padding: 7px 9px; border: 1px solid #24364c; border-radius: 9px; color: #f8fafc; background: #0b1724; font-weight: 700; }
+.inline-price-input:focus { outline: none; border-color: #4ade80; }
+.contributions-count { cursor: default; align-self: flex-end; }
