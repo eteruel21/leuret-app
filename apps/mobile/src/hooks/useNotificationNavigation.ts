@@ -25,6 +25,11 @@ export function useNotificationNavigation({ enabled, isClient }: { enabled: bool
       const data = response.notification.request.content.data as Record<string, unknown> | undefined;
       const target = notificationRoute(data, isClient);
       if (target) router.push(target as Href);
+      try {
+        Notifications.clearLastNotificationResponse();
+      } catch {
+        // Algunos entornos de desarrollo no incluyen el módulo nativo.
+      }
     }
 
     // En arranque en frío el navegador puede no estar montado todavía.

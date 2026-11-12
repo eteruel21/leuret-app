@@ -1,10 +1,12 @@
-import { Redirect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useContext } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { LeuretLoading } from "@/components/LeuretLoading";
 import { colors, radius } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { ScreenResumeContext } from "@/contexts/screen-resume-context";
 import { initialRouteFor } from "@/utils/initial-navigation";
 
 /**
@@ -14,15 +16,10 @@ import { initialRouteFor } from "@/utils/initial-navigation";
 export default function IndexScreen() {
   const { session, profile, loading: authLoading, signOut } = useAuth();
   const { activeCompany, loading: companyLoading } = useCompany();
-
-  if (
-    authLoading ||
-    (session && profile?.role === "contractor" && profile.active && companyLoading)
-  ) {
-    return <LeuretLoading fullScreen message="Preparando tu espacio de trabajo…" />;
-  }
-
-  const destination = initialRouteFor({
+  const takeStartupScreen = useContext(ScreenResumeContext);
+  const loading = authLoading ||
+    (session && profile?.role === "contractor" && profile.active && companyLoading);
+  const destination = loading ? null : initialRouteFor({
     authenticated: Boolean(session),
     role: profile?.role,
     active: Boolean(profile?.active),
@@ -30,7 +27,13 @@ export default function IndexScreen() {
     hasActiveCompany: Boolean(activeCompany),
   });
 
-  if (destination) return <Redirect href={destination} />;
+  useFocusEffect(useCallback(() => {
+    if (destination) router.replace(takeStartupScreen() ?? destination);
+  }, [destination, takeStartupScreen]));
+
+  if (loading || destination) {
+    return <LeuretLoading fullScreen message="Preparando tu espacio de trabajo…" />;
+  }
 
   return (
     <View style={styles.container}>

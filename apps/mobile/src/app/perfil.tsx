@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BackButton } from "@/components/back-navigation";
 import { colors, layout, radius, shadows } from "@/constants/theme";
 import { ProfileOverview } from "@/components/ProfileOverview";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -327,14 +328,7 @@ export default function ProfileScreen() {
         style={styles.flex}
       >
         <View style={styles.header}>
-          <Pressable
-            accessibilityLabel="Volver"
-            hitSlop={8}
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <Ionicons name="arrow-back" size={22} color={colors.textLight} />
-          </Pressable>
+          <BackButton fallback={profile?.role === "client" ? "/(client-tabs)/cuenta" : "/(tabs)"} />
           <Text style={styles.headerTitle}>Mi perfil</Text>
           <View style={styles.headerSpacer} />
         </View>
@@ -528,16 +522,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
   headerTitle: { color: colors.textLight, fontSize: 17, fontWeight: "900" },
-  headerSpacer: { width: 42 },
+  headerSpacer: { width: 44 },
   content: {
     flexGrow: 1,
     paddingHorizontal: layout.screenPadding,

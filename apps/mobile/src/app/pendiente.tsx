@@ -11,6 +11,7 @@ import {
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BackBar, confirmReturnToLogin } from "@/components/back-navigation";
 import {
   colors,
   layout,
@@ -51,7 +52,8 @@ export default function PendingApprovalScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
+      <BackBar fallback={() => void confirmReturnToLogin(signOut)} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}

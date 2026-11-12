@@ -1,13 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
 import {
-  Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BackButton } from "@/components/back-navigation";
 import { colors, radius } from "@/constants/theme";
 
 type AdminPlaceholderProps = {
@@ -25,16 +24,7 @@ export function AdminPlaceholder({
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <View style={styles.header}>
-        <Pressable
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
-          <Ionicons
-            name="arrow-back-outline"
-            size={22}
-            color={colors.textLight}
-          />
-        </Pressable>
+        <BackButton fallback="/(tabs)/mas" />
 
         <Text style={styles.headerTitle}>{title}</Text>
       </View>
@@ -74,14 +64,6 @@ const styles = StyleSheet.create({
     gap: 14,
   },
 
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.10)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
 
   headerTitle: {
     color: colors.textLight,

@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BackBar, confirmReturnToLogin } from "@/components/back-navigation";
 import { CONTRACTOR_CATEGORIES } from "@/constants/contractor-categories";
 import { colors, layout, radius } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
@@ -382,7 +383,12 @@ export default function ProfessionalProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
+      <BackBar
+        tone="light"
+        onPress={currentStep > 1 ? () => setCurrentStep(currentStep - 1) : undefined}
+        fallback={() => void confirmReturnToLogin(signOut)}
+      />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}

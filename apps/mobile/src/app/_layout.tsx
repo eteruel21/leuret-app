@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { stackBackOptions } from "@/components/back-navigation";
 import { colors } from "@/constants/theme";
 import {
   AuthProvider,
@@ -17,6 +18,7 @@ import {
   CompanyProvider,
   useCompany,
 } from "@/contexts/CompanyContext";
+import { ScreenResumeContext, useScreenResume } from "@/contexts/screen-resume-context";
 
 import { useEffect, useRef } from "react";
 import {
@@ -24,6 +26,7 @@ import {
   unregisterCurrentPushTokenAsync,
 } from "@/services/push-notification-service";
 import { processOfflineSyncQueue } from "@/services/offline-sync-service";
+import { initialRouteFor } from "@/utils/initial-navigation";
 import { readPendingInvitation } from "@/utils/pending-invitation";
 import { useNotificationNavigation } from "@/hooks/useNotificationNavigation";
 
@@ -104,32 +107,55 @@ function RootNavigator() {
 
   const hasActiveCompany = isContractorAuthenticated && Boolean(activeCompany);
   const needsCompanySetup = isContractorAuthenticated && !activeCompany;
+  const isInitialLoading = authLoading && !profile;
+  const isCompanyInitialLoading =
+    isContractorAuthenticated && companyLoading && !activeCompany;
+  const loading = isInitialLoading || isCompanyInitialLoading;
+
+  const initialRoute = initialRouteFor({
+    authenticated: isAuthenticated,
+    role: profile?.role,
+    active: isApproved,
+    primaryCategory: profile?.primary_category,
+    hasActiveCompany,
+  });
+  const resumeScope = initialRoute === "/login" ? null : initialRoute;
+  const resumeKey = session?.sessionId && profile?.id && resumeScope
+    ? JSON.stringify([
+      session.sessionId, profile.id, resumeScope,
+      resumeScope === "/(tabs)" ? activeCompany?.id : null,
+    ])
+    : null;
+  const resume = useScreenResume({
+    authenticated: isAuthenticated,
+    loading,
+    scope: resumeScope,
+    scopeKey: resumeKey,
+  });
+  const navigationReady = !loading && resume.ready;
 
   // Si la persona llegó desde un correo de invitación antes de entrar,
   // la llevamos a unirse en cuanto su cuenta pueda usar una empresa.
   const pendingInvitationChecked = useRef(false);
-  const canUseCompany = (hasActiveCompany || needsCompanySetup) && !needsProfileSetup && !companyLoading;
+  const canUseCompany = navigationReady && (hasActiveCompany || needsCompanySetup) &&
+    !needsProfileSetup && !companyLoading;
 
   useEffect(() => {
     if (!canUseCompany || pendingInvitationChecked.current) return;
     pendingInvitationChecked.current = true;
     void readPendingInvitation().then((code) => {
       if (!code) return;
-      router.push((hasActiveCompany ? "/equipo/unirme" : "/empresa/unirme") as Href);
+      router.navigate((hasActiveCompany ? "/equipo/unirme" : "/empresa/unirme") as Href);
     });
   }, [canUseCompany, hasActiveCompany]);
 
   // Tocar un aviso push abre su presupuesto o factura (también en arranque en frío).
   useNotificationNavigation({
-    enabled: isClientAuthenticated || hasActiveCompany,
+    enabled: navigationReady && (isClientAuthenticated || hasActiveCompany),
     isClient: isClientAuthenticated,
   });
 
-  const isInitialLoading = authLoading && !profile;
-  const isCompanyInitialLoading =
-    isContractorAuthenticated && companyLoading && !activeCompany;
-
-  if (isInitialLoading || isCompanyInitialLoading) {
+  if (!navigationReady) {
     return (
       <View style={styles.loading}>
         <View style={styles.loadingOrb} />
@@ -143,61 +169,65 @@ function RootNavigator() {
   }
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: {
-          backgroundColor: colors.background,
-        },
-      }}
-    >
-      {/* Índice raíz: destino seguro ante enlaces inválidos o rutas protegidas. */}
-      <Stack.Screen name="index" />
+    <ScreenResumeContext.Provider value={resume.takeStartupScreen}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: {
+            backgroundColor: colors.background,
+          },
+        }}
+      >
+        {/* Índice raíz: destino seguro ante enlaces inválidos o rutas protegidas. */}
+        <Stack.Screen name="index" />
 
-      {/* Enlace del correo de invitación: solo se abre con /invitacion. */}
-      <Stack.Screen name="invitacion" />
+        {/* Enlace del correo de invitación: solo se abre con /invitacion. */}
+        <Stack.Screen
+          name="invitacion"
+          options={{ ...stackBackOptions("/"), headerShown: true, title: "Invitación" }}
+        />
 
-      <Stack.Protected guard={!isAuthenticated}>
-        <Stack.Screen name="(auth)" />
-      </Stack.Protected>
+        <Stack.Protected guard={!isAuthenticated}>
+          <Stack.Screen name="(auth)" />
+        </Stack.Protected>
 
-      <Stack.Protected guard={needsProfileSetup}>
-        <Stack.Screen name="perfil-profesional" />
-      </Stack.Protected>
+        <Stack.Protected guard={needsProfileSetup}>
+          <Stack.Screen name="perfil-profesional" />
+        </Stack.Protected>
 
-      <Stack.Protected guard={isPendingApproval}>
-        <Stack.Screen name="pendiente" />
-      </Stack.Protected>
+        <Stack.Protected guard={isPendingApproval}>
+          <Stack.Screen name="pendiente" />
+        </Stack.Protected>
 
-      <Stack.Protected guard={needsCompanySetup}>
-        <Stack.Screen name="empresa" />
-      </Stack.Protected>
+        <Stack.Protected guard={needsCompanySetup}>
+          <Stack.Screen name="empresa" />
+        </Stack.Protected>
 
-      <Stack.Protected guard={hasActiveCompany}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="agenda" />
-        <Stack.Screen name="calculos" />
-        <Stack.Screen name="clientes" />
-        <Stack.Screen name="facturas" />
-        <Stack.Screen name="presupuestos" />
-        <Stack.Screen name="proyectos" />
-        <Stack.Screen name="tareas" />
-        <Stack.Screen name="equipo" />
-        <Stack.Screen name="catalogo" />
-      </Stack.Protected>
+        <Stack.Protected guard={hasActiveCompany}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="agenda" />
+          <Stack.Screen name="calculos" />
+          <Stack.Screen name="clientes" />
+          <Stack.Screen name="facturas" />
+          <Stack.Screen name="presupuestos" />
+          <Stack.Screen name="proyectos" />
+          <Stack.Screen name="tareas" />
+          <Stack.Screen name="equipo" />
+          <Stack.Screen name="catalogo" />
+        </Stack.Protected>
 
+        <Stack.Protected guard={isClientAuthenticated}>
+          <Stack.Screen name="(client-tabs)" />
+          <Stack.Screen name="cliente-presupuestos" />
+          <Stack.Screen name="cliente-facturas" />
+          <Stack.Screen name="cliente-proyectos" />
+        </Stack.Protected>
 
-      <Stack.Protected guard={isClientAuthenticated}>
-        <Stack.Screen name="(client-tabs)" />
-        <Stack.Screen name="cliente-presupuestos" />
-        <Stack.Screen name="cliente-facturas" />
-        <Stack.Screen name="cliente-proyectos" />
-      </Stack.Protected>
-
-      <Stack.Protected guard={hasActiveCompany || isClientAuthenticated}>
-        <Stack.Screen name="perfil" />
-      </Stack.Protected>
-    </Stack>
+        <Stack.Protected guard={hasActiveCompany || isClientAuthenticated}>
+          <Stack.Screen name="perfil" />
+        </Stack.Protected>
+      </Stack>
+    </ScreenResumeContext.Provider>
   );
 }
 

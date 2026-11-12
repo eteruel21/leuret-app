@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -95,21 +95,12 @@ export default function ConfirmEmailScreen() {
   const showResend = status === "waiting" || status === "error";
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Volver"
-            style={styles.backButton}
-            onPress={() => router.replace("/(auth)/login")}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </Pressable>
-
           <View style={styles.header}>
             <View style={styles.iconContainer}>
               <Ionicons
@@ -214,14 +205,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     flexGrow: 1
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16
   },
   header: {
     alignItems: "center",

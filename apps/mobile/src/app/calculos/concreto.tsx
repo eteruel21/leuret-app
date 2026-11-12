@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   type Href,
   router,
+  Stack,
   useLocalSearchParams,
 } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
@@ -22,6 +23,7 @@ import {
 import { usePriceContribution } from "../../components/AddPriceModal";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { HeaderBackButton } from "@/components/back-navigation";
 import { colors, radius } from "../../constants/theme";
 import { useCompany } from "../../contexts/CompanyContext";
 import { useFormulaParameters } from "../../hooks/useFormulaParameters";
@@ -62,6 +64,7 @@ type CatalogPriceTarget =
 const DIMENSION_FIELDS = ["length", "width", "thickness"] as const;
 
 type ConcreteUse = {
+  id: string;
   label: string;
   description: string;
   dimensions?: Record<(typeof DIMENSION_FIELDS)[number], string>;
@@ -69,11 +72,13 @@ type ConcreteUse = {
 
 const CONCRETE_USES: readonly ConcreteUse[] = [
   {
+    id: "losa",
     label: "Losa o piso",
     description: "Superficie horizontal de espesor uniforme.",
     dimensions: { length: "Largo", width: "Ancho", thickness: "Espesor" },
   },
   {
+    id: "zapata",
     label: "Zapata rectangular",
     description: "Base de cimentación de espesor uniforme.",
     dimensions: {
@@ -83,11 +88,13 @@ const CONCRETE_USES: readonly ConcreteUse[] = [
     },
   },
   {
+    id: "viga",
     label: "Viga rectangular",
     description: "Elemento lineal de sección rectangular.",
     dimensions: { length: "Largo", width: "Ancho", thickness: "Peralte (altura)" },
   },
   {
+    id: "columna",
     label: "Columna rectangular",
     description: "Elemento vertical de sección rectangular.",
     dimensions: {
@@ -97,11 +104,13 @@ const CONCRETE_USES: readonly ConcreteUse[] = [
     },
   },
   {
+    id: "muro",
     label: "Muro macizo",
     description: "Tramo de muro de espesor uniforme y sin aberturas.",
     dimensions: { length: "Largo", width: "Altura", thickness: "Espesor" },
   },
   {
+    id: "volumen",
     label: "Volumen directo",
     description: "Ya conoces los metros cúbicos sin desperdicio.",
   },
@@ -190,52 +199,63 @@ function parseNumber(value: string): number {
 }
 
 export default function ConcreteCalculatorScreen() {
-  const [concreteUse, setConcreteUse] = useState<ConcreteUse | null>(null);
-
-  if (concreteUse) {
-    return (
-      <ConcreteCalculatorForm
-        concreteUse={concreteUse}
-        onChangeUse={() => setConcreteUse(null)}
-      />
-    );
-  }
+  const { uso } = useLocalSearchParams<{ uso?: string | string[] }>();
+  const useId = Array.isArray(uso) ? uso[0] : uso;
+  const concreteUse = CONCRETE_USES.find((option) => option.id === useId);
+  const changeUse = () => router.setParams({ uso: undefined });
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.section}>
-          <Text accessibilityRole="header" style={styles.sectionTitle}>
-            ¿Para qué se usará el concreto?
-          </Text>
-          <Text style={styles.sectionDescription}>
-            Elige el elemento que vas a vaciar para ver qué medidas ingresar.
-          </Text>
+    <>
+      <Stack.Screen
+        options={{
+          headerLeft: () => (
+            <HeaderBackButton fallback="/(tabs)/calculos" onPress={concreteUse ? changeUse : undefined} />
+          ),
+        }}
+      />
+      {concreteUse ? (
+        <ConcreteCalculatorForm
+          key={concreteUse.id}
+          concreteUse={concreteUse}
+          onChangeUse={changeUse}
+        />
+      ) : (
+        <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
+          <ScrollView contentContainerStyle={styles.content}>
+            <View style={styles.section}>
+              <Text accessibilityRole="header" style={styles.sectionTitle}>
+                ¿Para qué se usará el concreto?
+              </Text>
+              <Text style={styles.sectionDescription}>
+                Elige el elemento que vas a vaciar para ver qué medidas ingresar.
+              </Text>
 
-          <View style={styles.useOptions}>
-            {CONCRETE_USES.map((option) => (
-              <Pressable
-                key={option.label}
-                accessibilityRole="button"
-                accessibilityLabel={option.label}
-                accessibilityHint={option.description}
-                onPress={() => setConcreteUse(option)}
-                style={({ pressed }) => [
-                  styles.useOption,
-                  pressed && styles.buttonPressed,
-                ]}
-              >
-                <View style={styles.useOptionCopy}>
-                  <Text style={styles.useOptionTitle}>{option.label}</Text>
-                  <Text style={styles.useOptionDescription}>{option.description}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.primary} />
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+              <View style={styles.useOptions}>
+                {CONCRETE_USES.map((option) => (
+                  <Pressable
+                    key={option.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={option.label}
+                    accessibilityHint={option.description}
+                    onPress={() => router.setParams({ uso: option.id })}
+                    style={({ pressed }) => [
+                      styles.useOption,
+                      pressed && styles.buttonPressed,
+                    ]}
+                  >
+                    <View style={styles.useOptionCopy}>
+                      <Text style={styles.useOptionTitle}>{option.label}</Text>
+                      <Text style={styles.useOptionDescription}>{option.description}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      )}
+    </>
   );
 }
 

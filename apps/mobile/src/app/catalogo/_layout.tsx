@@ -1,22 +1,13 @@
 import { Stack } from "expo-router";
 
-import { colors } from "@/constants/theme";
+import { stackBackOptions } from "@/components/back-navigation";
 
 export default function CatalogLayout() {
   return (
     <Stack
-      screenOptions={{
-        headerStyle: {
-          backgroundColor: colors.surfaceDark,
-        },
-        headerTintColor: colors.textLight,
-        headerTitleStyle: {
-          fontWeight: "800",
-        },
-        contentStyle: {
-          backgroundColor: colors.background,
-        },
-      }}
-    />
+      screenOptions={stackBackOptions("/(tabs)/mas")}
+    >
+      <Stack.Screen name="index" options={{ title: "Catálogo" }} />
+    </Stack>
   );
 }

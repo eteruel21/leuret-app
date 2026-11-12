@@ -1,22 +1,16 @@
 import { Stack } from "expo-router";
 
-import { colors } from "@/constants/theme";
+import { confirmReturnToLogin, stackBackOptions } from "@/components/back-navigation";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function CompanyLayout() {
+  const { signOut } = useAuth();
+
   return (
     <Stack
-      screenOptions={{
-        headerStyle: {
-          backgroundColor: colors.surfaceDark,
-        },
-        headerTintColor: colors.textLight,
-        headerTitleStyle: {
-          fontWeight: "800",
-        },
-        contentStyle: {
-          backgroundColor: colors.background,
-        },
-      }}
+      screenOptions={({ route }) =>
+        stackBackOptions(route.name === "unirme" ? "/empresa" : () => void confirmReturnToLogin(signOut))
+      }
     >
       <Stack.Screen
         name="index"

@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BackBar } from "@/components/back-navigation";
 import {
   colors,
   layout,
@@ -43,6 +44,12 @@ export default function LoginScreen() {
   const [showRecovery, setShowRecovery] = useState(false);
   const [recoverySent, setRecoverySent] = useState(false);
   const [recoveryEmail, setRecoveryEmail] = useState("");
+
+  function closeRecovery() {
+    setRecoverySent(false);
+    setRecoveryEmail("");
+    setShowRecovery(false);
+  }
 
   async function handleSignIn() {
     const cleanEmail = email.trim();
@@ -163,7 +170,11 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={showRecovery ? ["bottom"] : ["top", "left", "right", "bottom"]}
+    >
+      {showRecovery ? <BackBar onPress={closeRecovery} /> : null}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={
@@ -297,11 +308,7 @@ export default function LoginScreen() {
                 </Text>
 
                 <Pressable
-                  onPress={() => {
-                    setRecoverySent(false);
-                    setRecoveryEmail("");
-                    setShowRecovery(false);
-                  }}
+                  onPress={closeRecovery}
                   style={({ pressed }) => [
                     styles.primaryButton,
                     pressed && styles.pressed,
@@ -388,11 +395,7 @@ export default function LoginScreen() {
                 </Pressable>
 
                 <Pressable
-                  onPress={() => {
-                    setRecoverySent(false);
-                    setRecoveryEmail("");
-                    setShowRecovery(false);
-                  }}
+                  onPress={closeRecovery}
                   style={styles.forgotButton}
                 >
                   <Text style={[styles.forgotText, { color: colors.textSecondary }]}>

@@ -81,7 +81,7 @@ export default function InvitationLinkScreen() {
   }[state];
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
       <View style={styles.card}>
         <View style={styles.icon}>
           <Ionicons name={content.icon} size={30} color={colors.primary} />

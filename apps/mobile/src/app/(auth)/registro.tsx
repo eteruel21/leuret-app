@@ -380,7 +380,7 @@ export default function RegisterScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -393,17 +393,6 @@ export default function RegisterScreen() {
           <View style={styles.backgroundOrb} />
 
           <View style={styles.topBar}>
-            <Pressable
-              onPress={() => router.back()}
-              style={styles.backButton}
-            >
-              <Ionicons
-                name="arrow-back-outline"
-                size={21}
-                color={colors.textLight}
-              />
-            </Pressable>
-
             <View style={styles.brandLockup}>
               <View style={styles.brandMark}>
                 <Ionicons
@@ -922,18 +911,7 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: colors.surfaceDarkRaised,
-    alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-end",
   },
 
   brandLockup: {

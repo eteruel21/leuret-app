@@ -178,7 +178,7 @@ export default function ClientsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
       <FlatList
         data={filteredClients}
         keyExtractor={(item) => item.id}

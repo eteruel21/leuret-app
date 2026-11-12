@@ -75,7 +75,7 @@ export default function ClientInvoicesScreen() {
   if (loading) return <LeuretLoading message="Cargando facturas…" fullScreen />;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+    <SafeAreaView style={styles.safeArea} edges={["left", "right"]}>
       <FlatList
         data={visible}
         keyExtractor={(item) => item.invoice.id}
