@@ -49,7 +49,7 @@ export default function ClientAccountScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+    <SafeAreaView style={styles.safeArea} edges={["left", "right"]}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Mi cuenta</Text>
 

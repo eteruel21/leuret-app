@@ -1,19 +1,11 @@
-import { Stack } from "expo-router";
+import { type Href, Stack } from "expo-router";
 
-import { colors } from "@/constants/theme";
+import { stackBackOptions } from "@/components/back-navigation";
 
 /** Stack con encabezado y botón atrás para las pantallas de detalle del cliente. */
-export function ClientDetailStack({ title }: { title: string }) {
+export function ClientDetailStack({ title, fallback }: { title: string; fallback: Href }) {
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.surfaceDark },
-        headerTintColor: colors.textLight,
-        headerTitleStyle: { fontWeight: "800" },
-        headerBackTitle: "Atrás",
-        contentStyle: { backgroundColor: colors.background },
-      }}
-    >
+    <Stack screenOptions={stackBackOptions(fallback)}>
       <Stack.Screen name="[id]" options={{ title }} />
     </Stack>
   );

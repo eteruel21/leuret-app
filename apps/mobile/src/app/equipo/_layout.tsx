@@ -1,22 +1,13 @@
 import { Stack } from "expo-router";
 
-import { colors } from "@/constants/theme";
+import { stackBackOptions } from "@/components/back-navigation";
 
 export default function TeamLayout() {
   return (
     <Stack
-      screenOptions={{
-        headerStyle: {
-          backgroundColor: colors.surfaceDark,
-        },
-        headerTintColor: colors.textLight,
-        headerTitleStyle: {
-          fontWeight: "800",
-        },
-        contentStyle: {
-          backgroundColor: colors.background,
-        },
-      }}
+      screenOptions={({ route }) =>
+        stackBackOptions(route.name === "index" ? "/(tabs)/mas" : "/equipo")
+      }
     >
       <Stack.Screen name="index" options={{ title: "Equipo" }} />
       <Stack.Screen name="historial" options={{ title: "Historial del equipo" }} />

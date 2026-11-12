@@ -126,7 +126,7 @@ export default function AgendaScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+    <SafeAreaView style={styles.safeArea} edges={["left", "right"]}>
       <Animated.View entering={FadeInDown.duration(420)} style={styles.header}>
         <View>
           <Text style={styles.eyebrow}>LEURET AGENDA</Text>

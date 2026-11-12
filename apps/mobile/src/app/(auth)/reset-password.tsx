@@ -76,7 +76,7 @@ export default function ResetPasswordScreen() {
 
   if (resetComplete) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
         <View style={styles.successScreen}>
           <View style={styles.successCard}>
             <View style={styles.successIconContainer}>
@@ -109,16 +109,12 @@ export default function ResetPasswordScreen() {
     );
   }
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <Pressable style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </Pressable>
-
           <View style={styles.header}>
             <View style={styles.iconContainer}>
               <Ionicons name="key" size={40} color={colors.primary} />
@@ -217,14 +213,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     flexGrow: 1
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16
   },
   header: {
     alignItems: "center",

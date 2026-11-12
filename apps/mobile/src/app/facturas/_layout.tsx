@@ -1,22 +1,13 @@
 import { Stack } from "expo-router";
 
-import { colors } from "@/constants/theme";
+import { stackBackOptions } from "@/components/back-navigation";
 
 export default function InvoicesLayout() {
   return (
     <Stack
-      screenOptions={{
-        headerStyle: {
-          backgroundColor: colors.surfaceDark,
-        },
-        headerTintColor: colors.textLight,
-        headerTitleStyle: {
-          fontWeight: "800",
-        },
-        contentStyle: {
-          backgroundColor: colors.background,
-        },
-      }}
+      screenOptions={({ route }) =>
+        stackBackOptions(route.name === "index" ? "/(tabs)/mas" : "/facturas")
+      }
     >
       <Stack.Screen
         name="index"

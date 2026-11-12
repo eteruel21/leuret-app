@@ -76,7 +76,7 @@ export default function ClientProjectsScreen() {
   if (loading) return <LeuretLoading message="Cargando proyectos…" fullScreen />;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+    <SafeAreaView style={styles.safeArea} edges={["left", "right"]}>
       <FlatList
         data={visible}
         keyExtractor={(item) => item.id}

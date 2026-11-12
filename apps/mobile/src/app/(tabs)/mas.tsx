@@ -148,7 +148,7 @@ export default function MoreScreen() {
   ];
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+    <SafeAreaView style={styles.safeArea} edges={["left", "right"]}>
       <ScrollView contentContainerStyle={styles.content}>
         <Animated.View entering={FadeInUp.duration(420)} style={styles.header}>
           <Text style={styles.eyebrow}>LEURET</Text>

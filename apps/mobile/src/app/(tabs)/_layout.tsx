@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Tabs, type Href, router, useSegments } from "expo-router";
-import { useEffect, useRef } from "react";
+import { Tabs } from "expo-router";
+import { useEffect } from "react";
 import {
   type ColorValue,
   StyleSheet,
@@ -12,16 +11,10 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 
+import { BackBar } from "@/components/back-navigation";
 import { colors } from "@/constants/theme";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
-
-const RESTORABLE_TABS = ["calculos", "clientes", "agenda", "mas"] as const;
-type RestorableTab = (typeof RESTORABLE_TABS)[number];
-
-function isRestorableTab(value: string): value is RestorableTab {
-  return (RESTORABLE_TABS as readonly string[]).includes(value);
-}
 
 function TabIcon({
   focused,
@@ -63,40 +56,18 @@ function TabIcon({
 }
 
 export default function TabsLayout() {
-  const segments: readonly string[] = useSegments();
-  const hasRestored = useRef(false);
-
-  useEffect(() => {
-    // Save last tab
-    if (segments.length === 2 && segments[0] === "(tabs)") {
-      const activeTab = segments[1] === "index" ? "inicio" : segments[1];
-      void AsyncStorage.setItem("@contractor-pro:last-tab", activeTab);
-    }
-  }, [segments]);
-
-  useEffect(() => {
-    // Restore last tab on mount
-    const restoreTab = async () => {
-      if (hasRestored.current) return;
-      try {
-        const saved = await AsyncStorage.getItem("@contractor-pro:last-tab");
-        if (saved && isRestorableTab(saved)) {
-          hasRestored.current = true;
-          router.replace(`/(tabs)/${saved}` as Href);
-        } else {
-          hasRestored.current = true;
-        }
-      } catch {
-        hasRestored.current = true;
-      }
-    };
-    void restoreTab();
-  }, []);
-
   return (
     <Tabs
-      screenOptions={{
-        headerShown: false,
+      backBehavior="history"
+      screenOptions={({ route }) => ({
+        headerShown: route.name !== "index",
+        header: () => (
+          <BackBar
+            tone={route.name === "clientes" ? "light" : "dark"}
+            fallback="/(tabs)"
+            fallbackMode="navigate"
+          />
+        ),
         tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.steel,
@@ -126,7 +97,7 @@ export default function TabsLayout() {
           fontWeight: "800",
           letterSpacing: 0.15,
         },
-      }}
+      })}
     >
       <Tabs.Screen
         name="index"

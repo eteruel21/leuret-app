@@ -82,7 +82,7 @@ export default function ClientBudgetsScreen() {
   if (loading) return <LeuretLoading message="Cargando presupuestos…" fullScreen />;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+    <SafeAreaView style={styles.safeArea} edges={["left", "right"]}>
       <FlatList
         data={visible}
         keyExtractor={(item) => item.budget.id}

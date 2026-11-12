@@ -6,6 +6,7 @@ import {
   View,
 } from "react-native";
 
+import { BackBar } from "@/components/back-navigation";
 import { colors } from "@/constants/theme";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -35,8 +36,10 @@ function TabIcon({
 export default function ClientTabsLayout() {
   return (
     <Tabs
-      screenOptions={{
-        headerShown: false,
+      backBehavior="history"
+      screenOptions={({ route }) => ({
+        headerShown: route.name !== "index",
+        header: () => <BackBar tone="light" fallback="/(client-tabs)" fallbackMode="navigate" />,
         tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
@@ -57,7 +60,7 @@ export default function ClientTabsLayout() {
           fontSize: 10,
           fontWeight: "800",
         },
-      }}
+      })}
     >
       <Tabs.Screen
         name="index"
