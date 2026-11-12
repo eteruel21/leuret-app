@@ -1,5 +1,4 @@
-import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
+import { exportHtmlDocument } from "@/utils/document-export";
 
 import {
   formatMoney,
@@ -440,39 +439,6 @@ export function buildBudgetHtml({
 `;
 }
 
-export async function generateBudgetPdf({
-  company,
-  budget,
-}: BudgetPdfInput): Promise<{
-  uri: string | null;
-  error: string | null;
-}> {
-  try {
-    const html = buildBudgetHtml({
-      company,
-      budget,
-    });
-
-    const { uri } = await Print.printToFileAsync({
-      html,
-      base64: false,
-    });
-
-    return {
-      uri,
-      error: null,
-    };
-  } catch (error) {
-    return {
-      uri: null,
-      error:
-        error instanceof Error
-          ? error.message
-          : "No fue posible generar el PDF.",
-    };
-  }
-}
-
 export async function shareBudgetPdf({
   company,
   budget,
@@ -480,57 +446,9 @@ export async function shareBudgetPdf({
   uri: string | null;
   error: string | null;
 }> {
-  const { uri, error } = await generateBudgetPdf({
-    company,
-    budget,
-  });
-
-  if (error || !uri) {
-    return {
-      uri: null,
-      error:
-        error ||
-        "No fue posible generar el archivo PDF.",
-    };
-  }
-
-  const canShare = await Sharing.isAvailableAsync();
-
-  if (!canShare) {
-    return {
-      uri,
-      error:
-        "Este dispositivo no permite compartir archivos desde la app.",
-    };
-  }
-
-  await Sharing.shareAsync(uri, {
-    mimeType: "application/pdf",
+  return exportHtmlDocument({
+    html: buildBudgetHtml({ company, budget }),
+    title: `Presupuesto ${budget.budget_number}`,
     dialogTitle: `Compartir ${budget.budget_number}`,
-    UTI: "com.adobe.pdf",
   });
-
-  return {
-    uri,
-    error: null,
-  };
-}
-
-export async function generateAndShareBudgetPdf(
-  budget: unknown,
-  totals?: unknown,
-) {
-  console.warn(
-    "generateAndShareBudgetPdf está usando compatibilidad temporal. La pantalla vieja de presupuestos debe migrarse luego al nuevo flujo.",
-    {
-      budget,
-      totals,
-    },
-  );
-
-  return {
-    uri: null,
-    error:
-      "Esta pantalla usa el sistema anterior de presupuestos. Abre el presupuesto desde Proyecto → Presupuestos para generar el PDF nuevo.",
-  };
 }

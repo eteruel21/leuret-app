@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator, Alert, FlatList, Modal, Pressable, ScrollView,
@@ -21,6 +21,7 @@ import {
 import { calculatePaint, type PaintResult } from "../../services/calculators/pintura";
 import { formatDecimal, formatMoney } from "../../utils/format";
 import { loadLocalData, saveLocalData } from "../../utils/local-storage";
+import { useCalculatorBudget } from "@/components/BudgetPickerModal";
 
 type Target = "paint" | "primer" | "labor" | "supplies";
 type Form = {
@@ -47,8 +48,10 @@ function num(value: string) {
 
 export default function PaintScreen() {
   const params = useLocalSearchParams<{ budgetId?: string | string[] }>();
-  const budgetId = Array.isArray(params.budgetId)
+  const paramBudgetId = Array.isArray(params.budgetId)
     ? params.budgetId[0] : params.budgetId;
+  const { budgetId, requestBudget, budgetPicker } =
+    useCalculatorBudget(paramBudgetId);
   const { activeCompany } = useCompany();
   const currency = activeCompany?.currency_code;
   const { requestPrice, priceModal } = usePriceContribution();
@@ -161,14 +164,15 @@ export default function PaintScreen() {
     setError(""); setMessage("");
   }
 
-  async function addToBudget() {
+  async function addToBudget(chosenBudgetId?: unknown) {
     if (!result) return;
-    if (!activeCompany || !budgetId) {
-      Alert.alert("Selecciona un presupuesto",
-        "Abre esta calculadora desde un presupuesto para guardar la partida.", [
-          { text: "Cancelar", style: "cancel" },
-          { text: "Ver presupuestos", onPress: () => router.push("/presupuestos") },
-        ]);
+    if (!activeCompany) return;
+
+    const targetBudgetId =
+      typeof chosenBudgetId === "string" ? chosenBudgetId : budgetId;
+
+    if (!targetBudgetId) {
+      requestBudget((id) => void addToBudget(id));
       return;
     }
     const price = result.totalCost / result.netArea;
@@ -176,7 +180,7 @@ export default function PaintScreen() {
     const cost = budgetUnitCost(c.totalCost,
       result.netArea, price);
     const response = await addBudgetItem({
-      companyId: activeCompany.id, budgetId, itemType: "service",
+      companyId: activeCompany.id, budgetId: targetBudgetId, itemType: "service",
       description: `Pintura de paredes (${Math.round(num(form.coats))} manos)`,
       unitName: "m²", quantity: result.netArea, unitCost: cost,
       unitPrice: price, taxable: true,
@@ -206,6 +210,7 @@ export default function PaintScreen() {
   ];
 
   return <SafeAreaView style={styles.safe} edges={["left", "right", "bottom"]}>
+      {budgetPicker}
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.hero}><Ionicons name="color-palette-outline" size={30}
         color={colors.textLight} /><View style={styles.flex}>

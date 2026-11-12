@@ -7,7 +7,6 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -27,6 +26,7 @@ import {
   type ShoppingListLine,
 } from "@/services/budget-materials";
 import { listCatalogItems } from "@/services/catalog-service";
+import { shareText } from "@/utils/share-text";
 import type { CatalogItemWithDetails } from "@/types/catalog";
 import type { BudgetItem } from "@/types/budget";
 import { formatMoney } from "@/types/budget";
@@ -101,10 +101,13 @@ export function ShoppingListModal({
 
   async function handleShare() {
     try {
-      await Share.share({
+      const outcome = await shareText({
         title: `Lista de compras · ${title}`,
         message: shoppingListText(list, { title, formatMoney: money }),
       });
+      if (outcome === "copied") {
+        Alert.alert("Lista copiada", "La lista de compras se copió al portapapeles.");
+      }
     } catch (error) {
       Alert.alert(
         "No fue posible compartir la lista",

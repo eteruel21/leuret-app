@@ -301,13 +301,25 @@ export async function getBudgetDetailsRepo(userId: string, budgetId: string, com
   });
 }
 
+/** Partidas de un presupuesto aprobado o cancelado: no se pueden agregar ni quitar. */
+export class BudgetLockedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BudgetLockedError";
+  }
+}
+
 async function checkBudgetNotApproved(client: any, budgetId: string) {
   const check = await client.query(
     `SELECT status FROM public.budgets WHERE id = $1 LIMIT 1`,
     [budgetId]
   );
-  if (check.rows[0]?.status === "approved") {
-    throw new Error("El presupuesto está aprobado y bloqueado. No se puede modificar.");
+  const status = check.rows[0]?.status;
+  if (status === "approved") {
+    throw new BudgetLockedError("El presupuesto está aprobado y bloqueado. No se puede modificar.");
+  }
+  if (status === "cancelled") {
+    throw new BudgetLockedError("El presupuesto está cancelado. No se puede modificar.");
   }
 }
 

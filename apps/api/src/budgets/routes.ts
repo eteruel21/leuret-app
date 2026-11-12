@@ -41,7 +41,7 @@ import {
   getBudgetPriceUpdatesService,
   applyBudgetPriceUpdatesService
 } from "./services.js";
-import { BudgetNotDraftError, BudgetSendError } from "./repository.js";
+import { BudgetLockedError, BudgetNotDraftError, BudgetSendError } from "./repository.js";
 
 import { getCalculationDetailService } from "../calculations/services.js";
 
@@ -212,6 +212,9 @@ export async function registerBudgetRoutes(
         }
         return reply.status(201).send({ item });
       } catch (error) {
+        if (error instanceof BudgetLockedError) {
+          return reply.status(409).send({ message: error.message });
+        }
         request.log.error(safeErrorDetails(error), "No se pudo añadir la partida.");
         return reply.status(400).send({ message: "Error al añadir la partida." });
       }
@@ -245,6 +248,9 @@ export async function registerBudgetRoutes(
         );
         return { success: true };
       } catch (error) {
+        if (error instanceof BudgetLockedError) {
+          return reply.status(409).send({ message: error.message });
+        }
         request.log.error(safeErrorDetails(error), "No se pudo eliminar la partida.");
         return reply.status(400).send({ message: "Error al eliminar la partida." });
       }
@@ -402,14 +408,18 @@ export async function registerBudgetRoutes(
 
         const lineItems = savedCalc.results_data?.lineItems || [];
         if (lineItems.length > 0) {
-          itemsToInsert = lineItems.map((li: any) => ({
+          // Una línea con cantidad 0 o inválida no es una partida: antes se
+          // convertía en cantidad 1 y sumaba su precio al presupuesto.
+          itemsToInsert = lineItems
+            .filter((li: any) => Number.isFinite(Number(li.quantity)) && Number(li.quantity) > 0)
+            .map((li: any) => ({
             sectionId: sectionId ?? null,
             catalogItemId: null,
             platformCatalogItemId: null,
             itemType: li.itemType || "manual",
             description: li.description || "Partida de cálculo",
             unitName: li.unitName || "unidad",
-            quantity: Number(li.quantity) || 1,
+            quantity: Number(li.quantity),
             unitCost: Number(li.unitCost) || 0,
             unitPrice: Number(li.unitPrice) || 0,
             discountPercentage: 0,
@@ -424,12 +434,19 @@ export async function registerBudgetRoutes(
       }
 
       const createdItems = [];
-      for (const itemInput of itemsToInsert) {
-        const item = await addBudgetItemService(userId, parsedParams.data.budgetId, {
-          companyId,
-          ...itemInput
-        });
-        if (item) createdItems.push(item);
+      try {
+        for (const itemInput of itemsToInsert) {
+          const item = await addBudgetItemService(userId, parsedParams.data.budgetId, {
+            companyId,
+            ...itemInput
+          });
+          if (item) createdItems.push(item);
+        }
+      } catch (error) {
+        if (error instanceof BudgetLockedError) {
+          return reply.status(409).send({ message: error.message });
+        }
+        throw error;
       }
 
       return reply.status(201).send({ items: createdItems });

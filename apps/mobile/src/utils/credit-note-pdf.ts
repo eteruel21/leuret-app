@@ -1,5 +1,4 @@
-import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
+import { exportHtmlDocument } from "@/utils/document-export";
 
 import { formatMoney } from "@/types/budget";
 import type { InvoiceCreditNote } from "@/types/invoice";
@@ -119,14 +118,12 @@ export async function shareCreditNotePdf(
   creditNote: InvoiceCreditNote
 ): Promise<{ error: string | null }> {
   try {
-    const html = buildCreditNoteHtml(creditNote);
-    const { uri } = await Print.printToFileAsync({ html });
-    await Sharing.shareAsync(uri, {
-      mimeType: "application/pdf",
+    const { error } = await exportHtmlDocument({
+      html: buildCreditNoteHtml(creditNote),
+      title: `Nota de crédito ${creditNote.credit_note_number}`,
       dialogTitle: `Compartir nota de crédito ${creditNote.credit_note_number}`,
-      UTI: "com.adobe.pdf"
     });
-    return { error: null };
+    return { error };
   } catch (error) {
     return {
       error: error instanceof Error

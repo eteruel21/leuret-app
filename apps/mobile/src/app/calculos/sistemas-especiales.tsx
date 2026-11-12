@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -33,6 +33,7 @@ import {
 } from "../../services/calculators/sistemas-especiales";
 import { formatDecimal, formatMoney } from "../../utils/format";
 import { loadLocalData, saveLocalData } from "../../utils/local-storage";
+import { useCalculatorBudget } from "@/components/BudgetPickerModal";
 
 type DeviceTarget =
   | "deviceA"
@@ -194,9 +195,11 @@ export default function SpecialSystemsScreen() {
   const params = useLocalSearchParams<{
     budgetId?: string | string[];
   }>();
-  const budgetId = Array.isArray(params.budgetId)
+  const paramBudgetId = Array.isArray(params.budgetId)
     ? params.budgetId[0]
     : params.budgetId;
+  const { budgetId, requestBudget, budgetPicker } =
+    useCalculatorBudget(paramBudgetId);
 
   const { activeCompany } = useCompany();
   const currency = activeCompany?.currency_code;
@@ -422,24 +425,16 @@ export default function SpecialSystemsScreen() {
     setMessage("");
   }
 
-  async function addToBudget() {
+  async function addToBudget(chosenBudgetId?: unknown) {
     if (!result) return;
 
-    if (!activeCompany || !budgetId) {
-      Alert.alert(
-        "Selecciona un presupuesto",
-        "Abre esta calculadora desde un presupuesto para guardar la partida.",
-        [
-          {
-            text: "Cancelar",
-            style: "cancel",
-          },
-          {
-            text: "Ver presupuestos",
-            onPress: () => router.push("/presupuestos"),
-          },
-        ],
-      );
+    if (!activeCompany) return;
+
+    const targetBudgetId =
+      typeof chosenBudgetId === "string" ? chosenBudgetId : budgetId;
+
+    if (!targetBudgetId) {
+      requestBudget((id) => void addToBudget(id));
       return;
     }
 
@@ -455,7 +450,7 @@ export default function SpecialSystemsScreen() {
     const c = (compute(withCatalogCosts(form, tracked)) ?? result);
     const response = await addBudgetItem({
       companyId: activeCompany.id,
-      budgetId,
+      budgetId: targetBudgetId,
       itemType: "service",
       description: `Instalación de ${config.title.toLowerCase()}`,
       unitName: "sistema",
@@ -524,6 +519,7 @@ export default function SpecialSystemsScreen() {
       style={styles.safe}
       edges={["left", "right", "bottom"]}
     >
+      {budgetPicker}
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"

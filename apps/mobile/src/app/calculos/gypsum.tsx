@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator, Alert, FlatList, KeyboardAvoidingView,
@@ -24,6 +24,7 @@ import {
 } from "../../services/calculators/gypsum";
 import { formatDecimal, formatMoney } from "../../utils/format";
 import { loadLocalData, saveLocalData } from "../../utils/local-storage";
+import { useCalculatorBudget } from "@/components/BudgetPickerModal";
 
 type Target = "board" | "stud" | "track" | "screw" |
   "tape" | "compound" | "labor";
@@ -64,8 +65,10 @@ function number(value: string) {
 
 export default function GypsumScreen() {
   const params = useLocalSearchParams<{ budgetId?: string | string[] }>();
-  const budgetId = Array.isArray(params.budgetId)
+  const paramBudgetId = Array.isArray(params.budgetId)
     ? params.budgetId[0] : params.budgetId;
+  const { budgetId, requestBudget, budgetPicker } =
+    useCalculatorBudget(paramBudgetId);
   const { activeCompany } = useCompany();
   const currency = activeCompany?.currency_code;
   const { requestPrice, priceModal } = usePriceContribution();
@@ -210,14 +213,15 @@ export default function GypsumScreen() {
     setSuccess("");
   }
 
-  async function addToBudget() {
+  async function addToBudget(chosenBudgetId?: unknown) {
     if (!result) return;
-    if (!activeCompany || !budgetId) {
-      Alert.alert("Selecciona un presupuesto",
-        "Abre esta calculadora desde un presupuesto para guardar la partida.", [
-          { text: "Cancelar", style: "cancel" },
-          { text: "Ver presupuestos", onPress: () => router.push("/presupuestos") },
-        ]);
+    if (!activeCompany) return;
+
+    const targetBudgetId =
+      typeof chosenBudgetId === "string" ? chosenBudgetId : budgetId;
+
+    if (!targetBudgetId) {
+      requestBudget((id) => void addToBudget(id));
       return;
     }
     const f = (value: number) => formatDecimal(value, 0, currency);
@@ -227,7 +231,7 @@ export default function GypsumScreen() {
       c.totalCost,
       result.finishedArea, unitPrice);
     const response = await addBudgetItem({
-      companyId: activeCompany.id, budgetId, itemType: "service",
+      companyId: activeCompany.id, budgetId: targetBudgetId, itemType: "service",
       description: `Muro de gypsum a ${sides} cara${sides === 1 ? "" : "s"}`,
       unitName: "m²", quantity: result.finishedArea,
       unitCost, unitPrice, taxable: true,
@@ -281,6 +285,7 @@ export default function GypsumScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["left", "right", "bottom"]}>
+      {budgetPicker}
       <KeyboardAvoidingView style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content}
