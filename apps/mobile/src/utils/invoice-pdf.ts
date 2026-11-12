@@ -1,5 +1,4 @@
-import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
+import { exportHtmlDocument } from "@/utils/document-export";
 
 import { formatMoney } from "@/types/budget";
 import { formatShortDate } from "@/utils/format";
@@ -447,14 +446,13 @@ export async function shareInvoicePdf({
   error: string | null;
 }> {
   try {
-    const html = buildInvoiceHtml({ invoice, paymentInstructions });
-    const { uri } = await Print.printToFileAsync({ html });
-    await Sharing.shareAsync(uri, {
-      mimeType: "application/pdf",
-      dialogTitle: `Compartir factura ${invoice.snapshot_data?.invoice.number ?? "sin número"}`,
-      UTI: "com.adobe.pdf",
+    const number = invoice.snapshot_data?.invoice.number ?? "sin número";
+    const { error } = await exportHtmlDocument({
+      html: buildInvoiceHtml({ invoice, paymentInstructions }),
+      title: `Factura ${number}`,
+      dialogTitle: `Compartir factura ${number}`,
     });
-    return { error: null };
+    return { error };
   } catch (error: unknown) {
     return { error: error instanceof Error ? error.message : "Error desconocido" };
   }

@@ -1,5 +1,4 @@
-import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
+import { exportHtmlDocument } from "@/utils/document-export";
 
 import { formatMoney } from "@/types/budget";
 import {
@@ -153,14 +152,12 @@ export async function shareReceiptPdf(payment: InvoicePayment): Promise<{
   error: string | null;
 }> {
   try {
-    const html = buildReceiptHtml(payment);
-    const { uri } = await Print.printToFileAsync({ html });
-    await Sharing.shareAsync(uri, {
-      mimeType: "application/pdf",
+    const { error } = await exportHtmlDocument({
+      html: buildReceiptHtml(payment),
+      title: `Recibo ${payment.receipt_number}`,
       dialogTitle: `Compartir recibo ${payment.receipt_number}`,
-      UTI: "com.adobe.pdf",
     });
-    return { error: null };
+    return { error };
   } catch (error: unknown) {
     return {
       error: error instanceof Error ? error.message : "No fue posible generar el recibo."
