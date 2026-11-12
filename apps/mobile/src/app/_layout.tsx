@@ -26,6 +26,10 @@ import {
 import { processOfflineSyncQueue } from "@/services/offline-sync-service";
 import { readPendingInvitation } from "@/utils/pending-invitation";
 import { useNotificationNavigation } from "@/hooks/useNotificationNavigation";
+import { installWebAlert } from "@/utils/alert";
+
+// En la web, Alert.alert no muestra nada: se reemplaza antes del primer render.
+installWebAlert();
 
 function LeuretStartupMark() {
   const pulse = useSharedValue(0);

@@ -9,7 +9,6 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -35,6 +34,7 @@ import {
 } from "@/services/users-service";
 import type { CompanyInvitation, CompanyRole, InvitableCompanyRole } from "@/types/company";
 import { showAlert } from "@/utils/alert";
+import { shareText } from "@/utils/share-text";
 import { formatShortDate } from "@/utils/format";
 import {
   INVITABLE_ROLES,
@@ -462,7 +462,10 @@ function InviteSheet({
       email: created.email,
     });
     try {
-      await Share.share({ title: `Invitación a ${companyName}`, message });
+      const outcome = await shareText({ title: `Invitación a ${companyName}`, message });
+      if (outcome === "copied") {
+        showAlert("Invitación copiada", "El mensaje con el código se copió al portapapeles.");
+      }
     } catch {
       showAlert("No se pudo compartir", "Copia el código manualmente.");
     }

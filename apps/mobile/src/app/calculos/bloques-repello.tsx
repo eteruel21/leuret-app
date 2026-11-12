@@ -47,6 +47,7 @@ import {
   loadLocalData,
   saveLocalData,
 } from "../../utils/local-storage";
+import { useCalculatorBudget } from "@/components/BudgetPickerModal";
 
 type CatalogTarget =
   | "block"
@@ -114,9 +115,11 @@ export default function MasonryCalculatorScreen() {
   const params = useLocalSearchParams<{
     budgetId?: string | string[];
   }>();
-  const budgetId = Array.isArray(params.budgetId)
+  const paramBudgetId = Array.isArray(params.budgetId)
     ? params.budgetId[0]
     : params.budgetId;
+  const { budgetId, requestBudget, budgetPicker } =
+    useCalculatorBudget(paramBudgetId);
   const { activeCompany } = useCompany();
   const currencyCode = activeCompany?.currency_code;
   const { requestPrice, priceModal } = usePriceContribution();
@@ -374,21 +377,16 @@ export default function MasonryCalculatorScreen() {
     setBudgetMessage("");
   }
 
-  async function handleAddToBudget() {
+  async function handleAddToBudget(chosenBudgetId?: unknown) {
     if (!result) return;
 
-    if (!activeCompany || !budgetId) {
-      Alert.alert(
-        "Selecciona un presupuesto",
-        "Abre esta calculadora desde un presupuesto para guardar la partida.",
-        [
-          { text: "Cancelar", style: "cancel" },
-          {
-            text: "Ver presupuestos",
-            onPress: () => router.push("/presupuestos"),
-          },
-        ],
-      );
+    if (!activeCompany) return;
+
+    const targetBudgetId =
+      typeof chosenBudgetId === "string" ? chosenBudgetId : budgetId;
+
+    if (!targetBudgetId) {
+      requestBudget((id) => void handleAddToBudget(id));
       return;
     }
 
@@ -413,7 +411,7 @@ export default function MasonryCalculatorScreen() {
 
     const { error: budgetError } = await addBudgetItem({
       companyId: activeCompany.id,
-      budgetId,
+      budgetId: targetBudgetId,
       itemType: "service",
       description:
         plasterSides > 0
@@ -462,6 +460,7 @@ export default function MasonryCalculatorScreen() {
       style={styles.safeArea}
       edges={["left", "right", "bottom"]}
     >
+      {budgetPicker}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}

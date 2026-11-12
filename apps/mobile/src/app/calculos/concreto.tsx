@@ -52,6 +52,7 @@ import {
   formatMoney as formatMoneyUtil,
   formatDecimal as formatDecimalUtil,
 } from "../../utils/format";
+import { useCalculatorBudget } from "@/components/BudgetPickerModal";
 
 type CatalogPriceTarget =
   | "cement"
@@ -250,9 +251,11 @@ function ConcreteCalculatorForm({
   const params = useLocalSearchParams<{
     budgetId?: string | string[];
   }>();
-  const budgetId = Array.isArray(params.budgetId)
+  const paramBudgetId = Array.isArray(params.budgetId)
     ? params.budgetId[0]
     : params.budgetId;
+  const { budgetId, requestBudget, budgetPicker } =
+    useCalculatorBudget(paramBudgetId);
 
   const { activeCompany } = useCompany();
   const { requestPrice, priceModal } = usePriceContribution();
@@ -668,21 +671,16 @@ function ConcreteCalculatorForm({
   }
 
 
-  async function handleAddToBudget() {
+  async function handleAddToBudget(chosenBudgetId?: unknown) {
     if (!result) return;
 
-    if (!activeCompany || !budgetId) {
-      Alert.alert(
-        "Selecciona un presupuesto",
-        "Abre la calculadora desde un presupuesto para guardar esta partida.",
-        [
-          { text: "Cancelar", style: "cancel" },
-          {
-            text: "Ver presupuestos",
-            onPress: () => router.push("/presupuestos"),
-          },
-        ],
-      );
+    if (!activeCompany) return;
+
+    const targetBudgetId =
+      typeof chosenBudgetId === "string" ? chosenBudgetId : budgetId;
+
+    if (!targetBudgetId) {
+      requestBudget((id) => void handleAddToBudget(id));
       return;
     }
 
@@ -705,7 +703,7 @@ function ConcreteCalculatorForm({
 
     const { error: budgetError } = await addBudgetItem({
       companyId: activeCompany.id,
-      budgetId,
+      budgetId: targetBudgetId,
       itemType: "service",
       description: `Concreto · ${concreteUse.label} · mezcla ${form.cementRatio}:${form.sandRatio}:${form.gravelRatio}`,
       unitName: "m³",
@@ -752,6 +750,7 @@ function ConcreteCalculatorForm({
       style={styles.safeArea}
       edges={["left", "right", "bottom"]}
     >
+      {budgetPicker}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={

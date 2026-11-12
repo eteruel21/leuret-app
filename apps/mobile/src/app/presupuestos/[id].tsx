@@ -70,6 +70,8 @@ import {
 import { shareBudgetPdf } from "@/utils/budget-pdf";
 import { ShoppingListModal } from "@/components/ShoppingListModal";
 import { SendBudgetPanel } from "@/components/SendBudgetPanel";
+import { CalculatorPickerModal } from "@/components/CalculatorPickerModal";
+import { budgetAcceptsItems } from "@/utils/budget-picker";
 
 import { listCatalogItems } from "@/services/catalog-service";
 import type { CatalogItemWithDetails } from "@/types/catalog";
@@ -94,6 +96,8 @@ export default function BudgetDetailScreen() {
   const [modalVisible, setModalVisible] =
     useState(false);
   const [catalogModalVisible, setCatalogModalVisible] =
+    useState(false);
+  const [calculatorPickerVisible, setCalculatorPickerVisible] =
     useState(false);
   const [shoppingListVisible, setShoppingListVisible] =
     useState(false);
@@ -232,6 +236,9 @@ export default function BudgetDetailScreen() {
       </View>
     );
   }
+
+  // La API rechaza cambios en partidas de presupuestos aprobados o cancelados.
+  const canEditItems = budgetAcceptsItems(budget.status);
 
   async function handleApplyPrices(itemIds: string[]) {
     if (!activeCompany || !budget) return;
@@ -500,13 +507,11 @@ export default function BudgetDetailScreen() {
               Partidas
             </Text>
 
+            {canEditItems ? (
             <View style={styles.addButtonsRow}>
               <Pressable
                 onPress={() =>
-                  router.push({
-                    pathname: "/calculos/concreto",
-                    params: { budgetId },
-                  } as Href)
+                  setCalculatorPickerVisible(true)
                 }
                 style={({ pressed }) => [
                   styles.catalogButton,
@@ -520,7 +525,7 @@ export default function BudgetDetailScreen() {
                 />
 
                 <Text style={styles.catalogButtonText}>
-                  Concreto
+                  Calculadoras
                 </Text>
               </Pressable>
 
@@ -564,7 +569,14 @@ export default function BudgetDetailScreen() {
                 </Text>
               </Pressable>
             </View>
+            ) : null}
           </View>
+
+          {!canEditItems ? (
+            <Text style={styles.emptySmallText}>
+              Este presupuesto está {getBudgetStatusLabel(budget.status).toLowerCase()}: sus partidas ya no se pueden modificar.
+            </Text>
+          ) : null}
 
           {budget.sections.map((section) => (
             <BudgetSectionBlock
@@ -574,9 +586,9 @@ export default function BudgetDetailScreen() {
                 (item) =>
                   item.section_id === section.id,
               )}
-              onDeleteItem={(item) =>
+              onDeleteItem={canEditItems ? (item) =>
                 void handleDeleteItem(item)
-              }
+              : undefined}
             />
           ))}
 
@@ -588,9 +600,9 @@ export default function BudgetDetailScreen() {
               items={budget.items.filter(
                 (item) => !item.section_id,
               )}
-              onDeleteItem={(item) =>
+              onDeleteItem={canEditItems ? (item) =>
                 void handleDeleteItem(item)
-              }
+              : undefined}
             />
           ) : null}
         </View>
@@ -606,6 +618,12 @@ export default function BudgetDetailScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      <CalculatorPickerModal
+        visible={calculatorPickerVisible}
+        budgetId={budget.id}
+        onClose={() => setCalculatorPickerVisible(false)}
+      />
 
       <AddBudgetItemModal
         visible={modalVisible}
@@ -654,7 +672,8 @@ function BudgetSectionBlock({
 }: {
   section: BudgetSection | null;
   items: BudgetItem[];
-  onDeleteItem: (item: BudgetItem) => void;
+  /** Sin esta función (presupuesto aprobado o cancelado) no se muestra la papelera. */
+  onDeleteItem?: (item: BudgetItem) => void;
 }) {
   return (
     <View style={styles.sectionBlock}>
@@ -677,22 +696,26 @@ function BudgetSectionBlock({
                 {item.description}
               </Text>
 
-              <Pressable
-                onPress={() =>
-                  onDeleteItem(item)
-                }
-                hitSlop={12}
-              >
-                <Ionicons
-                  name="trash-outline"
-                  size={19}
-                  color={colors.danger}
-                />
-              </Pressable>
+              {onDeleteItem ? (
+                <Pressable
+                  onPress={() =>
+                    onDeleteItem(item)
+                  }
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Eliminar ${item.description}`}
+                >
+                  <Ionicons
+                    name="trash-outline"
+                    size={19}
+                    color={colors.danger}
+                  />
+                </Pressable>
+              ) : null}
             </View>
 
             <Text style={styles.itemMeta}>
-              {item.quantity} {item.unit_name} ×{" "}
+              {Number(item.quantity).toLocaleString("es-PA", { maximumFractionDigits: 3 })} {item.unit_name} ×{" "}
               {formatMoney(item.unit_price)}
             </Text>
 
