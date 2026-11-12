@@ -16,7 +16,8 @@
 export type WebDialogButton = {
   text?: string;
   style?: "default" | "cancel" | "destructive";
-  onPress?: (value?: string) => unknown;
+  /** Se llama sin argumentos (en la web no hay campos de texto en el diálogo). */
+  onPress?: () => unknown;
 };
 
 export type BrowserDialogs = {
