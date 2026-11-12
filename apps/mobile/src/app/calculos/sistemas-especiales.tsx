@@ -369,8 +369,8 @@ export default function SpecialSystemsScreen() {
   }
 
   function compute(source: Form): SpecialSystemsResult | null {
-    if (!totalEquipment) {
-      setError("Introduce al menos un equipo o dispositivo.");
+    if (!totalEquipment && !num(source.wiredPoints)) {
+      setError("Introduce al menos un equipo o un punto cableado.");
       return null;
     }
 
@@ -441,9 +441,14 @@ export default function SpecialSystemsScreen() {
 
     const c = (compute(withCatalogCosts(form, tracked)) ?? result);
 
+    // Sin equipos es un trabajo «solo cableado».
+    const wiringOnly = result.totalEquipment === 0;
+
     return {
       itemType: "service",
-      description: `Instalación de ${config.title.toLowerCase()}`,
+      description: wiringOnly
+        ? `Cableado de ${config.title.toLowerCase()} (${result.wiredPoints} puntos)`
+        : `Instalación de ${config.title.toLowerCase()}`,
       unitName: "sistema",
       quantity: 1,
       unitCost: budgetUnitCost(
@@ -466,13 +471,16 @@ export default function SpecialSystemsScreen() {
         material("Tubo conduit", c.conduitPieces, "und.", c.conduitCost),
         material("Caja", c.boxes, "und.", c.boxCost),
       ]),
-      notes:
-        `${equipmentNotes}` +
-        (result.wiredPoints
-          ? ` · ${result.wiredPoints} puntos cableados` +
+      notes: [
+        equipmentNotes,
+        result.wiredPoints
+          ? `${result.wiredPoints} puntos cableados` +
             ` · ${result.cableRollsToBuy} rollos de cable` +
             ` · ${result.conduitPieces} tubos`
-          : ""),
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
     };
   }
 
@@ -1060,6 +1068,11 @@ function Results({
       ))}
 
       <Text>Equipos totales: {result.totalEquipment}</Text>
+      {result.totalEquipment === 0 ? (
+        <Text>
+          Trabajo solo de cableado: no incluye equipos ni programación.
+        </Text>
+      ) : null}
       <Text>Puntos cableados: {result.wiredPoints}</Text>
       <Text>
         Cable: {formatDecimal(result.cableMeters, 2, currency)} m ·

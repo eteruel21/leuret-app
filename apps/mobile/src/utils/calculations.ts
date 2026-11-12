@@ -989,6 +989,8 @@ export type ElectricalPrices = {
   conduitPiece: number;
   boxUnit: number;
   outletUnit: number;
+  /** Tomacorriente de 240 V para puntos dedicados. Si falta (cálculos guardados antes), se usa outletUnit. */
+  dedicatedOutletUnit?: number;
   switchUnit: number;
   breakerUnit: number;
   supplies: number;
@@ -1022,6 +1024,7 @@ export type ElectricalResult = {
   conduitCost: number;
   boxCost: number;
   outletCost: number;
+  dedicatedOutletCost: number;
   switchCost: number;
   breakerCost: number;
   suppliesCost: number;
@@ -1059,6 +1062,7 @@ function emptyElectricalResult(): ElectricalResult {
     conduitCost: 0,
     boxCost: 0,
     outletCost: 0,
+    dedicatedOutletCost: 0,
     switchCost: 0,
     breakerCost: 0,
     suppliesCost: 0,
@@ -1194,8 +1198,13 @@ export function calculateElectrical(
   const boxCost =
     boxes * sanitizeNumber(prices.boxUnit);
   const outletCost =
-    (outletPoints + dedicatedPoints) *
+    outletPoints *
     sanitizeNumber(prices.outletUnit);
+  const dedicatedOutletCost =
+    dedicatedPoints *
+    sanitizeNumber(
+      prices.dedicatedOutletUnit ?? prices.outletUnit,
+    );
   const switchCost =
     switchPoints *
     sanitizeNumber(prices.switchUnit);
@@ -1211,6 +1220,7 @@ export function calculateElectrical(
     conduitCost +
     boxCost +
     outletCost +
+    dedicatedOutletCost +
     switchCost +
     breakerCost +
     suppliesCost;
@@ -1250,6 +1260,7 @@ export function calculateElectrical(
     conduitCost,
     boxCost,
     outletCost,
+    dedicatedOutletCost,
     switchCost,
     breakerCost,
     suppliesCost,
@@ -1393,7 +1404,9 @@ export function calculateSpecialSystems(
     input.conduitPieceLength,
   );
 
-  if (!totalEquipment) {
+  // Sin equipos ni puntos no hay trabajo. Con puntos y sin equipos es un
+  // trabajo «solo cableado» (p. ej. dejar la canalización lista).
+  if (!totalEquipment && !wiredPoints) {
     return {
       ...emptySpecialSystemsResult(input.systemType),
       deviceA,
@@ -1451,7 +1464,10 @@ export function calculateSpecialSystems(
 
   const installationLaborCost =
     wiredPoints * sanitizeNumber(prices.laborWiredPoint);
-  const programmingCost = sanitizeNumber(prices.programming);
+  // Sin equipos no hay sistema que programar.
+  const programmingCost = totalEquipment
+    ? sanitizeNumber(prices.programming)
+    : 0;
   const laborCost =
     installationLaborCost + programmingCost;
 

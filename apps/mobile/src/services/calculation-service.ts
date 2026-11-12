@@ -36,6 +36,18 @@ export async function saveCalculation(params: SaveCalculationParams): Promise<Sa
   return data.calculation;
 }
 
+/** Reemplaza un cálculo guardado de la misma calculadora (nombre, obra, datos y total). */
+export async function updateCalculation(
+  calculationId: string,
+  params: SaveCalculationParams
+): Promise<SavedCalculation> {
+  const data = await authenticatedRequest<{ calculation: SavedCalculation }>(`/calculations/${calculationId}`, {
+    method: "PUT",
+    body: JSON.stringify(params)
+  });
+  return data.calculation;
+}
+
 export async function fetchCompanyCalculations(
   companyId: string,
   projectId?: string,

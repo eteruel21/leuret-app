@@ -65,6 +65,30 @@ export function registerSpecialSystemsCalculator() {
         });
       }
 
+      if (res.deviceD > 0) {
+        items.push({
+          itemType: "equipment",
+          description: "Equipos Dispositivos Tipo D",
+          unitName: "unidad",
+          quantity: res.deviceD,
+          unitCost: prices.deviceDUnit,
+          unitPrice: prices.deviceDUnit,
+          subtotal: res.deviceDCost
+        });
+      }
+
+      if (res.deviceE > 0) {
+        items.push({
+          itemType: "equipment",
+          description: "Equipos Dispositivos Tipo E",
+          unitName: "unidad",
+          quantity: res.deviceE,
+          unitCost: prices.deviceEUnit,
+          unitPrice: prices.deviceEUnit,
+          subtotal: res.deviceECost
+        });
+      }
+
       if (res.cableRollsToBuy > 0) {
         items.push({
           itemType: "material",
@@ -98,6 +122,18 @@ export function registerSpecialSystemsCalculator() {
           unitCost: prices.boxUnit,
           unitPrice: prices.boxUnit,
           subtotal: res.boxCost
+        });
+      }
+
+      if (res.suppliesCost > 0) {
+        items.push({
+          itemType: "material",
+          description: "Accesorios e Insumos de Instalación",
+          unitName: "global",
+          quantity: 1,
+          unitCost: prices.supplies,
+          unitPrice: prices.supplies,
+          subtotal: res.suppliesCost
         });
       }
 

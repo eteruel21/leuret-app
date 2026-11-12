@@ -42,6 +42,47 @@ export async function saveCalculationRepo(userId: string, input: SaveCalculation
   });
 }
 
+/**
+ * Reemplaza el contenido de un cálculo guardado de la misma calculadora.
+ * Devuelve null si no existe, es de otra calculadora o RLS no permite editarlo.
+ */
+export async function updateCalculationRepo(userId: string, calculationId: string, input: SaveCalculationInput) {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query(
+      `
+        UPDATE public.saved_calculations
+        SET
+          project_id = $3,
+          client_id = $4,
+          title = $5,
+          input_data = $6,
+          price_data = $7,
+          results_data = $8,
+          total_cost = $9,
+          updated_at = now()
+        WHERE id = $1
+          AND company_id = $2
+          AND formula_code = $10
+        RETURNING *
+      `,
+      [
+        calculationId,
+        input.companyId,
+        input.projectId ?? null,
+        input.clientId ?? null,
+        input.title,
+        JSON.stringify(input.inputData),
+        JSON.stringify(input.priceData),
+        JSON.stringify(input.resultsData),
+        input.totalCost,
+        input.formulaCode
+      ]
+    );
+
+    return result.rows[0] ?? null;
+  });
+}
+
 export async function findCompanyCalculationsRepo(
   userId: string,
   companyId: string,

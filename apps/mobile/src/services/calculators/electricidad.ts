@@ -75,15 +75,28 @@ export function registerElectricalCalculator() {
         });
       }
 
-      if (res.outletPoints + res.dedicatedPoints > 0) {
+      if (res.outletPoints > 0) {
         items.push({
           itemType: "material",
           description: "Módulos y Placas de Tomacorrientes",
           unitName: "unidad",
-          quantity: res.outletPoints + res.dedicatedPoints,
+          quantity: res.outletPoints,
           unitCost: prices.outletUnit,
           unitPrice: prices.outletUnit,
           subtotal: res.outletCost
+        });
+      }
+
+      if (res.dedicatedPoints > 0) {
+        const dedicatedUnit = prices.dedicatedOutletUnit ?? prices.outletUnit;
+        items.push({
+          itemType: "material",
+          description: "Tomacorrientes de 240 V (puntos dedicados)",
+          unitName: "unidad",
+          quantity: res.dedicatedPoints,
+          unitCost: dedicatedUnit,
+          unitPrice: dedicatedUnit,
+          subtotal: res.dedicatedOutletCost
         });
       }
 

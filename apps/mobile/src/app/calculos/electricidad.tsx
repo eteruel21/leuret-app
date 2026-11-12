@@ -42,6 +42,7 @@ type Target =
   | "conduit"
   | "box"
   | "outlet"
+  | "dedicatedOutlet"
   | "switch"
   | "breaker"
   | "supplies"
@@ -66,6 +67,7 @@ type Form = {
   conduitPiecePrice: string;
   boxUnitPrice: string;
   outletUnitPrice: string;
+  dedicatedOutletUnitPrice: string;
   switchUnitPrice: string;
   breakerUnitPrice: string;
   suppliesPrice: string;
@@ -101,12 +103,23 @@ const initial: Form = {
   conduitPiecePrice: "",
   boxUnitPrice: "",
   outletUnitPrice: "",
+  dedicatedOutletUnitPrice: "",
   switchUnitPrice: "",
   breakerUnitPrice: "",
   suppliesPrice: "",
   standardLaborPrice: "",
   dedicatedLaborPrice: "",
 };
+
+/**
+ * Datos guardados antes de que existiera el precio del tomacorriente de 240 V:
+ * esos cálculos usaban el precio del tomacorriente estándar, así que se copia
+ * para que el total no cambie al abrirlos.
+ */
+function withDedicatedOutletPrice<T extends Partial<Form>>(saved: T): T {
+  if (saved.dedicatedOutletUnitPrice !== undefined) return saved;
+  return { ...saved, dedicatedOutletUnitPrice: saved.outletUnitPrice ?? "" };
+}
 
 function num(value: string) {
   const parsed = Number(value.replace(",", ".").trim());
@@ -154,7 +167,7 @@ export default function ElectricalScreen() {
       if (saved) {
         setForm((current) => ({
           ...current,
-          ...saved,
+          ...withDedicatedOutletPrice(saved),
         }));
       }
       setLoaded(true);
@@ -218,6 +231,7 @@ export default function ElectricalScreen() {
       conduit: "conduitPiecePrice",
       box: "boxUnitPrice",
       outlet: "outletUnitPrice",
+      dedicatedOutlet: "dedicatedOutletUnitPrice",
       switch: "switchUnitPrice",
       breaker: "breakerUnitPrice",
       supplies: "suppliesPrice",
@@ -314,6 +328,9 @@ export default function ElectricalScreen() {
           conduitPiece: num(source.conduitPiecePrice),
           boxUnit: num(source.boxUnitPrice),
           outletUnit: num(source.outletUnitPrice),
+          dedicatedOutletUnit: num(
+            source.dedicatedOutletUnitPrice,
+          ),
           switchUnit: num(source.switchUnitPrice),
           breakerUnit: num(source.breakerUnitPrice),
           supplies: num(source.suppliesPrice),
@@ -362,6 +379,7 @@ export default function ElectricalScreen() {
         material("Tubo conduit", c.conduitPieces, "und.", c.conduitCost),
         material("Caja eléctrica", c.boxes, "und.", c.boxCost),
         material("Tomacorriente", c.outletPoints, "und.", c.outletCost),
+        material("Tomacorriente 240 V", c.dedicatedPoints, "und.", c.dedicatedOutletCost),
         material("Interruptor", c.switchPoints, "und.", c.switchCost),
         material("Breaker", c.totalBreakers, "und.", c.breakerCost),
       ]),
@@ -378,7 +396,12 @@ export default function ElectricalScreen() {
     ready: loaded,
     snapshot: () => ({ form, selected, tracked }),
     restore: (saved) => {
-      if (saved.form) setForm((current) => ({ ...current, ...saved.form }));
+      if (saved.form) {
+        setForm((current) => ({
+          ...current,
+          ...withDedicatedOutletPrice(saved.form as Partial<Form>),
+        }));
+      }
       if (saved.selected !== undefined) setSelected(saved.selected);
       if (saved.tracked !== undefined) setTracked(saved.tracked);
     },
@@ -559,6 +582,11 @@ export default function ElectricalScreen() {
             onPress={() => setTarget("outlet")}
           />
           <CatalogButton
+            label="Tomacorriente 240 V (punto dedicado)"
+            value={selected.dedicatedOutlet}
+            onPress={() => setTarget("dedicatedOutlet")}
+          />
+          <CatalogButton
             label="Interruptor"
             value={selected.switch}
             onPress={() => setTarget("switch")}
@@ -618,6 +646,13 @@ export default function ElectricalScreen() {
               value={form.outletUnitPrice}
               onChangeText={(value) =>
                 update("outletUnitPrice", value)}
+              unit="B/."
+            />
+            <Input
+              label="Tomacorriente 240 V"
+              value={form.dedicatedOutletUnitPrice}
+              onChangeText={(value) =>
+                update("dedicatedOutletUnitPrice", value)}
               unit="B/."
             />
             <Input
@@ -811,6 +846,7 @@ const PICKER_KEYWORDS: Record<Target, RegExp> = {
   conduit: /conduit|\bemt\b|tubo electrico|tuberia electrica/,
   box: /caja|octogonal|cuadrada/,
   outlet: /tomacorriente|receptaculo|toma/,
+  dedicatedOutlet: /240 ?v|220 ?v|dedicad|tomacorriente.*(30|50) ?a/,
   switch: /interruptor|apagador|switch/,
   breaker: /breaker|interruptor termomagnetico|disyuntor/,
   supplies: /cinta aislante|conector (electrico|pvc|emt|de resorte)|grapa|abrazadera|tornillo|wirenut/,

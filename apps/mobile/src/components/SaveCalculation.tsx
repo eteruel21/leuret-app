@@ -18,7 +18,7 @@ import type { CalculatorId } from "@/constants/calculators";
 import { colors, radius } from "@/constants/theme";
 import { useCompany } from "@/contexts/CompanyContext";
 import type { BudgetLineDraft } from "@/services/budget-service";
-import { fetchCalculationDetail, saveCalculation } from "@/services/calculation-service";
+import { fetchCalculationDetail, saveCalculation, updateCalculation } from "@/services/calculation-service";
 import { listProjectsByCompany, type ProjectSummary } from "@/services/project-service";
 import { buildCalculationPayload, readCalculationState } from "@/utils/saved-calculation";
 
@@ -77,6 +77,8 @@ export function useSavedCalculation<State extends object>({
     clientId: string | null;
   } | null>(null);
   const [restoredTick, setRestoredTick] = useState(0);
+  /** Cálculo guardado que se está editando: el abierto por ruta o el último que se guardó aquí. */
+  const [currentId, setCurrentId] = useState<string | null>(null);
 
   const restoreRef = useRef(restore);
   const onRestoredRef = useRef(onRestored);
@@ -104,6 +106,7 @@ export function useSavedCalculation<State extends object>({
           return;
         }
         restoreRef.current(state);
+        setCurrentId(calculation.id);
         setLoadedCalculation({
           title: calculation.title,
           projectId: calculation.project_id,
@@ -146,21 +149,28 @@ export function useSavedCalculation<State extends object>({
       defaultTitle={loadedCalculation?.title ?? lineTitle}
       defaultProjectId={paramProjectId ?? loadedCalculation?.projectId ?? null}
       defaultClientId={paramClientId ?? loadedCalculation?.clientId ?? null}
+      canUpdate={Boolean(currentId)}
       onClose={() => setVisible(false)}
-      onSave={async ({ title, projectId, clientId }) => {
+      onSave={async ({ title, projectId, clientId, mode }) => {
         const companyId = activeCompany?.id;
         const line = buildLine();
         if (!companyId || !line) return "Calcula el resultado antes de guardarlo.";
         try {
-          await saveCalculation({
+          const payload = {
             companyId,
             projectId,
             clientId,
             formulaCode,
             title,
             ...buildCalculationPayload({ state: snapshot(), line, totalCost: totalCost ?? 0 }),
-          });
-          setSavedTitle(title);
+          };
+          const saved =
+            mode === "update" && currentId
+              ? await updateCalculation(currentId, payload)
+              : await saveCalculation(payload);
+          setCurrentId(saved.id);
+          setLoadedCalculation({ title, projectId, clientId });
+          setSavedTitle(mode === "update" ? `Actualizado «${title}».` : `Guardado como «${title}».`);
           setVisible(false);
           return null;
         } catch (error) {
@@ -178,11 +188,11 @@ export function useSavedCalculation<State extends object>({
         accessibilityRole="button"
       >
         <Ionicons name="bookmark-outline" size={18} color={colors.primary} />
-        <Text style={styles.saveButtonText}>{savedTitle ? "Guardar otra vez" : "Guardar cálculo"}</Text>
+        <Text style={styles.saveButtonText}>{currentId ? "Actualizar cálculo" : "Guardar cálculo"}</Text>
       </Pressable>
       {savedTitle ? (
         <Text style={styles.savedText}>
-          Guardado como «{savedTitle}». Lo encuentras en la obra, el cliente y en Cálculos.
+          {savedTitle} Lo encuentras en la obra, el cliente y en Cálculos.
         </Text>
       ) : loadedCalculation ? (
         <Text style={styles.savedText}>Abriste el cálculo guardado «{loadedCalculation.title}».</Text>
@@ -193,13 +203,15 @@ export function useSavedCalculation<State extends object>({
   return { saveButton, saveModal };
 }
 
-type SaveInput = { title: string; projectId: string | null; clientId: string | null };
+type SaveMode = "update" | "new";
+type SaveInput = { title: string; projectId: string | null; clientId: string | null; mode: SaveMode };
 
 function SaveCalculationModal({
   visible,
   defaultTitle,
   defaultProjectId,
   defaultClientId,
+  canUpdate,
   onClose,
   onSave,
 }: {
@@ -207,6 +219,8 @@ function SaveCalculationModal({
   defaultTitle: string;
   defaultProjectId: string | null;
   defaultClientId: string | null;
+  /** Hay un cálculo guardado abierto: se puede actualizar o guardar como nuevo. */
+  canUpdate: boolean;
   onClose: () => void;
   onSave: (input: SaveInput) => Promise<string | null>;
 }) {
@@ -216,7 +230,7 @@ function SaveCalculationModal({
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [search, setSearch] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState<SaveMode | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -245,17 +259,17 @@ function SaveCalculationModal({
 
   const selectedProject = projects.find((project) => project.id === projectId) ?? null;
 
-  const submit = async () => {
+  const submit = async (mode: SaveMode) => {
     const cleanTitle = title.trim();
     if (!cleanTitle) {
       setError("Escribe un nombre para el cálculo.");
       return;
     }
-    setSaving(true);
+    setSaving(mode);
     setError(null);
     const clientId = selectedProject?.client_id ?? (projectId ? null : defaultClientId);
-    const message = await onSave({ title: cleanTitle.slice(0, 250), projectId, clientId });
-    setSaving(false);
+    const message = await onSave({ title: cleanTitle.slice(0, 250), projectId, clientId, mode });
+    setSaving(null);
     if (message) setError(message);
   };
 
@@ -264,9 +278,11 @@ function SaveCalculationModal({
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
           <View style={styles.headerCopy}>
-            <Text style={styles.title}>Guardar cálculo</Text>
+            <Text style={styles.title}>{canUpdate ? "Actualizar cálculo" : "Guardar cálculo"}</Text>
             <Text style={styles.subtitle}>
-              Queda con sus medidas y precios para reabrirlo o pasarlo a un presupuesto más tarde.
+              {canUpdate
+                ? "Actualiza el cálculo guardado con las medidas y precios actuales, o guárdalo como uno nuevo."
+                : "Queda con sus medidas y precios para reabrirlo o pasarlo a un presupuesto más tarde."}
             </Text>
           </View>
           <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Cerrar">
@@ -330,17 +346,31 @@ function SaveCalculationModal({
         <View style={styles.footer}>
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Pressable
-            onPress={() => void submit()}
-            disabled={saving}
-            style={({ pressed }) => [styles.primary, (pressed || saving) && styles.pressed]}
+            onPress={() => void submit(canUpdate ? "update" : "new")}
+            disabled={saving !== null}
+            style={({ pressed }) => [styles.primary, (pressed || saving !== null) && styles.pressed]}
             accessibilityRole="button"
           >
-            {saving ? (
+            {saving === (canUpdate ? "update" : "new") ? (
               <ActivityIndicator color={colors.surface} />
             ) : (
-              <Text style={styles.primaryText}>Guardar</Text>
+              <Text style={styles.primaryText}>{canUpdate ? "Actualizar" : "Guardar"}</Text>
             )}
           </Pressable>
+          {canUpdate ? (
+            <Pressable
+              onPress={() => void submit("new")}
+              disabled={saving !== null}
+              style={({ pressed }) => [styles.secondary, (pressed || saving !== null) && styles.pressed]}
+              accessibilityRole="button"
+            >
+              {saving === "new" ? (
+                <ActivityIndicator color={colors.primary} />
+              ) : (
+                <Text style={styles.secondaryText}>Guardar como nuevo</Text>
+              )}
+            </Pressable>
+          ) : null}
         </View>
       </SafeAreaView>
     </Modal>
@@ -403,4 +433,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   primaryText: { color: colors.surface, fontWeight: "800", fontSize: 16 },
+  secondary: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: 13,
+    alignItems: "center",
+    backgroundColor: colors.surface,
+  },
+  secondaryText: { color: colors.primary, fontWeight: "800", fontSize: 16 },
 });

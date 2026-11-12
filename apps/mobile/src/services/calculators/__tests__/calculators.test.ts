@@ -372,6 +372,35 @@ describe("T-056: Calculadoras de Construcción (10 Calculadoras)", () => {
       expect(result.totalPoints).toBe(0);
       expect(result.totalCost).toBe(0);
     });
+
+    const outletInput = {
+      lightPoints: 0,
+      switchPoints: 0,
+      outletPoints: 2,
+      dedicatedPoints: 1,
+      averageRouteLength: 10,
+      cableRollLength: 100,
+      conduitPieceLength: 3,
+      lightingPointsPerCircuit: 8,
+      outletPointsPerCircuit: 6,
+      lightingConductors: 3,
+      powerConductors: 3,
+      wastePercentage: 0
+    };
+
+    it("Puntos dedicados usan el precio del tomacorriente de 240 V", () => {
+      const result = calculateElectrical(outletInput, { ...defaultPrices, dedicatedOutletUnit: 18 });
+
+      expect(result.outletCost).toBe(7);
+      expect(result.dedicatedOutletCost).toBe(18);
+    });
+
+    it("Sin precio de 240 V (cálculos anteriores) se usa el del tomacorriente estándar", () => {
+      const result = calculateElectrical(outletInput, defaultPrices);
+
+      expect(result.outletCost).toBe(7);
+      expect(result.dedicatedOutletCost).toBe(3.5);
+    });
   });
 
   // 6. Gypsum
@@ -699,6 +728,35 @@ describe("T-056: Calculadoras de Construcción (10 Calculadoras)", () => {
 
       expect(result.totalEquipment).toBe(0);
       expect(result.totalCost).toBe(0);
+    });
+
+    it("Solo cableado: sin equipos calcula cable, tubería, cajas y mano de obra, sin programación", () => {
+      const result = calculateSpecialSystems(
+        {
+          systemType: "cctv",
+          deviceA: 0,
+          deviceB: 0,
+          deviceC: 0,
+          deviceD: 0,
+          deviceE: 0,
+          wiredPoints: 10,
+          averageRouteLength: 15,
+          cableRunsPerPoint: 1,
+          wastePercentage: 10,
+          cableRollLength: 305,
+          conduitPieceLength: 3
+        },
+        defaultPrices
+      );
+
+      expect(result.totalEquipment).toBe(0);
+      expect(result.cableRollsToBuy).toBe(1);
+      expect(result.conduitPieces).toBe(55);
+      expect(result.boxes).toBe(10);
+      expect(result.materialsCost).toBeCloseTo(279.5, 2);
+      expect(result.installationLaborCost).toBe(350);
+      expect(result.programmingCost).toBe(0);
+      expect(result.totalCost).toBeCloseTo(629.5, 2);
     });
   });
 });
