@@ -21,6 +21,7 @@ import {
   approveBudgetSchema,
   rejectBudgetSchema,
   sendBudgetSchema,
+  reopenBudgetSchema,
   convertCalculationSchema,
   applyPriceUpdatesSchema
 } from "./schemas.js";
@@ -37,11 +38,12 @@ import {
   clientBudgetResponseError,
   rejectBudgetService,
   sendBudgetService,
+  reopenBudgetService,
   getBudgetHistoryService,
   getBudgetPriceUpdatesService,
   applyBudgetPriceUpdatesService
 } from "./services.js";
-import { BudgetLockedError, BudgetNotDraftError, BudgetSendError } from "./repository.js";
+import { BudgetLockedError, BudgetNotDraftError, BudgetReopenError, BudgetSendError } from "./repository.js";
 
 import { getCalculationDetailService } from "../calculations/services.js";
 
@@ -321,6 +323,39 @@ export async function registerBudgetRoutes(
   );
 
   app.post(
+    "/budgets/:budgetId/reopen",
+    {
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"])]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedParams = budgetParamsSchema.safeParse(request.params);
+      const parsedBody = reopenBudgetSchema.safeParse(request.body);
+
+      if (!parsedParams.success || !parsedBody.success) {
+        return reply.status(400).send({ message: "Datos no válidos para editar el presupuesto." });
+      }
+
+      try {
+        const budget = await reopenBudgetService(
+          userId,
+          parsedParams.data.budgetId,
+          parsedBody.data.companyId
+        );
+        return { budget };
+      } catch (error) {
+        if (error instanceof BudgetReopenError) {
+          return reply.status(error.code === "not_found" ? 404 : 409).send({ message: error.message });
+        }
+        request.log.error(safeErrorDetails(error), "No se pudo volver a borrador el presupuesto.");
+        return reply.status(400).send({ message: "Error al preparar el presupuesto para editar." });
+      }
+    }
+  );
+
+  app.post(
     "/budgets/:budgetId/reject",
     {
       preHandler: [authenticateRequest, requireActiveUser]
@@ -408,24 +443,32 @@ export async function registerBudgetRoutes(
 
         const lineItems = savedCalc.results_data?.lineItems || [];
         if (lineItems.length > 0) {
-          // Una línea con cantidad 0 o inválida no es una partida: antes se
-          // convertía en cantidad 1 y sumaba su precio al presupuesto.
+          // Cada línea pasa por el mismo esquema que una partida manual.
+          const lineSchema = createBudgetItemSchema.omit({ companyId: true });
           itemsToInsert = lineItems
-            .filter((li: any) => Number.isFinite(Number(li.quantity)) && Number(li.quantity) > 0)
-            .map((li: any) => ({
-            sectionId: sectionId ?? null,
-            catalogItemId: null,
-            platformCatalogItemId: null,
-            itemType: li.itemType || "manual",
-            description: li.description || "Partida de cálculo",
-            unitName: li.unitName || "unidad",
-            quantity: Number(li.quantity),
-            unitCost: Number(li.unitCost) || 0,
-            unitPrice: Number(li.unitPrice) || 0,
-            discountPercentage: 0,
-            taxable: true,
-            notes: `Generado desde cálculo: ${savedCalc.title}`
-          }));
+            // Una línea con cantidad 0 o inválida no es una partida: antes se
+            // convertía en cantidad 1 y sumaba su precio al presupuesto.
+            .filter((li: any) => Number.isFinite(Number(li?.quantity)) && Number(li.quantity) > 0)
+            .map((li: any) => lineSchema.safeParse({
+              sectionId: sectionId ?? null,
+              catalogItemId: null,
+              platformCatalogItemId: null,
+              itemType: li.itemType || "manual",
+              description: li.description || "Partida de cálculo",
+              unitName: li.unitName || "unidad",
+              quantity: Number(li.quantity),
+              unitCost: Number(li.unitCost) || 0,
+              unitPrice: Number(li.unitPrice) || 0,
+              discountPercentage: 0,
+              taxable: li.taxable ?? true,
+              materials: Array.isArray(li.materials) ? li.materials : undefined,
+              notes: [li.notes, `Desde cálculo guardado: ${savedCalc.title}`]
+                .filter((part) => typeof part === "string" && part.trim())
+                .join(" · ")
+                .slice(0, 2000)
+            }))
+            .filter((parsed: { success: boolean }) => parsed.success)
+            .map((parsed: any) => parsed.data);
         }
       }
 

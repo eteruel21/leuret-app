@@ -309,23 +309,32 @@ export class BudgetLockedError extends Error {
   }
 }
 
-async function checkBudgetNotApproved(client: any, budgetId: string) {
+const LOCKED_ITEM_MESSAGES: Record<string, string> = {
+  approved: "El presupuesto está aprobado y bloqueado. No se puede modificar.",
+  cancelled: "El presupuesto está cancelado. No se puede modificar.",
+};
+
+/**
+ * Solo los borradores aceptan cambios en sus partidas. Un presupuesto enviado,
+ * visto, rechazado o vencido se edita con «Editar» (reopen), que lo devuelve a
+ * borrador con una versión nueva para que el cliente no vea cambios sin aviso.
+ */
+async function checkBudgetIsDraft(client: any, budgetId: string) {
   const check = await client.query(
     `SELECT status FROM public.budgets WHERE id = $1 LIMIT 1`,
     [budgetId]
   );
-  const status = check.rows[0]?.status;
-  if (status === "approved") {
-    throw new BudgetLockedError("El presupuesto está aprobado y bloqueado. No se puede modificar.");
-  }
-  if (status === "cancelled") {
-    throw new BudgetLockedError("El presupuesto está cancelado. No se puede modificar.");
-  }
+  const status: string | undefined = check.rows[0]?.status;
+  if (!status || status === "draft") return;
+  throw new BudgetLockedError(
+    LOCKED_ITEM_MESSAGES[status] ??
+      "El presupuesto ya fue enviado. Usa «Editar presupuesto» para volverlo a borrador y modificarlo."
+  );
 }
 
 export async function addBudgetItemRepo(userId: string, budgetId: string, input: CreateBudgetItemInput) {
   return withUserTransaction(userId, async (client) => {
-    await checkBudgetNotApproved(client, budgetId);
+    await checkBudgetIsDraft(client, budgetId);
 
     const result = await client.query(
       `
@@ -391,7 +400,7 @@ export async function addBudgetItemRepo(userId: string, budgetId: string, input:
 
 export async function deleteBudgetItemRepo(userId: string, budgetId: string, itemId: string, companyId: string) {
   return withUserTransaction(userId, async (client) => {
-    await checkBudgetNotApproved(client, budgetId);
+    await checkBudgetIsDraft(client, budgetId);
 
     await client.query(
       `
@@ -807,5 +816,89 @@ export async function sendBudgetRepo(
       budget: updated.rows[0],
       clientUserId: row.client_user_id
     };
+  });
+}
+
+export class BudgetReopenError extends Error {
+  constructor(
+    readonly code: "not_found" | "not_reopenable",
+    message: string
+  ) {
+    super(message);
+    this.name = "BudgetReopenError";
+  }
+}
+
+/** Estados desde los que se puede volver a borrador para editar. */
+export const REOPENABLE_BUDGET_STATUSES = ["sent", "viewed", "rejected", "expired"] as const;
+
+/**
+ * Vuelve a borrador un presupuesto enviado, visto, rechazado o vencido para
+ * editarlo. Guarda la versión que vio el cliente en budget_versions, sube la
+ * versión y deja constancia en el historial. El cliente deja de verlo hasta
+ * que se reenvíe.
+ */
+export async function reopenBudgetRepo(userId: string, budgetId: string, companyId: string) {
+  return withUserTransaction(userId, async (client) => {
+    const current = await client.query(
+      `SELECT * FROM public.budgets WHERE id = $1 AND company_id = $2 LIMIT 1 FOR UPDATE`,
+      [budgetId, companyId]
+    );
+
+    const budget = current.rows[0];
+    if (!budget) throw new BudgetReopenError("not_found", "No se encontró el presupuesto.");
+    if (!(REOPENABLE_BUDGET_STATUSES as readonly string[]).includes(budget.status)) {
+      throw new BudgetReopenError(
+        "not_reopenable",
+        budget.status === "draft"
+          ? "El presupuesto ya está en borrador."
+          : "Un presupuesto aprobado o cancelado no se puede editar."
+      );
+    }
+
+    const items = await client.query(
+      `SELECT * FROM public.budget_items WHERE budget_id = $1 ORDER BY sort_order ASC`,
+      [budgetId]
+    );
+    const snapshot = JSON.stringify({ budget, items: items.rows });
+
+    await client.query(
+      `
+        INSERT INTO public.budget_versions (company_id, budget_id, version_number, snapshot_data, created_by)
+        VALUES ($1, $2, $3, $4, app.current_user_id())
+      `,
+      [companyId, budgetId, budget.version, snapshot]
+    );
+
+    const updated = await client.query(
+      `
+        UPDATE public.budgets
+        SET status = 'draft',
+            version = version + 1,
+            rejection_reason = NULL,
+            updated_at = now()
+        WHERE id = $1 AND company_id = $2
+        RETURNING *
+      `,
+      [budgetId, companyId]
+    );
+
+    const reopened = updated.rows[0];
+
+    await client.query(
+      `
+        INSERT INTO public.budget_change_history (company_id, budget_id, version, action, performed_by, notes, snapshot)
+        VALUES ($1, $2, $3, 'reopened', app.current_user_id(), $4, $5)
+      `,
+      [
+        companyId,
+        budgetId,
+        reopened.version,
+        `Vuelto a borrador para editar (antes: ${budget.status}, versión ${budget.version}).`,
+        snapshot
+      ]
+    );
+
+    return reopened;
   });
 }

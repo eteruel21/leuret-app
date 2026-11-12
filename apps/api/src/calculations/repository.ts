@@ -46,7 +46,8 @@ export async function findCompanyCalculationsRepo(
   userId: string,
   companyId: string,
   projectId?: string,
-  clientId?: string
+  clientId?: string,
+  limit = 200
 ) {
   return withUserTransaction(userId, async (client) => {
     let whereSql = `WHERE calc.company_id = $1`;
@@ -81,6 +82,7 @@ export async function findCompanyCalculationsRepo(
         LEFT JOIN public.clients AS customer ON customer.id = calc.client_id
         ${whereSql}
         ORDER BY calc.created_at DESC
+        LIMIT ${Math.min(Math.max(Math.trunc(limit), 1), 200)}
       `,
       params
     );

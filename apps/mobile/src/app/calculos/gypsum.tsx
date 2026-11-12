@@ -25,6 +25,8 @@ import {
 import { formatDecimal, formatMoney } from "../../utils/format";
 import { loadLocalData, saveLocalData } from "../../utils/local-storage";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
+import { useSavedCalculation } from "@/components/SaveCalculation";
+import type { BudgetLineDraft } from "@/services/budget-service";
 
 type Target = "board" | "stud" | "track" | "screw" |
   "tape" | "compound" | "labor";
@@ -213,25 +215,18 @@ export default function GypsumScreen() {
     setSuccess("");
   }
 
-  async function addToBudget(chosenBudgetId?: unknown) {
-    if (!result) return;
-    if (!activeCompany) return;
-
-    const targetBudgetId =
-      typeof chosenBudgetId === "string" ? chosenBudgetId : budgetId;
-
-    if (!targetBudgetId) {
-      requestBudget((id) => void addToBudget(id));
-      return;
-    }
+  /** Partida del resultado actual: se usa al agregar al presupuesto y al guardar el cálculo. */
+  function buildBudgetLine(): BudgetLineDraft | null {
+    if (!result) return null;
     const f = (value: number) => formatDecimal(value, 0, currency);
     const unitPrice = result.totalCost / result.finishedArea;
     const c = (compute(withCatalogCosts(form, tracked)) ?? result);
     const unitCost = budgetUnitCost(
       c.totalCost,
       result.finishedArea, unitPrice);
-    const response = await addBudgetItem({
-      companyId: activeCompany.id, budgetId: targetBudgetId, itemType: "service",
+
+    return {
+      itemType: "service",
       description: `Muro de gypsum a ${sides} cara${sides === 1 ? "" : "s"}`,
       unitName: "m²", quantity: result.finishedArea,
       unitCost, unitPrice, taxable: true,
@@ -246,6 +241,43 @@ export default function GypsumScreen() {
       notes: `${f(result.boardsToBuy)} láminas · ${f(result.studPieces)} studs · ` +
         `${f(result.trackPieces)} tracks · ${f(result.screwBoxes)} cajas de tornillos · ` +
         `${f(result.tapeRolls)} rollos de cinta · ${f(result.compoundPackages)} compuestos`,
+    };
+  }
+
+  const { saveButton, saveModal } = useSavedCalculation({
+    formulaCode: "gypsum",
+    ready: loaded,
+    snapshot: () => ({ form, sides, selected, tracked }),
+    restore: (saved) => {
+      if (saved.form) setForm((current) => ({ ...current, ...saved.form }));
+      if (saved.sides !== undefined) setSides(saved.sides);
+      if (saved.selected !== undefined) setSelected(saved.selected);
+      if (saved.tracked !== undefined) setTracked(saved.tracked);
+    },
+    onRestored: () => calculate(),
+    buildLine: buildBudgetLine,
+    totalCost: result?.totalCost,
+  });
+
+  async function addToBudget(chosenBudgetId?: unknown) {
+    if (!result) return;
+    if (!activeCompany) return;
+
+    const targetBudgetId =
+      typeof chosenBudgetId === "string" ? chosenBudgetId : budgetId;
+
+    if (!targetBudgetId) {
+      requestBudget((id) => void addToBudget(id));
+      return;
+    }
+
+    const line = buildBudgetLine();
+    if (!line) return;
+
+    const response = await addBudgetItem({
+      companyId: activeCompany.id,
+      budgetId: targetBudgetId,
+      ...line,
     });
     if (response.error) {
       Alert.alert("No fue posible agregar la partida", response.error);
@@ -286,6 +318,7 @@ export default function GypsumScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["left", "right", "bottom"]}>
       {budgetPicker}
+      {saveModal}
       <KeyboardAvoidingView style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content}
@@ -360,6 +393,7 @@ export default function GypsumScreen() {
           </View>
           {result ? <Results result={result} currency={currency}
             onAdd={addToBudget} /> : null}
+        {result ? saveButton : null}
           {success ? <Message text={success} /> : null}
         </ScrollView>
       </KeyboardAvoidingView>

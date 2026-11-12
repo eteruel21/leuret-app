@@ -9,7 +9,8 @@ export const calculationParamsSchema = z.object({
 export const listCalculationsSchema = z.object({
   companyId: uuidSchema,
   projectId: uuidSchema.optional(),
-  clientId: uuidSchema.optional()
+  clientId: uuidSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional()
 });
 
 export const saveCalculationSchema = z.object({

@@ -5,7 +5,8 @@ import {
   rejectBudgetRepo,
   addBudgetItemRepo,
   deleteBudgetItemRepo,
-  getBudgetHistoryRepo
+  getBudgetHistoryRepo,
+  reopenBudgetRepo
 } from "../repository.js";
 import {
   saveCalculationRepo,
@@ -195,5 +196,53 @@ describe("T-057: Suite de Pruebas de Totales de Presupuestos (Subtotales, Impues
     expect(list[0].title).toBe("Vaciado Losa de Techo");
 
     await deleteCalculationRepo(userId, savedCalc.id, companyId);
+  });
+
+  it("9. Un presupuesto rechazado no acepta partidas hasta volver a borrador con versión nueva", async () => {
+    const budgetRes = await adminPool.query(`
+      SELECT public.create_project_budget($1, $2, 'Presupuesto Reabrir') AS id
+    `, [companyId, projectId]);
+    const reopenBudgetId = budgetRes.rows[0].id;
+    const item = {
+      companyId,
+      description: "Partida tras reabrir",
+      unitName: "unidad",
+      quantity: 2,
+      unitPrice: 25,
+      unitCost: 10,
+      discountPercentage: 0,
+      taxable: true,
+      itemType: "manual" as const,
+      notes: ""
+    };
+
+    await rejectBudgetRepo(userId, reopenBudgetId, "Necesito otra cotización", companyId);
+    await expect(addBudgetItemRepo(userId, reopenBudgetId, item)).rejects.toThrow("Editar presupuesto");
+
+    const reopened = await reopenBudgetRepo(userId, reopenBudgetId, companyId);
+    expect(reopened.status).toBe("draft");
+    expect(reopened.version).toBe(2);
+    expect(reopened.rejection_reason).toBeNull();
+
+    const versions = await adminPool.query(
+      `SELECT version_number FROM public.budget_versions WHERE budget_id = $1`,
+      [reopenBudgetId]
+    );
+    expect(versions.rows.map((row) => row.version_number)).toContain(1);
+
+    const history = await getBudgetHistoryRepo(userId, reopenBudgetId, companyId);
+    expect(history.some((entry) => entry.action === "reopened" && entry.version === 2)).toBe(true);
+
+    const added = await addBudgetItemRepo(userId, reopenBudgetId, item);
+    expect(added?.description).toBe("Partida tras reabrir");
+  });
+
+  it("10. Un presupuesto aprobado o en borrador no se puede reabrir", async () => {
+    await expect(reopenBudgetRepo(userId, budgetId, companyId)).rejects.toThrow("aprobado o cancelado");
+
+    const budgetRes = await adminPool.query(`
+      SELECT public.create_project_budget($1, $2, 'Presupuesto Borrador') AS id
+    `, [companyId, projectId]);
+    await expect(reopenBudgetRepo(userId, budgetRes.rows[0].id, companyId)).rejects.toThrow("ya está en borrador");
   });
 });

@@ -33,6 +33,8 @@ import {
 import { formatDecimal, formatMoney } from "../../utils/format";
 import { loadLocalData, saveLocalData } from "../../utils/local-storage";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
+import { useSavedCalculation } from "@/components/SaveCalculation";
+import type { BudgetLineDraft } from "@/services/budget-service";
 
 type Target =
   | "lightingCable"
@@ -334,19 +336,9 @@ export default function ElectricalScreen() {
     setMessage("");
   }
 
-  async function addToBudget(chosenBudgetId?: unknown) {
-    if (!result) return;
-
-    if (!activeCompany) return;
-
-    const targetBudgetId =
-      typeof chosenBudgetId === "string" ? chosenBudgetId : budgetId;
-
-    if (!targetBudgetId) {
-      requestBudget((id) => void addToBudget(id));
-      return;
-    }
-
+  /** Partida del resultado actual: se usa al agregar al presupuesto y al guardar el cálculo. */
+  function buildBudgetLine(): BudgetLineDraft | null {
+    if (!result) return null;
     const unitPrice =
       result.totalCost / result.totalPoints;
     const c = (compute(withCatalogCosts(form, tracked)) ?? result);
@@ -354,9 +346,7 @@ export default function ElectricalScreen() {
       c.totalCost,
       result.totalPoints, unitPrice);
 
-    const response = await addBudgetItem({
-      companyId: activeCompany.id,
-      budgetId: targetBudgetId,
+    return {
       itemType: "service",
       description:
         `Instalación eléctrica (` +
@@ -380,6 +370,43 @@ export default function ElectricalScreen() {
         `${result.powerCableRollsToBuy} rollos de cable de potencia · ` +
         `${result.conduitPieces} tubos · ` +
         `${result.totalBreakers} breakers`,
+    };
+  }
+
+  const { saveButton, saveModal } = useSavedCalculation({
+    formulaCode: "electricity",
+    ready: loaded,
+    snapshot: () => ({ form, selected, tracked }),
+    restore: (saved) => {
+      if (saved.form) setForm((current) => ({ ...current, ...saved.form }));
+      if (saved.selected !== undefined) setSelected(saved.selected);
+      if (saved.tracked !== undefined) setTracked(saved.tracked);
+    },
+    onRestored: () => calculate(),
+    buildLine: buildBudgetLine,
+    totalCost: result?.totalCost,
+  });
+
+  async function addToBudget(chosenBudgetId?: unknown) {
+    if (!result) return;
+
+    if (!activeCompany) return;
+
+    const targetBudgetId =
+      typeof chosenBudgetId === "string" ? chosenBudgetId : budgetId;
+
+    if (!targetBudgetId) {
+      requestBudget((id) => void addToBudget(id));
+      return;
+    }
+
+    const line = buildBudgetLine();
+    if (!line) return;
+
+    const response = await addBudgetItem({
+      companyId: activeCompany.id,
+      budgetId: targetBudgetId,
+      ...line,
     });
 
     if (response.error) {
@@ -445,6 +472,7 @@ export default function ElectricalScreen() {
       edges={["left", "right", "bottom"]}
     >
       {budgetPicker}
+      {saveModal}
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -655,6 +683,7 @@ export default function ElectricalScreen() {
             onAdd={addToBudget}
           />
         ) : null}
+        {result ? saveButton : null}
 
         {message ? (
           <Text style={styles.success}>{message}</Text>

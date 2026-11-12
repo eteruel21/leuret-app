@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Budget, BudgetStatus } from "../../types/budget";
-import { budgetAcceptsItems, editableBudgets } from "../budget-picker";
+import { budgetAcceptsItems, budgetCanReopen, editableBudgets } from "../budget-picker";
 
 const budget = (id: string, status: BudgetStatus, title: string, updatedAt: string): Budget =>
   ({
@@ -12,12 +12,18 @@ const budget = (id: string, status: BudgetStatus, title: string, updatedAt: stri
     updated_at: updatedAt,
   }) as Budget;
 
-describe("budgetAcceptsItems", () => {
-  it("bloquea aprobados y cancelados", () => {
-    expect(budgetAcceptsItems("approved")).toBe(false);
-    expect(budgetAcceptsItems("cancelled")).toBe(false);
+describe("budgetAcceptsItems / budgetCanReopen", () => {
+  it("solo los borradores aceptan partidas", () => {
     expect(budgetAcceptsItems("draft")).toBe(true);
-    expect(budgetAcceptsItems("sent")).toBe(true);
+    expect(budgetAcceptsItems("sent")).toBe(false);
+    expect(budgetAcceptsItems("approved")).toBe(false);
+  });
+
+  it("enviados, vistos, rechazados y vencidos se pueden reabrir; aprobados y cancelados no", () => {
+    expect(["sent", "viewed", "rejected", "expired"].every((status) => budgetCanReopen(status as BudgetStatus))).toBe(true);
+    expect(budgetCanReopen("approved")).toBe(false);
+    expect(budgetCanReopen("cancelled")).toBe(false);
+    expect(budgetCanReopen("draft")).toBe(false);
   });
 });
 
@@ -30,13 +36,14 @@ describe("editableBudgets", () => {
     budget("5", "cancelled", "Muro norte", "2026-11-12T10:00:00Z"),
   ];
 
-  it("quita aprobados y cancelados y pone primero los borradores recientes", () => {
-    expect(editableBudgets(list).map((item) => item.id)).toEqual(["4", "3", "1"]);
+  it("deja solo borradores, del más reciente al más antiguo", () => {
+    expect(editableBudgets(list).map((item) => item.id)).toEqual(["4", "3"]);
   });
 
   it("busca por nombre sin importar tildes ni mayúsculas, y por número", () => {
     expect(editableBudgets(list, "banO").map((item) => item.id)).toEqual(["3"]);
-    expect(editableBudgets(list, "pre-1").map((item) => item.id)).toEqual(["1"]);
+    expect(editableBudgets(list, "pre-4").map((item) => item.id)).toEqual(["4"]);
+    expect(editableBudgets(list, "pérez")).toEqual([]);
     expect(editableBudgets(list, "chen")).toEqual([]);
   });
 });

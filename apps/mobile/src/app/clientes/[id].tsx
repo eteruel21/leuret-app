@@ -58,6 +58,7 @@ import { getClientDisplayName } from "@/types/client";
 import { validateClientAddress, validateClientContact, validateClientIdentity } from "@/utils/client-validation";
 import type { Project } from "@/types/project";
 import { getProjectStatusLabel } from "@/types/project";
+import { SavedCalculationsSection } from "@/components/SavedCalculationsSection";
 
 export default function ClientDetailScreen() {
   const params = useLocalSearchParams<{
@@ -404,6 +405,10 @@ export default function ClientDetailScreen() {
             ))
           )}
         </InfoSection>
+
+        <View style={styles.section}>
+          <SavedCalculationsSection clientId={client.id} />
+        </View>
       </ScrollView>
 
       {editModalVisible ? (

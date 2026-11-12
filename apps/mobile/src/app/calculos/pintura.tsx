@@ -22,6 +22,8 @@ import { calculatePaint, type PaintResult } from "../../services/calculators/pin
 import { formatDecimal, formatMoney } from "../../utils/format";
 import { loadLocalData, saveLocalData } from "../../utils/local-storage";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
+import { useSavedCalculation } from "@/components/SaveCalculation";
+import type { BudgetLineDraft } from "@/services/budget-service";
 
 type Target = "paint" | "primer" | "labor" | "supplies";
 type Form = {
@@ -164,6 +166,43 @@ export default function PaintScreen() {
     setError(""); setMessage("");
   }
 
+  /** Partida del resultado actual: se usa al agregar al presupuesto y al guardar el cálculo. */
+  function buildBudgetLine(): BudgetLineDraft | null {
+    if (!result) return null;
+    const price = result.totalCost / result.netArea;
+    const c = compute(withCatalogCosts(form, tracked));
+    const cost = budgetUnitCost(c.totalCost,
+      result.netArea, price);
+
+    return {
+      itemType: "service",
+      description: `Pintura de paredes (${Math.round(num(form.coats))} manos)`,
+      unitName: "m²", quantity: result.netArea, unitCost: cost,
+      unitPrice: price, taxable: true,
+      materials: compactMaterials([
+        material("Pintura", c.paintGallonsToBuy, "gal", c.paintCost),
+        primer && material("Primer", c.primerGallonsToBuy, "gal", c.primerCost),
+      ]),
+      notes: `${result.paintGallonsToBuy} galones de pintura` +
+        (primer ? ` · ${result.primerGallonsToBuy} galones de primer` : ""),
+    };
+  }
+
+  const { saveButton, saveModal } = useSavedCalculation({
+    formulaCode: "paint",
+    ready: loaded,
+    snapshot: () => ({ form, primer, selected, tracked }),
+    restore: (saved) => {
+      if (saved.form) setForm((current) => ({ ...current, ...saved.form }));
+      if (saved.primer !== undefined) setPrimer(saved.primer);
+      if (saved.selected !== undefined) setSelected(saved.selected);
+      if (saved.tracked !== undefined) setTracked(saved.tracked);
+    },
+    onRestored: () => calculate(),
+    buildLine: buildBudgetLine,
+    totalCost: result?.totalCost,
+  });
+
   async function addToBudget(chosenBudgetId?: unknown) {
     if (!result) return;
     if (!activeCompany) return;
@@ -175,21 +214,14 @@ export default function PaintScreen() {
       requestBudget((id) => void addToBudget(id));
       return;
     }
-    const price = result.totalCost / result.netArea;
-    const c = compute(withCatalogCosts(form, tracked));
-    const cost = budgetUnitCost(c.totalCost,
-      result.netArea, price);
+
+    const line = buildBudgetLine();
+    if (!line) return;
+
     const response = await addBudgetItem({
-      companyId: activeCompany.id, budgetId: targetBudgetId, itemType: "service",
-      description: `Pintura de paredes (${Math.round(num(form.coats))} manos)`,
-      unitName: "m²", quantity: result.netArea, unitCost: cost,
-      unitPrice: price, taxable: true,
-      materials: compactMaterials([
-        material("Pintura", c.paintGallonsToBuy, "gal", c.paintCost),
-        primer && material("Primer", c.primerGallonsToBuy, "gal", c.primerCost),
-      ]),
-      notes: `${result.paintGallonsToBuy} galones de pintura` +
-        (primer ? ` · ${result.primerGallonsToBuy} galones de primer` : ""),
+      companyId: activeCompany.id,
+      budgetId: targetBudgetId,
+      ...line,
     });
     if (response.error) Alert.alert("No fue posible agregar la partida", response.error);
     else setMessage("La partida fue guardada en el presupuesto.");
@@ -211,6 +243,7 @@ export default function PaintScreen() {
 
   return <SafeAreaView style={styles.safe} edges={["left", "right", "bottom"]}>
       {budgetPicker}
+      {saveModal}
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.hero}><Ionicons name="color-palette-outline" size={30}
         color={colors.textLight} /><View style={styles.flex}>
@@ -247,6 +280,7 @@ export default function PaintScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Pressable onPress={calculate} style={styles.primary}><Text style={styles.primaryText}>Calcular pintura</Text></Pressable>
       {result ? <Results result={result} currency={currency} onAdd={addToBudget} /> : null}
+        {result ? saveButton : null}
       {message ? <Text style={styles.success}>{message}</Text> : null}
     </ScrollView>
     <Picker visible={Boolean(target)} target={target} items={items} loading={loading}

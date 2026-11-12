@@ -55,6 +55,10 @@ import {
   formatDecimal as formatDecimalUtil,
 } from "../../utils/format";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
+import { useSavedCalculation } from "@/components/SaveCalculation";
+import type { BudgetLineDraft } from "@/services/budget-service";
+import { fetchCalculationDetail } from "@/services/calculation-service";
+import { readCalculationState } from "@/utils/saved-calculation";
 
 type CatalogPriceTarget =
   | "cement"
@@ -200,10 +204,40 @@ function parseNumber(value: string): number {
 }
 
 export default function ConcreteCalculatorScreen() {
-  const { uso } = useLocalSearchParams<{ uso?: string | string[] }>();
-  const useId = Array.isArray(uso) ? uso[0] : uso;
+  const { activeCompany } = useCompany();
+  const params = useLocalSearchParams<{
+    uso?: string | string[];
+    calculationId?: string | string[];
+  }>();
+  const useId = Array.isArray(params.uso) ? params.uso[0] : params.uso;
+  const calculationId = Array.isArray(params.calculationId)
+    ? params.calculationId[0]
+    : params.calculationId;
   const concreteUse = CONCRETE_USES.find((option) => option.id === useId);
   const changeUse = () => router.setParams({ uso: undefined });
+
+  // Un cálculo guardado abre directo el formulario del uso con que se hizo.
+  useEffect(() => {
+    const companyId = activeCompany?.id;
+    if (!calculationId || !companyId || useId) return;
+    let cancelled = false;
+    void fetchCalculationDetail(calculationId, companyId)
+      .then((calculation) => {
+        if (cancelled) return;
+        const savedUse = readCalculationState<{ concreteUse?: string }>(calculation.input_data)?.concreteUse;
+        const match =
+          CONCRETE_USES.find((option) => option.id === savedUse || option.label === savedUse) ??
+          CONCRETE_USES[0];
+        router.setParams({ uso: match.id });
+      })
+      .catch(() => {
+        // El formulario muestra el error al intentar restaurar el cálculo.
+        if (!cancelled) router.setParams({ uso: CONCRETE_USES[0].id });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCompany?.id, calculationId, useId]);
 
   return (
     <>
@@ -691,19 +725,9 @@ function ConcreteCalculatorForm({
   }
 
 
-  async function handleAddToBudget(chosenBudgetId?: unknown) {
-    if (!result) return;
-
-    if (!activeCompany) return;
-
-    const targetBudgetId =
-      typeof chosenBudgetId === "string" ? chosenBudgetId : budgetId;
-
-    if (!targetBudgetId) {
-      requestBudget((id) => void handleAddToBudget(id));
-      return;
-    }
-
+  /** Partida del resultado actual: se usa al agregar al presupuesto y al guardar el cálculo. */
+  function buildBudgetLine(): BudgetLineDraft | null {
+    if (!result) return null;
     const unitPrice =
       result.volumeWithWaste > 0
         ? result.totalCost / result.volumeWithWaste
@@ -721,9 +745,7 @@ function ConcreteCalculatorForm({
       `${formatNumber(result.gravelVolume, 3)} m³ de gravilla`,
     ].join(" · ");
 
-    const { error: budgetError } = await addBudgetItem({
-      companyId: activeCompany.id,
-      budgetId: targetBudgetId,
+    return {
       itemType: "service",
       description: `Concreto · ${concreteUse.label} · mezcla ${form.cementRatio}:${form.sandRatio}:${form.gravelRatio}`,
       unitName: "m³",
@@ -741,6 +763,45 @@ function ConcreteCalculatorForm({
           : material("Gravilla", c.gravelVolume, "m³", c.gravelCost),
       ]),
       notes: details,
+    };
+  }
+
+  const { saveButton, saveModal } = useSavedCalculation({
+    formulaCode: "concrete",
+    ready: settingsLoaded,
+    snapshot: () => ({ form, sandPriceMode, gravelPriceMode, selectedCatalogNames, trackedPrices, concreteUse: concreteUse.id }),
+    restore: (saved) => {
+      if (saved.form) setForm((current) => ({ ...current, ...saved.form }));
+      if (saved.sandPriceMode !== undefined) setSandPriceMode(saved.sandPriceMode);
+      if (saved.gravelPriceMode !== undefined) setGravelPriceMode(saved.gravelPriceMode);
+      if (saved.selectedCatalogNames !== undefined) setSelectedCatalogNames(saved.selectedCatalogNames);
+      if (saved.trackedPrices !== undefined) setTrackedPrices(saved.trackedPrices);
+    },
+    onRestored: () => handleCalculate(),
+    buildLine: buildBudgetLine,
+    totalCost: result?.totalCost,
+  });
+
+  async function handleAddToBudget(chosenBudgetId?: unknown) {
+    if (!result) return;
+
+    if (!activeCompany) return;
+
+    const targetBudgetId =
+      typeof chosenBudgetId === "string" ? chosenBudgetId : budgetId;
+
+    if (!targetBudgetId) {
+      requestBudget((id) => void handleAddToBudget(id));
+      return;
+    }
+
+    const line = buildBudgetLine();
+    if (!line) return;
+
+    const { error: budgetError } = await addBudgetItem({
+      companyId: activeCompany.id,
+      budgetId: targetBudgetId,
+      ...line,
     });
 
     if (budgetError) {
@@ -771,6 +832,7 @@ function ConcreteCalculatorForm({
       edges={["left", "right", "bottom"]}
     >
       {budgetPicker}
+      {saveModal}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={
@@ -1082,6 +1144,7 @@ function ConcreteCalculatorForm({
               onAddToBudget={handleAddToBudget}
             />
           ) : null}
+        {result ? saveButton : null}
 
           {budgetMessage ? (
             <View style={styles.budgetSuccessBox}>

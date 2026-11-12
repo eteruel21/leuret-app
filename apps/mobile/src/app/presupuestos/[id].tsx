@@ -47,6 +47,7 @@ import {
   deleteBudgetItem,
   getBudgetById,
   getBudgetPriceUpdates,
+  reopenBudget,
   type BudgetPriceUpdate,
 } from "@/services/budget-service";
 import {
@@ -71,7 +72,8 @@ import { shareBudgetPdf } from "@/utils/budget-pdf";
 import { ShoppingListModal } from "@/components/ShoppingListModal";
 import { SendBudgetPanel } from "@/components/SendBudgetPanel";
 import { CalculatorPickerModal } from "@/components/CalculatorPickerModal";
-import { budgetAcceptsItems } from "@/utils/budget-picker";
+import { budgetAcceptsItems, budgetCanReopen } from "@/utils/budget-picker";
+import { confirmAction } from "@/utils/alert";
 
 import { listCatalogItems } from "@/services/catalog-service";
 import type { CatalogItemWithDetails } from "@/types/catalog";
@@ -99,6 +101,7 @@ export default function BudgetDetailScreen() {
     useState(false);
   const [calculatorPickerVisible, setCalculatorPickerVisible] =
     useState(false);
+  const [reopening, setReopening] = useState(false);
   const [shoppingListVisible, setShoppingListVisible] =
     useState(false);
   const [priceUpdates, setPriceUpdates] =
@@ -237,8 +240,33 @@ export default function BudgetDetailScreen() {
     );
   }
 
-  // La API rechaza cambios en partidas de presupuestos aprobados o cancelados.
+  // Solo los borradores aceptan cambios en sus partidas (igual que la API).
   const canEditItems = budgetAcceptsItems(budget.status);
+  const canReopen = budgetCanReopen(budget.status);
+
+  async function handleReopen() {
+    if (!activeCompany || !budget || reopening) return;
+
+    const confirmed = await confirmAction({
+      title: "Editar presupuesto",
+      message:
+        `Volverá a borrador como versión ${budget.version + 1}. ` +
+        "El cliente dejará de verlo hasta que lo reenvíes, y la versión que vio queda guardada en el historial.",
+      confirmText: "Editar",
+    });
+    if (!confirmed) return;
+
+    setReopening(true);
+    const { budget: reopened, error } = await reopenBudget(activeCompany.id, budget.id);
+    setReopening(false);
+
+    if (error || !reopened) {
+      Alert.alert("No se pudo editar el presupuesto", error ?? "Inténtalo de nuevo.");
+      return;
+    }
+
+    await loadBudget(true);
+  }
 
   async function handleApplyPrices(itemIds: string[]) {
     if (!activeCompany || !budget) return;
@@ -369,6 +397,7 @@ export default function BudgetDetailScreen() {
           <View style={styles.heroInfo}>
             <Text style={styles.budgetNumber}>
               {budget.budget_number}
+              {budget.version > 1 ? ` · versión ${budget.version}` : ""}
             </Text>
 
             <Text style={styles.budgetTitle}>
@@ -431,6 +460,36 @@ export default function BudgetDetailScreen() {
                 setPriceUpdates([]);
               }}
             />
+          </View>
+        ) : null}
+
+        {canReopen ? (
+          <View style={styles.reopenCard}>
+            <Text style={styles.reopenText}>
+              {budget.status === "rejected"
+                ? "El cliente rechazó este presupuesto. Edítalo para ajustarlo y reenviarlo."
+                : budget.status === "expired"
+                  ? "Este presupuesto venció. Edítalo para actualizarlo y reenviarlo con una vigencia nueva."
+                  : "Este presupuesto ya se envió al cliente. Para cambiarlo, vuelve a borrador: sube de versión y luego lo reenvías."}
+            </Text>
+            <Pressable
+              onPress={() => void handleReopen()}
+              disabled={reopening}
+              style={({ pressed }) => [
+                styles.reopenButton,
+                (pressed || reopening) && styles.pressed,
+              ]}
+              accessibilityRole="button"
+            >
+              {reopening ? (
+                <ActivityIndicator color={colors.textLight} />
+              ) : (
+                <>
+                  <Ionicons name="create-outline" size={18} color={colors.textLight} />
+                  <Text style={styles.reopenButtonText}>Editar presupuesto</Text>
+                </>
+              )}
+            </Pressable>
           </View>
         ) : null}
 
@@ -574,7 +633,9 @@ export default function BudgetDetailScreen() {
 
           {!canEditItems ? (
             <Text style={styles.emptySmallText}>
-              Este presupuesto está {getBudgetStatusLabel(budget.status).toLowerCase()}: sus partidas ya no se pueden modificar.
+              {canReopen
+                ? "Para cambiar las partidas, toca «Editar presupuesto»."
+                : `Este presupuesto está ${getBudgetStatusLabel(budget.status).toLowerCase()}: sus partidas ya no se pueden modificar.`}
             </Text>
           ) : null}
 
@@ -621,7 +682,7 @@ export default function BudgetDetailScreen() {
 
       <CalculatorPickerModal
         visible={calculatorPickerVisible}
-        budgetId={budget.id}
+        params={{ budgetId: budget.id }}
         onClose={() => setCalculatorPickerVisible(false)}
       />
 
@@ -1838,5 +1899,33 @@ const styles = StyleSheet.create({
   },
   sendPanel: {
     marginTop: 14,
+  },
+  reopenCard: {
+    marginTop: 14,
+    padding: 14,
+    gap: 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  reopenText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textSecondary,
+  },
+  reopenButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+    backgroundColor: colors.primary,
+  },
+  reopenButtonText: {
+    color: colors.textLight,
+    fontWeight: "800",
+    fontSize: 15,
   },
 });

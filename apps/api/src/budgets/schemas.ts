@@ -126,6 +126,10 @@ export const sendBudgetSchema = z.object({
     .optional()
 });
 
+export const reopenBudgetSchema = z.object({
+  companyId: uuidSchema
+});
+
 export const rejectBudgetSchema = z.object({
   companyId: uuidSchema.optional(),
   rejectionReason: z.string().trim().min(2, "El motivo de rechazo es obligatorio.").max(2000)

@@ -14,6 +14,7 @@ import {
   findBudgetPriceUpdatesRepo,
   applyBudgetPriceUpdatesRepo,
   sendBudgetRepo,
+  reopenBudgetRepo,
   type CreateBudgetItemInput
 } from "./repository.js";
 import { notifyBudgetDecision, notifyBudgetSent } from "../notifications/event-service.js";
@@ -105,4 +106,8 @@ export async function applyBudgetPriceUpdatesService(
   itemIds: string[]
 ) {
   return applyBudgetPriceUpdatesRepo(userId, budgetId, companyId, itemIds);
+}
+
+export async function reopenBudgetService(userId: string, budgetId: string, companyId: string) {
+  return reopenBudgetRepo(userId, budgetId, companyId);
 }

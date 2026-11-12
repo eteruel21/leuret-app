@@ -48,6 +48,8 @@ import {
   saveLocalData,
 } from "../../utils/local-storage";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
+import { useSavedCalculation } from "@/components/SaveCalculation";
+import type { BudgetLineDraft } from "@/services/budget-service";
 
 type CatalogTarget =
   | "block"
@@ -377,19 +379,9 @@ export default function MasonryCalculatorScreen() {
     setBudgetMessage("");
   }
 
-  async function handleAddToBudget(chosenBudgetId?: unknown) {
-    if (!result) return;
-
-    if (!activeCompany) return;
-
-    const targetBudgetId =
-      typeof chosenBudgetId === "string" ? chosenBudgetId : budgetId;
-
-    if (!targetBudgetId) {
-      requestBudget((id) => void handleAddToBudget(id));
-      return;
-    }
-
+  /** Partida del resultado actual: se usa al agregar al presupuesto y al guardar el cálculo. */
+  function buildBudgetLine(): BudgetLineDraft | null {
+    if (!result) return null;
     const unitPrice =
       result.netWallArea > 0
         ? result.totalCost / result.netWallArea
@@ -409,9 +401,7 @@ export default function MasonryCalculatorScreen() {
         : "sin repello",
     ].join(" · ");
 
-    const { error: budgetError } = await addBudgetItem({
-      companyId: activeCompany.id,
-      budgetId: targetBudgetId,
+    return {
       itemType: "service",
       description:
         plasterSides > 0
@@ -428,6 +418,44 @@ export default function MasonryCalculatorScreen() {
         material("Arena", c.sandVolume, "m³", c.sandCost),
       ]),
       notes,
+    };
+  }
+
+  const { saveButton, saveModal } = useSavedCalculation({
+    formulaCode: "blocks",
+    ready: settingsLoaded,
+    snapshot: () => ({ form, plasterSides, selectedCatalogNames, trackedPrices }),
+    restore: (saved) => {
+      if (saved.form) setForm((current) => ({ ...current, ...saved.form }));
+      if (saved.plasterSides !== undefined) setPlasterSides(saved.plasterSides);
+      if (saved.selectedCatalogNames !== undefined) setSelectedCatalogNames(saved.selectedCatalogNames);
+      if (saved.trackedPrices !== undefined) setTrackedPrices(saved.trackedPrices);
+    },
+    onRestored: () => handleCalculate(),
+    buildLine: buildBudgetLine,
+    totalCost: result?.totalCost,
+  });
+
+  async function handleAddToBudget(chosenBudgetId?: unknown) {
+    if (!result) return;
+
+    if (!activeCompany) return;
+
+    const targetBudgetId =
+      typeof chosenBudgetId === "string" ? chosenBudgetId : budgetId;
+
+    if (!targetBudgetId) {
+      requestBudget((id) => void handleAddToBudget(id));
+      return;
+    }
+
+    const line = buildBudgetLine();
+    if (!line) return;
+
+    const { error: budgetError } = await addBudgetItem({
+      companyId: activeCompany.id,
+      budgetId: targetBudgetId,
+      ...line,
     });
 
     if (budgetError) {
@@ -461,6 +489,7 @@ export default function MasonryCalculatorScreen() {
       edges={["left", "right", "bottom"]}
     >
       {budgetPicker}
+      {saveModal}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -791,6 +820,7 @@ export default function MasonryCalculatorScreen() {
               onAddToBudget={handleAddToBudget}
             />
           ) : null}
+        {result ? saveButton : null}
 
           {budgetMessage ? (
             <View style={styles.successBox}>

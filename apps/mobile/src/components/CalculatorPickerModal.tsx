@@ -7,21 +7,29 @@ import { CALCULATORS, type CalculatorRoute } from "@/constants/calculators";
 import { colors, radius } from "@/constants/theme";
 
 /**
- * Abre cualquiera de las 10 calculadoras ligada a un presupuesto: al
- * calcular, «Agregar al presupuesto» guarda la partida directamente en él.
+ * Abre cualquiera de las 10 calculadoras con contexto: desde un presupuesto
+ * (`budgetId`, la partida se guarda en él) o desde una obra o cliente
+ * (`projectId`/`clientId`, el cálculo guardado queda ligado a ellos).
  */
 export function CalculatorPickerModal({
   visible,
-  budgetId,
+  params,
+  title = "Agregar desde una calculadora",
+  subtitle = "El resultado se guardará como partida de este presupuesto.",
   onClose,
 }: {
   visible: boolean;
-  budgetId: string;
+  params: { budgetId?: string; projectId?: string; clientId?: string };
+  title?: string;
+  subtitle?: string;
   onClose: () => void;
 }) {
   const open = (route: CalculatorRoute) => {
     onClose();
-    router.push({ pathname: route, params: { budgetId } } as Href);
+    const cleanParams = Object.fromEntries(
+      Object.entries(params).filter(([, value]) => Boolean(value)),
+    );
+    router.push({ pathname: route, params: cleanParams } as Href);
   };
 
   return (
@@ -29,8 +37,8 @@ export function CalculatorPickerModal({
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
           <View style={styles.headerCopy}>
-            <Text style={styles.title}>Agregar desde una calculadora</Text>
-            <Text style={styles.subtitle}>El resultado se guardará como partida de este presupuesto.</Text>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.subtitle}>{subtitle}</Text>
           </View>
           <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Cerrar">
             <Ionicons name="close" size={26} color={colors.text} />

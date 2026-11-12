@@ -115,3 +115,20 @@ export const CALCULATORS: CalculationCategory[] = [
     route: "/calculos/muebles-mdf",
   },
 ];
+
+export type CalculatorId =
+  | "concrete"
+  | "blocks"
+  | "gypsum"
+  | "pvc"
+  | "paint"
+  | "flooring"
+  | "electricity"
+  | "special-systems"
+  | "air-conditioning"
+  | "mdf";
+
+/** Calculadora por su código (el `formula_code` de un cálculo guardado). */
+export function calculatorById(id: string | null | undefined): CalculationCategory | null {
+  return CALCULATORS.find((calculator) => calculator.id === id) ?? null;
+}
