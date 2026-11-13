@@ -632,7 +632,7 @@ export default function HomeScreen() {
                         {membership.company?.name ?? "Empresa"}
                       </Text>
                       <Text style={styles.sheetCompanyRole}>
-                        {ROLE_LABELS[membership.role] ?? membership.role}
+                      {membership.role === "owner" ? "Contratista independiente" : ROLE_LABELS[membership.role]}
                       </Text>
                     </View>
                     {isSwitching ? (
@@ -650,6 +650,16 @@ export default function HomeScreen() {
             {switchError ? <Text style={styles.sheetError}>{switchError}</Text> : null}
 
             <View style={styles.sheetActions}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Espacios de trabajo"
+                onPress={() => goToCompanyRoute("/espacios")}
+                style={({ pressed }) => [styles.sheetAction, pressed && styles.companyCardPressed]}
+              >
+                <Ionicons name="swap-horizontal-outline" size={20} color={colors.text} />
+                <Text style={styles.sheetActionText}>Espacios de trabajo</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </Pressable>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => goToCompanyRoute("/equipo" as Href)}

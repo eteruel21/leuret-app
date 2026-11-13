@@ -77,6 +77,8 @@ export type AppProfile = {
   avatar_url: string | null;
   role: AppRole;
   active: boolean;
+  contractor_requested_at?: string | null;
+  contractor_approved_at?: string | null;
   province: string | null;
   district: string | null;
   corregimiento: string | null;

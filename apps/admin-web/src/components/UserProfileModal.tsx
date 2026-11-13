@@ -153,9 +153,10 @@ export function UserProfileModal({
   children,
 }: UserProfileModalProps) {
   const pendingContractor = Boolean(
-    profile?.role === "contractor" &&
-    !profile.active &&
-    !profile.approvedAt
+    profile && (
+      (profile.role === "contractor" && !profile.active && !profile.approvedAt) ||
+      (profile.active && profile.contractorRequestedAt && !profile.contractorApprovedAt)
+    )
   );
 
   const location = profile

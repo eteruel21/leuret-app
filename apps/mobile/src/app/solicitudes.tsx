@@ -33,7 +33,7 @@ export default function ClientConnectionsScreen() {
   const { activeCompany, companies, setActiveCompanyId } = useCompany();
   const { can } = usePermissions();
   const { id: highlightedId } = useLocalSearchParams<{ id?: string }>();
-  const isClient = profile?.role === "client";
+  const isClient = profile?.role === "client" && !activeCompany;
   const canSend = isClient || Boolean(activeCompany && can("clients.edit"));
   const [requests, setRequests] = useState<ClientConnection[] | null>(null);
   const [contact, setContact] = useState("");
@@ -48,7 +48,7 @@ export default function ClientConnectionsScreen() {
     const number = ++requestNumber.current;
     if (showRefresh) setRefreshing(true);
     try {
-      const data = await listClientConnections();
+      const data = await listClientConnections(false, isClient ? "client" : "company");
       if (number !== requestNumber.current) return;
       setRequests(data.requests);
       setLoadingError(null);
@@ -57,7 +57,7 @@ export default function ClientConnectionsScreen() {
     } finally {
       if (number === requestNumber.current) setRefreshing(false);
     }
-  }, []);
+  }, [isClient]);
 
   useFocusEffect(useCallback(() => {
     void load();

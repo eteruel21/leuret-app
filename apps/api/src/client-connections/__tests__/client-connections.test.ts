@@ -177,4 +177,44 @@ describe("Solicitudes y fichas de Leuret", () => {
     const me = await app.inject({ method: "GET", url: "/auth/me", headers: outsider.headers });
     expect(me.json().user.notifications_opt_in).toBe(true);
   });
+
+  it("mantiene separado el portal de un cliente de las solicitudes que gestiona como miembro del equipo", async () => {
+    const teammate = await account("client");
+    const customer = await account("client");
+    const ownClientCompany = await company(owner, "Empresa que atiende al miembro");
+    const invitation = await app.inject({
+      method: "POST", url: `/companies/${companyId}/invitations`, headers: owner.headers,
+      payload: { email: teammate.email, role: "sales" }
+    });
+    expect(invitation.statusCode, invitation.body).toBe(201);
+    const joined = await app.inject({
+      method: "POST", url: "/companies/invitations/accept", headers: teammate.headers,
+      payload: { token: invitation.json().invitation.acceptanceToken }
+    });
+    expect(joined.statusCode, joined.body).toBe(200);
+
+    const connection = await app.inject({
+      method: "POST", url: "/client-connections", headers: teammate.headers,
+      payload: { companyId, email: customer.email }
+    });
+    expect(connection.statusCode, connection.body).toBe(201);
+    const [received] = await requests(customer);
+    expect((await respond(customer, received!.id, "accept")).statusCode).toBe(200);
+
+    const otherCompanyEmail = `${randomUUID()}@example.test`;
+    await adminPool.query("UPDATE public.companies SET email = $2 WHERE id = $1", [ownClientCompany, otherCompanyEmail]);
+    const personalConnection = await app.inject({
+      method: "POST", url: "/client-connections", headers: teammate.headers,
+      payload: { email: otherCompanyEmail }
+    });
+    expect(personalConnection.statusCode, personalConnection.body).toBe(201);
+
+    const bySpace = (space: "client" | "company") => app.inject({
+      url: `/client-connections?space=${space}`, headers: teammate.headers
+    });
+    expect((await bySpace("company")).json().requests).toContainEqual(expect.objectContaining({ id: received!.id }));
+    expect((await bySpace("client")).json().requests).toEqual([
+      expect.objectContaining({ company_id: ownClientCompany, status: "pending" })
+    ]);
+  });
 });

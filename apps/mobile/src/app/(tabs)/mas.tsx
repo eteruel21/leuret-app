@@ -34,6 +34,13 @@ type OptionItem = {
 
 const baseOptions: OptionItem[] = [
   {
+    id: "workspaces",
+    title: "Espacios de trabajo",
+    description: "Cambia de equipo o activa tu espacio como contratista.",
+    icon: "swap-horizontal-outline",
+    onPress: () => router.push("/espacios"),
+  },
+  {
     id: "job-requests",
     title: "Peticiones de clientes",
     description:
@@ -53,9 +60,8 @@ const baseOptions: OptionItem[] = [
   },
   {
     id: "join-company",
-    title: "Unirme a una empresa",
-    description:
-      "Usa un código de invitación que te enviaron.",
+    title: "Invitaciones de equipo",
+    description: "Revisa tus invitaciones o acepta con un código.",
     icon: "key-outline" as const,
     onPress: () => router.push("/equipo/unirme" as Href),
   },

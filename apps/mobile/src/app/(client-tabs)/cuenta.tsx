@@ -86,6 +86,11 @@ export default function ClientAccountScreen() {
 
         <View style={styles.menu}>
           <MenuRow
+            icon="swap-horizontal-outline"
+            label="Espacios de trabajo"
+            onPress={() => router.push("/espacios")}
+          />
+          <MenuRow
             icon="create-outline"
             label="Editar mis datos y avisos"
             onPress={() => router.push("/perfil" as Href)}

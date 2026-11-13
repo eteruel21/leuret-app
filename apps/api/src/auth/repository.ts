@@ -34,6 +34,8 @@ export type UserProfile = QueryResultRow & {
   role: "super_admin" | "contractor" | "client";
   active: boolean;
   approved_at: Date | null;
+  contractor_requested_at: Date | null;
+  contractor_approved_at: Date | null;
   email_confirmed_at: Date | null;
   deleted_at: Date | null;
   status?: UserStatus;
@@ -268,6 +270,8 @@ export async function loadOwnProfile(client: PoolClient): Promise<UserProfile | 
       profile.role,
       profile.active,
       profile.approved_at,
+      profile.contractor_requested_at,
+      profile.contractor_approved_at,
       app_user.email_confirmed_at,
       app_user.deleted_at,
       profile.province,

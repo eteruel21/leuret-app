@@ -102,6 +102,9 @@ export function UsersTab({
 
                 <td>
                   {roleLabel(user.role)}
+                  {user.active && user.contractorRequestedAt && !user.contractorApprovedAt
+                    ? <small>Solicitó acceso como contratista</small>
+                    : null}
                 </td>
 
                 <td>

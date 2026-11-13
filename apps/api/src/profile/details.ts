@@ -24,6 +24,8 @@ type ProfileRow = QueryResultRow & {
   role: "super_admin" | "contractor" | "client";
   active: boolean;
   approved_at: Date | null;
+  contractor_requested_at: Date | null;
+  contractor_approved_at: Date | null;
   email_confirmed_at: Date | null;
   deleted_at: Date | null;
   province: string | null;
@@ -193,6 +195,8 @@ export async function getUserProfileDetails(
             profile.role,
             profile.active,
             profile.approved_at,
+            profile.contractor_requested_at,
+            profile.contractor_approved_at,
             auth_user.email_confirmed_at,
             auth_user.deleted_at,
             profile.province,
@@ -353,7 +357,7 @@ export async function getUserProfileDetails(
   );
 
   const professional =
-    profile.role === "contractor"
+    profile.role === "contractor" || profile.contractor_requested_at || profile.contractor_approved_at
       ? {
           businessName: profile.business_name,
           idDocument: profile.id_document,
@@ -393,6 +397,8 @@ export async function getUserProfileDetails(
     active: Boolean(profile.active),
     status: getUserStatus(profile),
     approvedAt: profile.approved_at,
+    contractorRequestedAt: profile.contractor_requested_at,
+    contractorApprovedAt: profile.contractor_approved_at,
     createdAt: profile.created_at,
     updatedAt: profile.updated_at,
     location: {

@@ -1,13 +1,6 @@
 import { generateSecureToken, hashSecureToken } from "../auth/tokens.js";
+import { notifyCompanyInvitation } from "../notifications/event-service.js";
 import { sendCompanyInvitationEmail } from "../services/email.js";
-
-const INVITATION_ROLE_LABELS: Record<string, string> = {
-  admin: "Administrador",
-  supervisor: "Supervisor",
-  sales: "Ventas",
-  estimator: "Presupuestista",
-  member: "Equipo de campo"
-};
 
 import {
   findUserCompanyMembershipsRepo,
@@ -29,6 +22,14 @@ import {
   type CreateCompanyInput,
   type BillingInput
 } from "./repository.js";
+
+const INVITATION_ROLE_LABELS: Record<string, string> = {
+  admin: "Administrador",
+  supervisor: "Supervisor",
+  sales: "Ventas",
+  estimator: "Presupuestista",
+  member: "Equipo de campo"
+};
 
 export async function getUserCompanyMembershipsService(userId: string) {
   return findUserCompanyMembershipsRepo(userId);
@@ -73,14 +74,18 @@ export async function createCompanyInvitationService(
   // código se puede compartir a mano desde la app.
   let emailSent = false;
   try {
-    const context = await findInvitationEmailContextRepo(userId, companyId);
-    const delivery = await sendCompanyInvitationEmail({
-      to: email,
-      token,
-      companyName: context?.company_name ?? "",
-      inviterName: context?.inviter_name ?? null,
-      roleLabel: INVITATION_ROLE_LABELS[role] ?? role
-    });
+    const context = await findInvitationEmailContextRepo(userId, companyId, invitation.id);
+    const [delivery] = await Promise.all([
+      sendCompanyInvitationEmail({
+        to: invitation.email,
+        token,
+        companyName: context?.company_name ?? "",
+        inviterName: context?.inviter_name ?? null,
+        roleLabel: INVITATION_ROLE_LABELS[role] ?? role,
+        idempotencyKey: `team-invitation/${tokenHash}`
+      }),
+      notifyCompanyInvitation(context?.recipient_id ?? null, invitation.id)
+    ]);
     emailSent = delivery.sent;
   } catch {
     emailSent = false;
@@ -93,13 +98,17 @@ export async function getCompanyInvitationsService(userId: string, companyId: st
   return findCompanyInvitationsRepo(userId, companyId);
 }
 
-export async function acceptCompanyInvitationService(userId: string, token: string) {
+export async function acceptCompanyInvitationService(
+  userId: string,
+  input: { token: string } | { invitationId: string }
+) {
   const acceptedInvitation = await acceptCompanyInvitationRepo(
     userId,
-    hashSecureToken(token)
+    "token" in input ? hashSecureToken(input.token) : null,
+    "invitationId" in input ? input.invitationId : null
   );
   if (!acceptedInvitation) {
-    return { success: false, error: "La invitación no es válida o no corresponde a tu correo." };
+    return { success: false, error: "La invitación venció, ya fue respondida o no corresponde a tu correo." };
   }
 
   return { success: true, companyId: acceptedInvitation.company_id };

@@ -429,6 +429,7 @@ function InviteSheet({
   };
 
   const submit = async () => {
+    if (submitting) return;
     const cleanEmail = email.trim().toLowerCase();
     if (!EMAIL_PATTERN.test(cleanEmail)) {
       setError("Escribe un correo válido.");
@@ -472,12 +473,12 @@ function InviteSheet({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={submitting ? undefined : close}>
       <SafeAreaView style={styles.sheet}>
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>{created ? "Invitación lista" : "Invitar al equipo"}</Text>
-            <Pressable onPress={close} hitSlop={12} accessibilityRole="button" accessibilityLabel="Cerrar">
+            <Pressable onPress={close} disabled={submitting} hitSlop={12} accessibilityRole="button" accessibilityLabel="Cerrar">
               <Ionicons name="close" size={26} color={colors.text} />
             </Pressable>
           </View>
@@ -489,9 +490,10 @@ function InviteSheet({
               </View>
               <Text style={styles.successText}>
                 {created.emailSent
-                  ? `Le enviamos un correo a ${created.email} con un enlace para unirse como ${ROLE_LABELS[created.role]}. Si no le llega, compártele también el código.`
-                  : `Envía este código a ${created.email}. Debe entrar a Leuret con ese mismo correo para unirse como ${ROLE_LABELS[created.role]}.`}
+                  ? `Enviamos la solicitud a ${created.email}. Podrá unirse con el rol de ${ROLE_LABELS[created.role]}.`
+                  : `La solicitud quedó pendiente. Comparte el enlace con ${created.email} para que se una con el rol de ${ROLE_LABELS[created.role]}.`}
               </Text>
+              {!created.emailSent ? <Text style={styles.formError}>El correo no pudo enviarse.</Text> : null}
               {created.code ? (
                 <View style={styles.codeBox}>
                   <Text selectable style={styles.codeText}>{created.code}</Text>
@@ -514,54 +516,61 @@ function InviteSheet({
               />
             </ScrollView>
           ) : (
-            <ScrollView contentContainerStyle={styles.sheetContent} keyboardShouldPersistTaps="handled">
-              <Text style={styles.inputLabel}>Correo de la persona</Text>
-              <TextInput
-                value={email}
-                onChangeText={setEmail}
-                placeholder="nombre@correo.com"
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                style={styles.input}
-              />
+            <>
+              <ScrollView style={styles.flex} contentContainerStyle={styles.sheetContent} keyboardShouldPersistTaps="handled">
+                <Text style={styles.inputLabel}>Correo de la persona</Text>
+                <TextInput
+                  value={email}
+                  accessibilityLabel="Correo de la persona"
+                  onChangeText={setEmail}
+                  placeholder="nombre@correo.com"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  autoComplete="email"
+                  editable={!submitting}
+                  style={styles.input}
+                />
 
-              <Text style={[styles.inputLabel, styles.sheetSpacing]}>Rol</Text>
-              {INVITABLE_ROLES.map((option) => {
-                const isSelected = option === role;
-                return (
-                  <Pressable
-                    key={option}
-                    onPress={() => setRole(option)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: isSelected }}
-                    style={[styles.roleOption, isSelected && styles.roleOptionSelected]}
-                  >
-                    <Ionicons
-                      name={isSelected ? "radio-button-on" : "radio-button-off"}
-                      size={20}
-                      color={isSelected ? colors.primary : colors.textMuted}
-                    />
-                    <View style={styles.rowCopy}>
-                      <Text style={styles.rowTitle}>{ROLE_LABELS[option]}</Text>
-                      <Text style={styles.rowMeta}>{ROLE_DESCRIPTIONS[option]}</Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-
-              {error ? <Text style={styles.formError}>{error}</Text> : null}
-
-              <LeuretButton
-                label="Crear invitación"
-                icon="send-outline"
-                fullWidth
-                loading={submitting}
-                onPress={() => void submit()}
-                style={styles.sheetSpacing}
-              />
-            </ScrollView>
+                <Text style={[styles.inputLabel, styles.sheetSpacing]}>Rol</Text>
+                {INVITABLE_ROLES.map((option) => {
+                  const isSelected = option === role;
+                  return (
+                    <Pressable
+                      key={option}
+                      onPress={() => setRole(option)}
+                      disabled={submitting}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: isSelected }}
+                      style={[styles.roleOption, isSelected && styles.roleOptionSelected]}
+                    >
+                      <Ionicons
+                        name={isSelected ? "radio-button-on" : "radio-button-off"}
+                        size={20}
+                        color={isSelected ? colors.primary : colors.textMuted}
+                      />
+                      <View style={styles.rowCopy}>
+                        <Text style={styles.rowTitle}>{ROLE_LABELS[option]}</Text>
+                        <Text style={styles.rowMeta}>{ROLE_DESCRIPTIONS[option]}</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <View style={styles.sheetFooter}>
+                {error ? <Text accessibilityRole="alert" style={styles.formError}>{error}</Text> : null}
+                <LeuretButton
+                  label="Enviar solicitud"
+                  icon="send-outline"
+                  fullWidth
+                  loading={submitting}
+                  accessibilityRole="button"
+                  accessibilityLabel="Enviar solicitud"
+                  onPress={() => void submit()}
+                />
+              </View>
+            </>
           )}
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -660,6 +669,14 @@ const styles = StyleSheet.create({
   },
   sheetTitle: { flex: 1, color: colors.text, fontSize: 20, fontWeight: "900" },
   sheetContent: { padding: 20, paddingBottom: 40 },
+  sheetFooter: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.background,
+  },
   sheetBusy: { marginBottom: 12 },
   sheetSpacing: { marginTop: 20 },
   sheetSpacingSmall: { marginTop: 10 },
@@ -686,7 +703,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
   },
-  formError: { marginTop: 12, color: colors.danger, fontSize: 13, fontWeight: "700" },
+  formError: { color: colors.danger, fontSize: 13, fontWeight: "700" },
   successIcon: { alignItems: "center", marginBottom: 12 },
   successText: { color: colors.text, fontSize: 15, lineHeight: 22, textAlign: "center" },
   codeBox: {

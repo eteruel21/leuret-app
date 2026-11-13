@@ -55,7 +55,7 @@ describe("T-054: Suite de Pruebas de Autorización y RLS", () => {
     for (const email of [userEmails.ownerA, userEmails.ownerB, userEmails.estimator, userEmails.sales, userEmails.suspended]) {
       await adminPool.query("UPDATE app_auth.users SET email_confirmed_at = now() WHERE email = $1", [email]);
       await adminPool.query(
-        "UPDATE public.profiles SET active = true, approved_at = now() WHERE id = (SELECT id FROM app_auth.users WHERE email = $1)",
+        "UPDATE public.profiles SET active = true, approved_at = now(), contractor_approved_at = now() WHERE id = (SELECT id FROM app_auth.users WHERE email = $1)",
         [email]
       );
     }

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { type ComponentProps, useState } from "react";
 import {
   ActivityIndicator,
@@ -80,6 +80,8 @@ function PasswordStrengthIndicator({ password }: { password: string }) {
 
 export default function RegisterScreen() {
   const { signUp } = useAuth();
+  const { equipo } = useLocalSearchParams<{ equipo?: string }>();
+  const invited = equipo === "1";
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -282,7 +284,7 @@ export default function RegisterScreen() {
         password,
         captchaToken:
           currentCaptchaToken,
-        role: accountRole,
+        role: invited ? "contractor" : accountRole,
         province,
         district: cleanDistrict,
         corregimiento:
@@ -333,7 +335,9 @@ export default function RegisterScreen() {
 
         showAlert(
           "Registro recibido",
-          "Revisa tu correo para confirmar la cuenta. Después, los contratistas deberán completar su perfil profesional antes de esperar la aprobación del administrador.",
+          invited
+            ? "Confirma tu correo e inicia sesión para aceptar la invitación al equipo."
+            : "Revisa tu correo para confirmar la cuenta. Después, los contratistas deberán completar su perfil profesional antes de esperar la aprobación del administrador.",
           [
             {
               text: "Confirmar correo",
@@ -408,11 +412,13 @@ export default function RegisterScreen() {
           <Text style={styles.pageEyebrow}>NUEVA CUENTA</Text>
 
           <Text style={styles.title}>
-            Empieza a trabajar{"\n"}con más control.
+            {invited ? "Crea tu cuenta para unirte al equipo" : "Empieza a trabajar\ncon más control."}
           </Text>
 
           <Text style={styles.subtitle}>
-            {accountRole === "contractor"
+            {invited
+              ? "Completa tus datos con el correo al que llegó la invitación."
+              : accountRole === "contractor"
               ? "Crea tu cuenta para administrar empresas, clientes y obras."
               : "Crea tu acceso para consultar proyectos y presupuestos compartidos."}
           </Text>
@@ -421,11 +427,11 @@ export default function RegisterScreen() {
             <View style={styles.cardHeading}>
               <Text style={styles.cardTitle}>Crea tu acceso</Text>
               <Text style={styles.cardDescription}>
-                Elige cómo utilizarás la plataforma.
+                {invited ? "Confirma tu correo para abrir la invitación." : "Elige cómo utilizarás la plataforma."}
               </Text>
             </View>
 
-            <View style={styles.roleSelector}>
+            {!invited ? <View style={styles.roleSelector}>
               <Pressable
                 onPress={() => setAccountRole("contractor")}
                 style={[
@@ -469,7 +475,7 @@ export default function RegisterScreen() {
                   Cliente
                 </Text>
               </Pressable>
-            </View>
+            </View> : null}
 
             {/* Campos de Nombre y Apellido */}
             <View style={styles.row}>

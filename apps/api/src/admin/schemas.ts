@@ -26,6 +26,7 @@ export const userSchema = z.object({
   phone: z.string().trim().max(30),
   role: z.enum(["super_admin", "contractor", "client"]),
   active: z.boolean(),
+  approveContractor: z.boolean().optional(),
   approvedAt: z.string().nullable().optional(),
   approvedBy: z.string().nullable().optional()
 });

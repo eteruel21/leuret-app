@@ -96,11 +96,12 @@ export async function loadAdminData(): Promise<AdminData> {
 
 export async function saveUser(
   draft: UserDraft,
-  _actorId: string
+  _actorId: string,
+  approveContractor = false
 ): Promise<void> {
   await authenticatedRequest(`/admin/users/${draft.id}`, {
     method: "PATCH",
-    body: JSON.stringify(draft)
+    body: JSON.stringify({ ...draft, approveContractor })
   });
 }
 

@@ -24,13 +24,15 @@ type ResendMessage = {
   subject: string;
   text: string;
   html: string;
+  idempotencyKey?: string;
 };
 
 async function deliverWithResend({
   to,
   subject,
   text,
-  html
+  html,
+  idempotencyKey
 }: ResendMessage): Promise<EmailDeliveryResult> {
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
     return { sent: false, reason: "not_configured" };
@@ -41,7 +43,8 @@ async function deliverWithResend({
       method: "POST",
       headers: {
         Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {})
       },
       body: JSON.stringify({
         from: env.EMAIL_FROM,
@@ -336,6 +339,7 @@ type CompanyInvitationEmailInput = {
   companyName: string;
   inviterName?: string | null;
   roleLabel: string;
+  idempotencyKey?: string;
 };
 
 function escapeHtml(value: string): string {
@@ -358,7 +362,8 @@ export async function sendCompanyInvitationEmail({
   token,
   companyName,
   inviterName,
-  roleLabel
+  roleLabel,
+  idempotencyKey
 }: CompanyInvitationEmailInput): Promise<EmailDeliveryResult> {
   const { deepLink, webLink } = buildInvitationLinks(token);
   const company = escapeHtml(companyName.trim() || "una empresa");
@@ -389,12 +394,12 @@ export async function sendCompanyInvitationEmail({
         <div class="brand">Leuret</div>
         <h2 class="title">Te invitaron a ${company}</h2>
         <p>${inviter ? `<strong>${inviter}</strong> te invitó` : "Te invitaron"} a unirte al equipo de <strong>${company}</strong> como <span class="role">${role}</span>.</p>
-        <p>Entra a Leuret con este mismo correo (<strong>${email}</strong>). Si todavía no tienes cuenta, créala con ese correo y la invitación se aplicará al entrar.</p>
+        <p>Entra a Leuret con este mismo correo (<strong>${email}</strong>). Si todavía no tienes cuenta, puedes crearla con ese correo y confirmar que quieres unirte.</p>
         <div style="text-align: center;">
-          <a href="${deepLink}" class="btn-primary">Aceptar en la app</a><br />
-          <a href="${webLink}" class="btn-secondary">Aceptar desde el navegador</a>
+          <a href="${webLink}" class="btn-primary">Revisar invitación</a><br />
+          <a href="${deepLink}" class="btn-secondary">Abrir en la app</a>
         </div>
-        <p>Si los botones no funcionan, abre Leuret, ve a <strong>Más → Unirme a una empresa</strong> y pega este código:</p>
+        <p>También puedes pegar este código en <strong>Invitaciones de equipo</strong>:</p>
         <div class="code-box">${escapeHtml(token)}</div>
         <p class="footer">La invitación vence en 7 días. Si no esperabas este correo, puedes ignorarlo.</p>
       </div>
@@ -407,10 +412,10 @@ ${inviterName?.trim() ? `${inviterName.trim()} te invitó` : "Te invitaron"} a u
 
 Entra a Leuret con este mismo correo (${to}).
 
-Aceptar en la app: ${deepLink}
-Aceptar desde el navegador: ${webLink}
+Revisar invitación: ${webLink}
+Abrir en la app: ${deepLink}
 
-O ve a Más → Unirme a una empresa y pega este código: ${token}
+También puedes pegar este código en Invitaciones de equipo: ${token}
 
 La invitación vence en 7 días.
   `.trim();
@@ -419,7 +424,8 @@ La invitación vence en 7 días.
     to,
     subject: `Te invitaron a ${companyName.trim() || "una empresa"} en Leuret`,
     text,
-    html
+    html,
+    ...(idempotencyKey ? { idempotencyKey } : {})
   });
 }
 

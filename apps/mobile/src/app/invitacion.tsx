@@ -1,13 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
-import { type Href, router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LeuretLoading } from "@/components/LeuretLoading";
+import { JoinCompanyForm } from "@/components/JoinCompanyForm";
 import { colors, radius } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
-import { useCompany } from "@/contexts/CompanyContext";
 import { savePendingInvitation } from "@/utils/pending-invitation";
 
 /**
@@ -16,69 +16,53 @@ import { savePendingInvitation } from "@/utils/pending-invitation";
  * lleva a la persona a unirse, o le pide entrar primero.
  */
 export default function InvitationLinkScreen() {
-  const params = useLocalSearchParams<{ codigo?: string | string[] }>();
+  const params = useLocalSearchParams<{ codigo?: string | string[]; id?: string }>();
   const rawCode = Array.isArray(params.codigo) ? params.codigo[0] : params.codigo;
   const { session, profile, loading: authLoading } = useAuth();
-  const { activeCompany, loading: companyLoading } = useCompany();
-  const [state, setState] = useState<"checking" | "invalid" | "login" | "waiting" | "client">("checking");
+  const [linkCode, setLinkCode] = useState<string | null | undefined>(rawCode ? undefined : null);
 
   useEffect(() => {
-    if (authLoading) return;
+    if (!rawCode) return;
     let active = true;
 
     void savePendingInvitation(rawCode).then((code) => {
       if (!active) return;
-      if (!code) {
-        setState("invalid");
-        return;
+      setLinkCode(code);
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.history.replaceState(window.history.state, "", window.location.pathname);
       }
-      if (!session) {
-        setState("login");
-        return;
-      }
-      if (profile?.role === "client") {
-        setState("client");
-        return;
-      }
-      if (profile?.role !== "contractor" || !profile.active) {
-        setState("waiting");
-        return;
-      }
-      if (companyLoading) return;
-      router.replace((activeCompany ? "/equipo/unirme" : "/empresa/unirme") as Href);
     });
 
     return () => {
       active = false;
     };
-  }, [authLoading, companyLoading, session, profile?.role, profile?.active, activeCompany, rawCode]);
+  }, [rawCode]);
 
-  if (state === "checking") {
+  if (authLoading || (rawCode && linkCode === undefined)) {
     return <LeuretLoading fullScreen message="Abriendo tu invitación…" />;
+  }
+
+  const invalid = Boolean(rawCode && !linkCode);
+  if (!invalid && session && profile) {
+    return (
+      <SafeAreaView style={styles.form} edges={["left", "right", "bottom"]}>
+        <JoinCompanyForm key={rawCode ?? params.id ?? "invitaciones"} invitationId={params.id} initialCode={linkCode ?? undefined} />
+      </SafeAreaView>
+    );
   }
 
   const content = {
     invalid: {
       icon: "alert-circle-outline" as const,
       title: "Enlace no válido",
-      text: "El enlace de invitación está incompleto. Pide que te lo reenvíen o pega el código desde Más → Unirme a una empresa.",
+      text: "El enlace de invitación está incompleto. Pide que te lo reenvíen o pega el código en Invitaciones de equipo.",
     },
     login: {
       icon: "mail-open-outline" as const,
       title: "Tienes una invitación",
-      text: "Inicia sesión o crea tu cuenta con el mismo correo al que llegó la invitación. Te uniremos a la empresa en cuanto entres.",
+      text: "Usa el correo al que te enviaron la invitación. Cuando entres, podrás ver la empresa y confirmar que quieres unirte.",
     },
-    waiting: {
-      icon: "time-outline" as const,
-      title: "Invitación guardada",
-      text: "Tu cuenta todavía se está activando. La invitación quedó guardada y se aplicará cuando tu cuenta esté aprobada.",
-    },
-    client: {
-      icon: "person-circle-outline" as const,
-      title: "Esta invitación es para un equipo",
-      text: "Entraste con una cuenta de cliente. Para unirte al equipo de la empresa, entra con una cuenta de profesional registrada con el correo invitado.",
-    },
-  }[state];
+  }[invalid ? "invalid" : "login"];
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
@@ -89,18 +73,18 @@ export default function InvitationLinkScreen() {
         <Text style={styles.title}>{content.title}</Text>
         <Text style={styles.text}>{content.text}</Text>
 
-        {state === "login" ? (
+        {!invalid ? (
           <>
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.replace("/login" as Href)}
+              onPress={() => router.replace("/login")}
               style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
             >
               <Text style={styles.buttonLabel}>Iniciar sesión</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.replace("/registro" as Href)}
+              onPress={() => router.replace({ pathname: "/registro", params: { equipo: "1" } })}
               style={({ pressed }) => [
                 styles.button,
                 styles.buttonSmall,
@@ -114,7 +98,7 @@ export default function InvitationLinkScreen() {
         ) : (
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.replace("/" as Href)}
+            onPress={() => router.replace("/")}
             style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
           >
             <Text style={styles.buttonLabel}>Ir a Leuret</Text>
@@ -126,6 +110,7 @@ export default function InvitationLinkScreen() {
 }
 
 const styles = StyleSheet.create({
+  form: { flex: 1, backgroundColor: colors.background },
   safeArea: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: colors.background },
   card: { padding: 24, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   icon: {

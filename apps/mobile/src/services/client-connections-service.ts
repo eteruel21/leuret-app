@@ -18,9 +18,13 @@ export type ClientConnection = {
   created_at: string;
 };
 
-export function listClientConnections(pendingOnly = false) {
+export function listClientConnections(pendingOnly = false, space?: "client" | "company") {
+  const query = new URLSearchParams();
+  if (pendingOnly) query.set("pending", "true");
+  if (space) query.set("space", space);
+  const suffix = query.toString();
   return authenticatedRequest<{ requests: ClientConnection[] }>(
-    pendingOnly ? "/client-connections?pending=true" : "/client-connections",
+    suffix ? `/client-connections?${suffix}` : "/client-connections",
   );
 }
 

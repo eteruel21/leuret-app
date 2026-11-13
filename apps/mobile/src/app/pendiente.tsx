@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -12,6 +13,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, w
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BackBar, confirmReturnToLogin } from "@/components/back-navigation";
+import { LeuretButton } from "@/components/LeuretButton";
 import {
   colors,
   layout,
@@ -140,6 +142,15 @@ export default function PendingApprovalScreen() {
           <Text style={styles.errorText}>
             No se pudo comprobar el perfil: {profileError}
           </Text>
+        ) : null}
+
+        {profile?.role === "contractor" ? (
+          <LeuretButton
+            label="Tengo una invitación de equipo"
+            icon="mail-open-outline"
+            variant="secondary"
+            onPress={() => router.push("/invitacion")}
+          />
         ) : null}
 
         <Pressable
