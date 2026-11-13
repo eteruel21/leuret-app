@@ -1,8 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { StatusPill } from "@/components/client/StatusPill";
-import { MotionPressable } from "@/components/MotionPressable";
 import { colors, radius, shadows } from "@/constants/theme";
 import type { JobRequestSummary } from "@/types/job-request";
 import type { StatusTone } from "@/utils/client-portal";
@@ -26,12 +25,11 @@ export function JobRequestCard({ request, state, onPress, unread = 0, badge, foo
   const urgent = request.desired_timing === "urgent";
 
   return (
-    <MotionPressable
+    <Pressable
       onPress={onPress}
-      pressedScale={0.985}
       accessibilityRole="button"
       accessibilityLabel={`${request.title}, ${state.label}${unread ? `, ${unread} mensajes sin leer` : ""}`}
-      style={styles.card}
+      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
       <View style={styles.top}>
         {request.cover_photo_url ? (
@@ -80,7 +78,7 @@ export function JobRequestCard({ request, state, onPress, unread = 0, badge, foo
         </Text>
         <Text style={styles.footerText}>{timeAgo(request.created_at)}</Text>
       </View>
-    </MotionPressable>
+    </Pressable>
   );
 }
 
@@ -94,6 +92,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     ...shadows.soft,
   },
+  pressed: { backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong, transform: [{ scale: 0.985 }] },
   top: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   cover: { width: 64, height: 64, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
   coverEmpty: { alignItems: "center", justifyContent: "center" },

@@ -38,7 +38,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { OwnerDashboard } from "@/components/OwnerDashboard";
 import { RoleDashboard } from "@/components/RoleDashboard";
-import { JobRequestsHomeCard } from "@/components/job-requests/JobRequestsHomeCard";
+import { useJobRequestsHomeSummary } from "@/hooks/useJobRequestsHomeSummary";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   HOME_FOCUS,
@@ -60,6 +60,8 @@ type QuickActionProps = {
   subtitle: string;
   onPress: () => void;
   delay?: number;
+  /** Número a destacar junto a la flecha (p. ej. peticiones nuevas). */
+  badge?: number;
 };
 
 const QUICK_ACTIONS: Record<
@@ -81,6 +83,7 @@ function QuickAction({
   subtitle,
   onPress,
   delay = 0,
+  badge = 0,
 }: QuickActionProps) {
   return (
     <Animated.View
@@ -103,6 +106,12 @@ function QuickAction({
           <Text style={styles.quickTitle}>{title}</Text>
           <Text style={styles.quickSubtitle}>{subtitle}</Text>
         </View>
+
+        {badge > 0 ? (
+          <View style={styles.quickBadge}>
+            <Text style={styles.quickBadgeText}>{badge > 99 ? "99+" : badge}</Text>
+          </View>
+        ) : null}
 
         <Ionicons
           name="arrow-forward"
@@ -209,6 +218,8 @@ export default function HomeScreen() {
 
   const goToCompanyRoute = (href: Href) => { setCompanySheetOpen(false); router.push(href); };
   const quickActions = quickActionsFor(role);
+  const canSeeJobRequests = can("jobRequests.view") && Boolean(activeCompany);
+  const jobRequests = useJobRequestsHomeSummary(canSeeJobRequests ? activeCompany!.id : null);
   const showProjects = can("projects.view");
   // Los cobros solo se muestran a quien los gestiona (owner, admin, sales).
   const showFinances = can("invoices.payments.record");
@@ -400,11 +411,18 @@ export default function HomeScreen() {
                 />
               );
             })}
-          </View>
 
-          {can("jobRequests.view") && activeCompany ? (
-            <JobRequestsHomeCard companyId={activeCompany.id} />
-          ) : null}
+            {canSeeJobRequests ? (
+              <QuickAction
+                icon="megaphone-outline"
+                title="Peticiones de clientes"
+                subtitle={jobRequests.subtitle}
+                badge={jobRequests.badge}
+                delay={80 + quickActions.length * 60}
+                onPress={() => router.push("/peticiones" as Href)}
+              />
+            ) : null}
+          </View>
 
           {showOwnerDashboard && activeCompany ? (
             <>
@@ -1158,6 +1176,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentSoft,
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  quickBadge: {
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 6,
+    marginRight: spacing.sm,
+    borderRadius: 11,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  quickBadgeText: {
+    color: colors.textInverse,
+    fontSize: 11,
+    fontWeight: "900",
   },
 
   quickCopy: {
