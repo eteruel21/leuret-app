@@ -69,6 +69,18 @@ describe("notificationRoute", () => {
     expect(notificationRoute({ type: "budget.approved", budgetId: id }, false)?.pathname).toBe("/presupuestos/[id]");
     expect(notificationRoute({ type: "invoice.payment_registered", invoiceId: id }, false)?.pathname).toBe("/facturas/[id]");
   });
+  it("abre las peticiones de trabajo y sus conversaciones", () => {
+    expect(notificationRoute({ type: "job_request.created", requestId: id }, false)?.pathname).toBe("/peticiones/[id]");
+    expect(notificationRoute({ type: "job_request.created", requestId: id }, true)).toBeNull();
+    expect(notificationRoute({ type: "job_request.message", requestId: id, companyId: id }, true)).toEqual({
+      pathname: "/cliente-peticiones/conversacion",
+      params: { requestId: id, companyId: id },
+    });
+    expect(notificationRoute({ type: "job_request.message", requestId: id, companyId: id }, false)?.pathname).toBe(
+      "/peticiones/conversacion",
+    );
+    expect(notificationRoute({ type: "job_request.message", requestId: id }, false)).toBeNull();
+  });
   it("ignora tipos desconocidos e identificadores inválidos", () => {
     expect(notificationRoute({ type: "budget.sent", budgetId: "../admin" }, true)).toBeNull();
     expect(notificationRoute({ type: "otro" }, true)).toBeNull();

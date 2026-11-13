@@ -73,6 +73,16 @@ export default function ClientTabsLayout() {
       />
 
       <Tabs.Screen
+        name="peticiones"
+        options={{
+          title: "Peticiones",
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon focused={focused} active="megaphone" inactive="megaphone-outline" color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
         name="proyectos"
         options={{
           title: "Proyectos",
@@ -102,9 +112,11 @@ export default function ClientTabsLayout() {
         }}
       />
 
+      {/* Cuenta se abre desde el botón de perfil del inicio; su lugar en la barra es para Peticiones. */}
       <Tabs.Screen
         name="cuenta"
         options={{
+          href: null,
           title: "Cuenta",
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused} active="person" inactive="person-outline" color={color} />

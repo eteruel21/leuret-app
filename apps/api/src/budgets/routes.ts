@@ -316,6 +316,10 @@ export async function registerBudgetRoutes(
           const status = error.code === "not_found" ? 404 : error.code === "not_draft" ? 409 : 400;
           return reply.status(status).send({ message: error.message });
         }
+        // Presupuesto de una petición de trabajo que se cerró o llegó al máximo.
+        if ((error as { hint?: unknown })?.hint === "job_request_not_accepting") {
+          return reply.status(409).send({ message: (error as Error).message });
+        }
         request.log.error(safeErrorDetails(error), "No se pudo enviar el presupuesto.");
         return reply.status(400).send({ message: "Error al enviar el presupuesto." });
       }

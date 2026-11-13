@@ -219,6 +219,7 @@ function RootNavigator() {
           <Stack.Screen name="tareas" />
           <Stack.Screen name="equipo" />
           <Stack.Screen name="catalogo" />
+          <Stack.Screen name="peticiones" />
         </Stack.Protected>
 
         <Stack.Protected guard={isClientAuthenticated}>
@@ -227,6 +228,7 @@ function RootNavigator() {
           <Stack.Screen name="cliente-presupuestos" />
           <Stack.Screen name="cliente-facturas" />
           <Stack.Screen name="cliente-proyectos" />
+          <Stack.Screen name="cliente-peticiones" />
         </Stack.Protected>
 
         <Stack.Protected guard={hasActiveCompany || isClientAuthenticated}>

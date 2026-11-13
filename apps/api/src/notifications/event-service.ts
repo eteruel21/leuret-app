@@ -174,3 +174,58 @@ export async function notifyInvoicePaymentRegistered(
     }
   );
 }
+
+/** Envía el mismo aviso a varios usuarios en grupos pequeños (best-effort). */
+async function dispatchEventPushToMany(
+  recipientIds: string[],
+  title: string,
+  body: string,
+  data: Record<string, unknown>
+): Promise<void> {
+  const unique = [...new Set(recipientIds.filter(Boolean))];
+  for (let index = 0; index < unique.length; index += 10) {
+    await Promise.allSettled(
+      unique.slice(index, index + 10).map((recipientId) => dispatchEventPush(recipientId, title, body, data))
+    );
+  }
+}
+
+export async function notifyJobRequestCreated(
+  recipientIds: string[],
+  request: { id: string; title: string; category: string; province: string }
+): Promise<void> {
+  await dispatchEventPushToMany(
+    recipientIds,
+    "Nueva petición de trabajo",
+    `${request.category} en ${request.province}: ${request.title.slice(0, 90)}`,
+    { type: "job_request.created", requestId: request.id }
+  );
+}
+
+export async function notifyJobRequestMessage(
+  recipientIds: string[],
+  message: {
+    requestId: string;
+    companyId: string;
+    senderSide: "client" | "company";
+    companyName: string;
+    requesterFirstName: string;
+    title: string;
+    body: string | null;
+  }
+): Promise<void> {
+  const preview = message.body ? message.body.slice(0, 120) : "Te envió una foto.";
+  const title = message.senderSide === "company"
+    ? `${message.companyName} te escribió`
+    : `${message.requesterFirstName} respondió`;
+  await dispatchEventPushToMany(
+    recipientIds,
+    title,
+    `«${message.title.slice(0, 60)}»: ${preview}`,
+    {
+      type: "job_request.message",
+      requestId: message.requestId,
+      companyId: message.companyId
+    }
+  );
+}

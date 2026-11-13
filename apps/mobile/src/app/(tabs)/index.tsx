@@ -38,6 +38,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { OwnerDashboard } from "@/components/OwnerDashboard";
 import { RoleDashboard } from "@/components/RoleDashboard";
+import { JobRequestsHomeCard } from "@/components/job-requests/JobRequestsHomeCard";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   HOME_FOCUS,
@@ -400,6 +401,10 @@ export default function HomeScreen() {
               );
             })}
           </View>
+
+          {can("jobRequests.view") && activeCompany ? (
+            <JobRequestsHomeCard companyId={activeCompany.id} />
+          ) : null}
 
           {showOwnerDashboard && activeCompany ? (
             <>

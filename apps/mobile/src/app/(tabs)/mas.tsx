@@ -34,6 +34,15 @@ type OptionItem = {
 
 const baseOptions: OptionItem[] = [
   {
+    id: "job-requests",
+    title: "Peticiones de clientes",
+    description:
+      "Trabajos publicados por clientes: pregunta y envía tu presupuesto.",
+    icon: "megaphone-outline" as const,
+    onPress: () => router.push("/peticiones" as Href),
+    capability: "jobRequests.view",
+  },
+  {
     id: "team",
     title: "Equipo",
     description:
