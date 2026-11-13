@@ -229,6 +229,7 @@ function RootNavigator() {
         </Stack.Protected>
         <Stack.Protected guard={hasActiveCompany || isClientAuthenticated}>
           <Stack.Screen name="solicitudes" options={{ ...stackBackOptions(initialRoute ?? "/"), headerShown: true, title: "Solicitudes de vinculación" }} />
+          <Stack.Screen name="notificaciones" options={{ ...stackBackOptions(initialRoute ?? "/"), headerShown: true, title: "Notificaciones" }} />
         </Stack.Protected>
       </Stack>
     </ScreenResumeContext.Provider>

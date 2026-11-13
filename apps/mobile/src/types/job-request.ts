@@ -155,3 +155,26 @@ export type CreateJobRequestInput = {
   budgetMin: number | null;
   budgetMax: number | null;
 };
+
+/** Conversación en la campana de notificaciones (cliente o contratista). */
+export type JobRequestInboxConversation = {
+  request_id: string;
+  company_id: string;
+  /** Lado del usuario en la conversación. */
+  side: "client" | "company";
+  title: string;
+  /** Empresa (para el cliente) o nombre de pila del cliente (para la empresa). */
+  counterpart_name: string;
+  company_name: string;
+  last_message_at: string;
+  unread_count: number;
+  last_sender_side: "client" | "company" | null;
+  last_body: string | null;
+  last_has_photo: boolean;
+};
+
+export type JobRequestInbox = {
+  unreadMessages: number;
+  unreadConversations: number;
+  conversations: JobRequestInboxConversation[];
+};

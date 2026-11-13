@@ -85,3 +85,9 @@ export const feedQuerySchema = z.object({
 });
 
 export type FeedQuery = z.infer<typeof feedQuerySchema>;
+
+export const inboxQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(30),
+  /** Espacio activo de la app: solo las conversaciones como cliente o como empresa. */
+  space: z.enum(["client", "company"]).optional().transform((value) => value ?? null)
+});

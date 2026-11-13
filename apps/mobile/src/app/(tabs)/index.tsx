@@ -11,7 +11,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { ConnectionInboxButton } from "@/components/client/connection-inbox-button";
+import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -288,7 +288,7 @@ export default function HomeScreen() {
             <View style={styles.brand}><Image source={require("../../../assets/images/leuret-logo-header.png")} style={styles.brandLogo} resizeMode="contain" /></View>
 
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <ConnectionInboxButton />
+              <NotificationsBell />
               <Pressable
                 accessibilityLabel="Abrir perfil"
                 accessibilityRole="button"

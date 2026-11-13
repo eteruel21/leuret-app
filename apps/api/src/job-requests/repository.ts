@@ -575,3 +575,129 @@ export async function sendJobRequestMessageRepo(
     return { message: message.rows[0]!, recipientIds: info.recipient_ids ?? [] };
   });
 }
+
+// ---------------------------------------------------------------------------
+// Bandeja de mensajes (campana de notificaciones)
+// ---------------------------------------------------------------------------
+
+export type JobRequestInboxRow = {
+  request_id: string;
+  company_id: string;
+  side: "client" | "company";
+  title: string;
+  counterpart_name: string;
+  company_name: string;
+  last_message_at: string;
+  unread_count: number;
+  last_sender_side: "client" | "company" | null;
+  last_body: string | null;
+  last_has_photo: boolean;
+  total_unread: number;
+  unread_conversations: number;
+};
+
+/**
+ * Conversaciones del usuario, con las no leídas primero.
+ *
+ * - Cliente: las conversaciones de sus peticiones (mensajes de la empresa).
+ * - Contratista: las de sus empresas que él inició o, si es dueño o
+ *   administrador, todas las de la empresa (los mismos destinatarios del push).
+ *
+ * Se filtra de forma explícita y no solo con RLS, porque el superadministrador
+ * puede leer todas las conversaciones.
+ */
+export async function findJobRequestInboxRepo(
+  userId: string,
+  limit: number,
+  space: "client" | "company" | null = null
+) {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query<JobRequestInboxRow>(
+      `
+        WITH mine AS (
+          SELECT
+            thread.id AS thread_id,
+            thread.request_id,
+            thread.company_id,
+            thread.company_name,
+            thread.last_message_at,
+            'client'::text AS side,
+            thread.client_last_read_at AS last_read_at,
+            job.title,
+            job.requester_first_name
+          FROM public.job_request_threads AS thread
+          JOIN public.job_requests AS job ON job.id = thread.request_id
+          WHERE job.requester_id = app.current_user_id()
+            AND thread.last_message_at IS NOT NULL
+
+          UNION ALL
+
+          SELECT
+            thread.id,
+            thread.request_id,
+            thread.company_id,
+            thread.company_name,
+            thread.last_message_at,
+            'company'::text,
+            thread.company_last_read_at,
+            job.title,
+            job.requester_first_name
+          FROM public.job_request_threads AS thread
+          JOIN public.job_requests AS job ON job.id = thread.request_id
+          JOIN public.company_members AS member
+            ON member.company_id = thread.company_id
+           AND member.user_id = app.current_user_id()
+           AND member.active = true
+          WHERE thread.last_message_at IS NOT NULL
+            AND job.requester_id <> app.current_user_id()
+            AND (thread.started_by = app.current_user_id() OR member.role IN ('owner', 'admin'))
+        ),
+        scored AS (
+          SELECT
+            mine.*,
+            (
+              SELECT count(*)::int
+              FROM public.job_request_messages AS message
+              WHERE message.thread_id = mine.thread_id
+                AND message.sender_side <> mine.side
+                AND message.created_at > COALESCE(mine.last_read_at, '-infinity'::timestamptz)
+            ) AS unread_count
+          FROM mine
+          WHERE $2::text IS NULL OR mine.side = $2::text
+        )
+        SELECT
+          scored.request_id,
+          scored.company_id,
+          scored.side,
+          scored.title,
+          CASE WHEN scored.side = 'client' THEN scored.company_name ELSE scored.requester_first_name END AS counterpart_name,
+          scored.company_name,
+          scored.last_message_at,
+          scored.unread_count,
+          last_message.sender_side AS last_sender_side,
+          left(last_message.body, 140) AS last_body,
+          COALESCE(last_message.photo_storage_path IS NOT NULL, false) AS last_has_photo,
+          (sum(scored.unread_count) OVER ())::int AS total_unread,
+          (count(*) FILTER (WHERE scored.unread_count > 0) OVER ())::int AS unread_conversations
+        FROM scored
+        LEFT JOIN LATERAL (
+          SELECT message.sender_side, message.body, message.photo_storage_path
+          FROM public.job_request_messages AS message
+          WHERE message.thread_id = scored.thread_id
+          ORDER BY message.created_at DESC
+          LIMIT 1
+        ) AS last_message ON true
+        ORDER BY (scored.unread_count > 0) DESC, scored.last_message_at DESC
+        LIMIT $1
+      `,
+      [limit, space]
+    );
+
+    const first = result.rows[0];
+    return {
+      unreadMessages: first?.total_unread ?? 0,
+      unreadConversations: first?.unread_conversations ?? 0,
+      conversations: result.rows.map(({ total_unread: _total, unread_conversations: _count, ...row }) => row)
+    };
+  });
+}

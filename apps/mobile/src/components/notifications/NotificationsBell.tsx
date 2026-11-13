@@ -1,27 +1,39 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
-import { router, useFocusEffect } from "expo-router";
+import { type Href, router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { AppState, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors, radius } from "@/constants/theme";
 import { useCompany } from "@/contexts/CompanyContext";
 import { listClientConnections } from "@/services/client-connections-service";
+import { getJobRequestInbox } from "@/services/job-request-service";
+import { badgeLabel, bellAccessibilityLabel, bellCount, refreshesBell } from "@/utils/notifications-inbox";
 
-export function ConnectionInboxButton() {
+/**
+ * Campana del Inicio (cliente y contratista). El globo suma las solicitudes
+ * de vinculación recibidas y los mensajes nuevos de las peticiones de trabajo.
+ */
+export function NotificationsBell() {
   const { activeCompany } = useCompany();
+  // Un usuario puede tener espacio de cliente y de contratista: se cuenta solo el activo.
   const space = activeCompany ? "company" : "client";
-  const [count, setCount] = useState(0);
+  const [connections, setConnections] = useState(0);
+  const [messages, setMessages] = useState(0);
 
   useFocusEffect(useCallback(() => {
     let active = true;
     async function refresh() {
-      try {
-        const { requests } = await listClientConnections(true, space);
-        if (active) setCount(requests.filter((item) => item.incoming).length);
-      } catch {
-        // La bandeja muestra el error y permite reintentar.
+      const [connectionResult, inboxResult] = await Promise.allSettled([
+        listClientConnections(true, space),
+        getJobRequestInbox({ limit: 1, space }),
+      ]);
+      if (!active) return;
+      // Si una consulta falla se conserva el último valor; la pantalla muestra el error.
+      if (connectionResult.status === "fulfilled") {
+        setConnections(connectionResult.value.requests.filter((item) => item.incoming).length);
       }
+      if (inboxResult.status === "fulfilled") setMessages(inboxResult.value.unreadMessages);
     }
 
     void refresh();
@@ -30,7 +42,7 @@ export function ConnectionInboxButton() {
       if (state === "active") void refresh();
     });
     const push = Platform.OS === "web" ? null : Notifications.addNotificationReceivedListener((notification) => {
-      if (notification.request.content.data?.type === "client_connection.requested") void refresh();
+      if (refreshesBell(notification.request.content.data?.type)) void refresh();
     });
 
     return () => {
@@ -41,17 +53,19 @@ export function ConnectionInboxButton() {
     };
   }, [space]));
 
+  const count = bellCount(connections, messages);
+
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={count ? `Solicitudes de vinculación, ${count} pendiente${count === 1 ? "" : "s"}` : "Solicitudes de vinculación"}
+      accessibilityLabel={bellAccessibilityLabel(count)}
       style={({ pressed }) => [styles.button, pressed && { opacity: 0.72 }]}
-      onPress={() => router.push("/solicitudes")}
+      onPress={() => router.push("/notificaciones" as Href)}
     >
-      <Ionicons name="notifications-outline" size={21} color={colors.textLight} />
+      <Ionicons name={count ? "notifications" : "notifications-outline"} size={21} color={colors.textLight} />
       {count > 0 ? (
         <View style={styles.badge}>
-          <Text style={styles.count}>{count > 9 ? "9+" : count}</Text>
+          <Text style={styles.count}>{badgeLabel(count)}</Text>
         </View>
       ) : null}
     </Pressable>
