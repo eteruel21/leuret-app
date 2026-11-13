@@ -1,4 +1,4 @@
-import { type Href, Stack, router } from "expo-router";
+import { Stack } from "expo-router";
 import {
   StyleSheet,
   Text,
@@ -20,14 +20,13 @@ import {
 } from "@/contexts/CompanyContext";
 import { ScreenResumeContext, useScreenResume } from "@/contexts/screen-resume-context";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import {
   registerForPushNotificationsAsync,
   unregisterCurrentPushTokenAsync,
 } from "@/services/push-notification-service";
 import { processOfflineSyncQueue } from "@/services/offline-sync-service";
 import { initialRouteFor } from "@/utils/initial-navigation";
-import { readPendingInvitation } from "@/utils/pending-invitation";
 import { useNotificationNavigation } from "@/hooks/useNotificationNavigation";
 import { installWebAlert } from "@/utils/alert";
 
@@ -85,8 +84,10 @@ function RootNavigator() {
   const isAuthenticated = Boolean(session);
   const isContractor = isAuthenticated && profile?.role === "contractor";
 
-  const needsProfileSetup = isContractor && !profile?.primary_category;
   const isApproved = isAuthenticated && Boolean(profile?.active);
+  const needsProfileSetup = isContractor && !profile?.primary_category && !isApproved;
+  const canUseSpaces = isApproved && (isContractor || profile?.role === "client");
+  const hasContractorApproval = Boolean(profile?.contractor_approved_at);
 
   useEffect(() => {
     if (!isApproved) {
@@ -108,13 +109,12 @@ function RootNavigator() {
   const isPendingApproval = isAuthenticated && !profile?.active && !needsProfileSetup;
 
   const isClientAuthenticated = isApproved && profile?.role === "client";
-  const isContractorAuthenticated = isApproved && profile?.role === "contractor";
 
-  const hasActiveCompany = isContractorAuthenticated && Boolean(activeCompany);
-  const needsCompanySetup = isContractorAuthenticated && !activeCompany;
+  const hasActiveCompany = canUseSpaces && Boolean(activeCompany);
+  const canCreateCompany = canUseSpaces && hasContractorApproval && Boolean(profile?.primary_category);
   const isInitialLoading = authLoading && !profile;
   const isCompanyInitialLoading =
-    isContractorAuthenticated && companyLoading && !activeCompany;
+    canUseSpaces && companyLoading && !activeCompany;
   const loading = isInitialLoading || isCompanyInitialLoading;
 
   const initialRoute = initialRouteFor({
@@ -123,6 +123,7 @@ function RootNavigator() {
     active: isApproved,
     primaryCategory: profile?.primary_category,
     hasActiveCompany,
+    hasContractorApproval,
   });
   const resumeScope = initialRoute === "/login" ? null : initialRoute;
   const resumeKey = session?.sessionId && profile?.id && resumeScope
@@ -139,25 +140,10 @@ function RootNavigator() {
   });
   const navigationReady = !loading && resume.ready;
 
-  // Si la persona llegó desde un correo de invitación antes de entrar,
-  // la llevamos a unirse en cuanto su cuenta pueda usar una empresa.
-  const pendingInvitationChecked = useRef(false);
-  const canUseCompany = navigationReady && (hasActiveCompany || needsCompanySetup) &&
-    !needsProfileSetup && !companyLoading;
-
-  useEffect(() => {
-    if (!canUseCompany || pendingInvitationChecked.current) return;
-    pendingInvitationChecked.current = true;
-    void readPendingInvitation().then((code) => {
-      if (!code) return;
-      router.navigate((hasActiveCompany ? "/equipo/unirme" : "/empresa/unirme") as Href);
-    });
-  }, [canUseCompany, hasActiveCompany]);
-
   // Tocar un aviso abre su solicitud o documento, incluso en arranque en frío.
   useNotificationNavigation({
-    enabled: navigationReady && (isClientAuthenticated || hasActiveCompany),
-    isClient: isClientAuthenticated,
+    enabled: navigationReady && canUseSpaces,
+    isClient: isClientAuthenticated && !hasActiveCompany,
   });
 
   if (!navigationReady) {
@@ -196,7 +182,7 @@ function RootNavigator() {
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
 
-        <Stack.Protected guard={needsProfileSetup}>
+        <Stack.Protected guard={needsProfileSetup || canUseSpaces}>
           <Stack.Screen name="perfil-profesional" />
         </Stack.Protected>
 
@@ -204,8 +190,15 @@ function RootNavigator() {
           <Stack.Screen name="pendiente" />
         </Stack.Protected>
 
-        <Stack.Protected guard={needsCompanySetup}>
+        <Stack.Protected guard={canCreateCompany}>
           <Stack.Screen name="empresa" />
+        </Stack.Protected>
+
+        <Stack.Protected guard={canUseSpaces}>
+          <Stack.Screen
+            name="espacios"
+            options={{ ...stackBackOptions(hasActiveCompany ? "/(tabs)" : "/"), headerShown: true, title: "Espacios de trabajo" }}
+          />
         </Stack.Protected>
 
         <Stack.Protected guard={hasActiveCompany}>
@@ -231,8 +224,10 @@ function RootNavigator() {
           <Stack.Screen name="cliente-peticiones" />
         </Stack.Protected>
 
-        <Stack.Protected guard={hasActiveCompany || isClientAuthenticated}>
+        <Stack.Protected guard={canUseSpaces}>
           <Stack.Screen name="perfil" />
+        </Stack.Protected>
+        <Stack.Protected guard={hasActiveCompany || isClientAuthenticated}>
           <Stack.Screen name="solicitudes" options={{ ...stackBackOptions(initialRoute ?? "/"), headerShown: true, title: "Solicitudes de vinculación" }} />
         </Stack.Protected>
       </Stack>

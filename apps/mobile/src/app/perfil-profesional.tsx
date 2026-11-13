@@ -178,7 +178,8 @@ function readFileAsDataUrl(
   });
 }
 export default function ProfessionalProfileScreen() {
-  const { updateContractorProfile, signOut } = useAuth();
+  const { profile, updateContractorProfile, signOut } = useAuth();
+  const workingInTeam = Boolean(profile?.active);
 
   // Paso actual (1: Info General, 2: Multimedia, 3: Documentos de Aprobación)
   const [currentStep, setCurrentStep] = useState(1);
@@ -186,7 +187,27 @@ export default function ProfessionalProfileScreen() {
   const [uploadingDocument, setUploadingDocument] = useState<ProfileDocumentType | null>(null);
   const [uploadingMedia, setUploadingMedia] = useState<"avatar" | "company-logo" | null>(null);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [form, dispatch] = useReducer(formReducer, INITIAL_FORM);
+  const [form, dispatch] = useReducer(formReducer, {
+    ...INITIAL_FORM,
+    businessName: profile?.business_name ?? "",
+    idDocument: profile?.id_document ?? "",
+    taxId: profile?.tax_id ?? "",
+    taxDv: profile?.tax_dv ?? "",
+    primaryCategory: profile?.primary_category ?? "",
+    specialties: profile?.specialties?.join(", ") ?? "",
+    experienceYears: profile?.experience_years?.toString() ?? "",
+    workAreas: profile?.work_areas?.join(", ") ?? "",
+    professionalDescription: profile?.professional_description ?? "",
+    avatarUrl: profile?.avatar_url ?? "",
+    companyLogoUrl: profile?.company_logo_url ?? "",
+    portfolioUrls: profile?.portfolio_urls?.join(", ") ?? "",
+    certifications: profile?.certifications?.join(", ") ?? "",
+    availability: profile?.availability ?? INITIAL_FORM.availability,
+    preferredContactMethod: profile?.preferred_contact_method ?? INITIAL_FORM.preferredContactMethod,
+    emitsInvoice: Boolean(profile?.emits_invoice),
+    hasTransport: Boolean(profile?.has_transport),
+    workMode: profile?.work_mode ?? INITIAL_FORM.workMode,
+  });
 
   const setField = (field: keyof FormState) =>
     (value: string | boolean) =>
@@ -367,11 +388,13 @@ export default function ProfessionalProfileScreen() {
 
       showAlert(
         "Perfil enviado",
-        "Tu información profesional ha sido guardada. Los administradores revisarán tus datos y documentos para autorizar tu acceso.",
+        workingInTeam
+          ? "Leuret revisará tu perfil para habilitar tu espacio de contratista independiente."
+          : "Tu información profesional ha sido guardada. Los administradores revisarán tus datos y documentos para autorizar tu acceso.",
         [
           {
             text: "Entendido",
-            onPress: () => router.replace("/pendiente"),
+            onPress: () => router.replace(workingInTeam ? "/espacios" : "/pendiente"),
           },
         ]
       );
@@ -387,7 +410,7 @@ export default function ProfessionalProfileScreen() {
       <BackBar
         tone="light"
         onPress={currentStep > 1 ? () => setCurrentStep(currentStep - 1) : undefined}
-        fallback={() => void confirmReturnToLogin(signOut)}
+        fallback={workingInTeam ? "/espacios" : () => void confirmReturnToLogin(signOut)}
       />
       <KeyboardAvoidingView
         style={styles.flex}
@@ -413,6 +436,12 @@ export default function ProfessionalProfileScreen() {
               <Ionicons name="log-out-outline" size={16} color={colors.danger} />
               <Text style={styles.logoutText}>Salir</Text>
             </Pressable>
+            {!workingInTeam ? (
+              <Pressable accessibilityRole="button" onPress={() => router.push("/invitacion")} style={styles.logoutButton}>
+                <Ionicons name="mail-open-outline" size={16} color={colors.primary} />
+                <Text style={styles.headerSubtitle}>Tengo una invitación de equipo</Text>
+              </Pressable>
+            ) : null}
           </View>
 
           {/* Progress Bar */}

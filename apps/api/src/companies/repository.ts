@@ -181,7 +181,18 @@ export async function findCompanyInvitationsRepo(userId: string, companyId: stri
   });
 }
 
-export async function acceptCompanyInvitationRepo(userId: string, tokenHash: string) {
+export async function listReceivedCompanyInvitationsRepo(userId: string) {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query("SELECT * FROM private.list_received_company_invitations()");
+    return result.rows;
+  });
+}
+
+export async function acceptCompanyInvitationRepo(
+  userId: string,
+  tokenHash: string | null,
+  invitationId: string | null
+) {
   return withUserTransaction(userId, async (client) => {
     const result = await client.query<{
       id: string;
@@ -191,9 +202,9 @@ export async function acceptCompanyInvitationRepo(userId: string, tokenHash: str
         SELECT
           accepted.accepted_invitation_id AS id,
           accepted.accepted_company_id AS company_id
-        FROM private.accept_company_invitation($1) AS accepted
+        FROM private.accept_company_invitation($1, $2) AS accepted
       `,
-      [tokenHash]
+      [tokenHash, invitationId]
     );
     return result.rows[0] ?? null;
   });
@@ -404,19 +415,24 @@ export async function findAdminAuditLogsRepo(
 
 
 /** Nombre de la empresa y de quien invita, para el correo de invitación. */
-export async function findInvitationEmailContextRepo(userId: string, companyId: string) {
+export async function findInvitationEmailContextRepo(userId: string, companyId: string, invitationId: string) {
   return withUserTransaction(userId, async (client) => {
-    const result = await client.query<{ company_name: string; inviter_name: string | null }>(
+    const result = await client.query<{
+      company_name: string;
+      inviter_name: string | null;
+      recipient_id: string | null;
+    }>(
       `
         SELECT
           company.name AS company_name,
-          COALESCE(NULLIF(trim(profile.full_name), ''), auth_user.email) AS inviter_name
+          COALESCE(NULLIF(trim(profile.full_name), ''), auth_user.email) AS inviter_name,
+          private.company_invitation_recipient($2) AS recipient_id
         FROM public.companies AS company
         LEFT JOIN app_auth.users AS auth_user ON auth_user.id = app.current_user_id()
         LEFT JOIN public.profiles AS profile ON profile.id = auth_user.id
         WHERE company.id = $1
       `,
-      [companyId]
+      [companyId, invitationId]
     );
     return result.rows[0] ?? null;
   });

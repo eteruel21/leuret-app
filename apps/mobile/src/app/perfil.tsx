@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -18,10 +18,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BackButton } from "@/components/back-navigation";
+import { LeuretButton } from "@/components/LeuretButton";
 import { colors, layout, radius, shadows } from "@/constants/theme";
 import { ProfileOverview } from "@/components/ProfileOverview";
 import { UserAvatar } from "@/components/UserAvatar";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 import {
   deleteOwnAccount,
   exportAccountData,
@@ -44,6 +46,9 @@ const DATA_RIGHTS_EMAIL = "privacidad@leurettech.com";
 
 export default function ProfileScreen() {
   const { profile, user, updateProfile, refreshProfile, signOut } = useAuth();
+  const { activeCompany } = useCompany();
+  const { equipo } = useLocalSearchParams<{ equipo?: string }>();
+  const completingTeamProfile = equipo === "1" && Boolean(activeCompany);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
   const [phone, setPhone] = useState(profile?.phone ?? "");
@@ -185,6 +190,10 @@ export default function ProfileScreen() {
 
   const handleSave = async () => {
     if (saving || !hasChanges) return;
+    if (completingTeamProfile && (fullName.trim().length < 2 || !/^\d{7,15}$/.test(phone.replace(/\D/g, "")))) {
+      Alert.alert("Completa tus datos", "Escribe tu nombre completo y un teléfono válido.");
+      return;
+    }
 
     setSaving(true);
     const { error } = await updateProfile({ fullName, phone, notificationsOptIn });
@@ -192,6 +201,11 @@ export default function ProfileScreen() {
 
     if (error) {
       Alert.alert("No se pudo guardar", error);
+      return;
+    }
+
+    if (completingTeamProfile) {
+      router.replace("/(tabs)");
       return;
     }
 
@@ -331,7 +345,7 @@ export default function ProfileScreen() {
         style={styles.flex}
       >
         <View style={styles.header}>
-          <BackButton fallback={profile?.role === "client" ? "/(client-tabs)/cuenta" : "/(tabs)"} />
+          <BackButton fallback={activeCompany ? "/(tabs)" : profile?.role === "client" ? "/(client-tabs)/cuenta" : "/espacios"} />
           <Text style={styles.headerTitle}>Mi perfil</Text>
           <View style={styles.headerSpacer} />
         </View>
@@ -379,9 +393,11 @@ export default function ProfileScreen() {
               </>
             ) : null}
           </View>
-          <Text style={styles.title}>Información personal</Text>
+          <Text style={styles.title}>{completingTeamProfile ? "Completa tu perfil" : "Información personal"}</Text>
           <Text style={styles.subtitle}>
-            Mantén tus datos actualizados para identificar tu cuenta.
+            {completingTeamProfile
+              ? `Ya formas parte de ${activeCompany?.name}. Completa tus datos para que el equipo pueda identificarte.`
+              : "Mantén tus datos actualizados para identificar tu cuenta."}
           </Text>
 
           <View style={styles.formCard}>
@@ -449,10 +465,18 @@ export default function ProfileScreen() {
             ) : (
               <>
                 <Ionicons name="checkmark-circle-outline" size={20} color={colors.textLight} />
-                <Text style={styles.saveButtonText}>Guardar cambios</Text>
+                <Text style={styles.saveButtonText}>{completingTeamProfile ? "Guardar y entrar al equipo" : "Guardar cambios"}</Text>
               </>
             )}
           </Pressable>
+
+          <LeuretButton
+            label="Espacios de trabajo"
+            icon="swap-horizontal-outline"
+            variant="secondary"
+            accessibilityRole="button"
+            onPress={() => router.push("/espacios")}
+          />
 
           <ProfileOverview
             details={details}

@@ -308,7 +308,10 @@ export default function App() {
   }, [loadData]);
 
   const pendingUsers = useMemo(
-    () => data.users.filter((user) => !user.active && !user.approvedAt),
+    () => data.users.filter((user) =>
+      (!user.active && !user.approvedAt) ||
+      (user.active && user.contractorRequestedAt && !user.contractorApprovedAt)
+    ),
     [data.users]
   );
   const normalizedSearch = search.trim().toLowerCase();
@@ -521,7 +524,8 @@ export default function App() {
           ...userDraft(reviewUser),
           active: true
         },
-        session.user.id
+        session.user.id,
+        Boolean(contractorReview?.contractorRequestedAt && !contractorReview.contractorApprovedAt)
       );
 
       closeContractorReview();

@@ -114,9 +114,9 @@ export function invitationMessage(params: {
   return [
     `Te invito a unirte a ${params.companyName} en Leuret como ${params.roleLabel}.`,
     "",
-    `1. Entra a la app Leuret con el correo ${params.email}.`,
-    "2. Ve a Más → Unirme a una empresa (o \"Tengo un código\" al crear tu empresa).",
-    `3. Pega este código: ${params.code}`,
+    `Abre https://app.leurettech.com/invitacion?codigo=${encodeURIComponent(params.code)}`,
+    `Entra a Leuret con el correo ${params.email} y acepta la invitación.`,
+    `Código: ${params.code}`,
     "",
     "El código vence en 7 días.",
   ].join("\n");

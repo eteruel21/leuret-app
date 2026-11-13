@@ -1,53 +1,66 @@
 import { Ionicons } from "@expo/vector-icons";
-import { type Href, router } from "expo-router";
-import { useEffect, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { LeuretButton } from "@/components/LeuretButton";
 import { colors, radius } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
-import { acceptCompanyInvitation } from "@/services/users-service";
-import { showAlert } from "@/utils/alert";
+import { ROLE_LABELS } from "@/permissions/permissions";
+import {
+  acceptCompanyInvitation,
+  listReceivedCompanyInvitations,
+  type ReceivedCompanyInvitation,
+} from "@/services/users-service";
 import { clearPendingInvitation, readPendingInvitation } from "@/utils/pending-invitation";
 import { extractInvitationCode, isValidInvitationCode } from "@/utils/team";
 
 /** Formulario para unirse a una empresa con el código de invitación. */
-export function JoinCompanyForm() {
-  const { profile } = useAuth();
+export function JoinCompanyForm({ invitationId, initialCode }: { invitationId?: string; initialCode?: string } = {}) {
+  const { profile, refreshProfile } = useAuth();
   const { refreshCompanies } = useCompany();
-  const [input, setInput] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [input, setInput] = useState(initialCode ?? "");
+  const [submitting, setSubmitting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [fromLink, setFromLink] = useState(false);
+  const [fromLink, setFromLink] = useState(Boolean(initialCode));
+  const [invitations, setInvitations] = useState<ReceivedCompanyInvitation[]>([]);
+  const [listError, setListError] = useState<string | null>(null);
 
-  // Si llegó desde el enlace del correo, el código ya está listo.
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let active = true;
-    void readPendingInvitation().then((code) => {
+    if (!initialCode) void readPendingInvitation().then((code) => {
       if (active && code) {
         setInput(code);
         setFromLink(true);
       }
     });
+    void listReceivedCompanyInvitations().then(({ invitations: received }) => {
+      if (!active) return;
+      setInvitations(received);
+      setListError(null);
+    }).catch((err: unknown) => {
+      if (active) setListError(err instanceof Error ? err.message : "No se pudieron cargar tus invitaciones.");
+    });
     return () => {
       active = false;
     };
-  }, []);
+  }, [initialCode]));
 
-  const submit = async () => {
-    const code = extractInvitationCode(input);
-    if (!isValidInvitationCode(code)) {
+  const submit = async (id?: string) => {
+    if (submitting) return;
+    const code = id ? "" : extractInvitationCode(input);
+    if (!id && !isValidInvitationCode(code)) {
       setError("El código no parece completo. Pega el mensaje de invitación o el código tal como lo recibiste.");
       return;
     }
 
-    setSubmitting(true);
+    setSubmitting(id ?? "code");
     setError(null);
-    const result = await acceptCompanyInvitation(code);
+    const result = await acceptCompanyInvitation(id ? { invitationId: id } : code);
 
     if (!result.success || !result.companyId) {
-      setSubmitting(false);
+      setSubmitting(null);
       setError(
         result.error ??
           "La invitación no es válida, ya se usó o fue enviada a otro correo."
@@ -56,14 +69,56 @@ export function JoinCompanyForm() {
     }
 
     await clearPendingInvitation();
-    await refreshCompanies(result.companyId);
-    setSubmitting(false);
-    showAlert("¡Bienvenido!", "Ya formas parte de la empresa. Te llevamos al inicio.");
-    router.replace("/(tabs)" as Href);
+    setInput("");
+    setFromLink(false);
+    try {
+      const activated = await refreshCompanies(result.companyId);
+      await refreshProfile();
+      if (!activated) {
+        setInvitations((current) => current.filter((item) => item.company_id !== result.companyId));
+        setError("Ya te uniste al equipo. Vuelve al inicio para cargar tu espacio de trabajo.");
+        return;
+      }
+      if (!profile?.full_name?.trim() || !profile.phone?.trim()) {
+        router.replace({ pathname: "/perfil", params: { equipo: "1" } });
+      } else {
+        router.replace("/(tabs)");
+      }
+    } finally {
+      setSubmitting(null);
+    }
   };
+
+  const received = invitationId
+    ? [...invitations].sort((left, right) => Number(right.id === invitationId) - Number(left.id === invitationId))
+    : invitations;
 
   return (
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      {received.length ? (
+        <View style={styles.invitations}>
+          <Text style={styles.title}>Invitaciones recibidas</Text>
+          {received.map((invitation) => (
+            <View key={invitation.id} style={styles.invitation}>
+              <Text style={styles.companyName}>{invitation.company_name}</Text>
+              <Text style={styles.text}>{ROLE_LABELS[invitation.role]}</Text>
+              <LeuretButton
+                label="Unirme al equipo"
+                icon="enter-outline"
+                fullWidth
+                accessibilityRole="button"
+                accessibilityLabel="Unirme al equipo"
+                disabled={Boolean(submitting)}
+                loading={submitting === invitation.id}
+                onPress={() => void submit(invitation.id)}
+                style={styles.button}
+              />
+            </View>
+          ))}
+        </View>
+      ) : null}
+      {listError ? <Text accessibilityRole="alert" style={styles.error}>{listError}</Text> : null}
+      {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
       <View style={styles.icon}>
         <Ionicons name="key-outline" size={30} color={colors.primary} />
       </View>
@@ -75,6 +130,8 @@ export function JoinCompanyForm() {
 
       <TextInput
         value={input}
+        accessibilityLabel="Código de invitación"
+        editable={!submitting}
         onChangeText={(value) => {
           setInput(value);
           setError(null);
@@ -94,14 +151,14 @@ export function JoinCompanyForm() {
         </View>
       ) : null}
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-
       <LeuretButton
-        label="Unirme a la empresa"
+        label="Unirme con el código"
         icon="enter-outline"
         fullWidth
-        loading={submitting}
-        disabled={!input.trim()}
+        accessibilityRole="button"
+        accessibilityLabel="Unirme con el código"
+        loading={submitting === "code"}
+        disabled={!input.trim() || Boolean(submitting)}
         onPress={() => void submit()}
         style={styles.button}
       />
@@ -111,6 +168,7 @@ export function JoinCompanyForm() {
           label="Descartar esta invitación"
           variant="ghost"
           fullWidth
+          disabled={Boolean(submitting)}
           onPress={() => {
             void clearPendingInvitation();
             setInput("");
@@ -125,6 +183,15 @@ export function JoinCompanyForm() {
 
 const styles = StyleSheet.create({
   content: { padding: 20, paddingBottom: 40 },
+  invitations: { gap: 12, marginBottom: 24 },
+  invitation: {
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+  },
+  companyName: { color: colors.text, fontSize: 17, fontWeight: "800" },
   icon: {
     width: 60,
     height: 60,

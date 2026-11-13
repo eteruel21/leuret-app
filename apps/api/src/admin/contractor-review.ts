@@ -179,7 +179,7 @@ export async function getContractorReview(
             ON auth_user.id = profile.id
 
           WHERE profile.id = $1::uuid
-            AND profile.role = 'contractor'
+            AND (profile.role = 'contractor' OR profile.contractor_requested_at IS NOT NULL)
 
           LIMIT 1
         `,
@@ -332,7 +332,7 @@ export async function getContractorDocument(
               FROM public.profiles
 
               WHERE id = $1::uuid
-                AND role = 'contractor'
+                AND (role = 'contractor' OR contractor_requested_at IS NOT NULL)
 
               LIMIT 1
             `,

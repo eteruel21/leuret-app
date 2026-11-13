@@ -30,6 +30,8 @@ export type PlatformUser = {
   active: boolean;
   approvedAt: string | null;
   approvedBy: string | null;
+  contractorRequestedAt?: string | null;
+  contractorApprovedAt?: string | null;
   createdAt: string;
   companyName: string;
 };
@@ -72,6 +74,8 @@ export type UserProfileDetail = {
   active: boolean;
   status: string;
   approvedAt: string | null;
+  contractorRequestedAt?: string | null;
+  contractorApprovedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   location: {

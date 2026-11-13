@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { ScreenResumeContext } from "@/contexts/screen-resume-context";
 import { initialRouteFor } from "@/utils/initial-navigation";
+import { readPendingInvitation } from "@/utils/pending-invitation";
 
 /**
  * Ruta de entrada estable. Evita que Expo Router use /invitacion
@@ -18,18 +19,25 @@ export default function IndexScreen() {
   const { activeCompany, loading: companyLoading } = useCompany();
   const takeStartupScreen = useContext(ScreenResumeContext);
   const loading = authLoading ||
-    (session && profile?.role === "contractor" && profile.active && companyLoading);
+    Boolean(session && profile?.active && companyLoading);
   const destination = loading ? null : initialRouteFor({
     authenticated: Boolean(session),
     role: profile?.role,
     active: Boolean(profile?.active),
     primaryCategory: profile?.primary_category,
     hasActiveCompany: Boolean(activeCompany),
+    hasContractorApproval: Boolean(profile?.contractor_approved_at),
   });
 
   useFocusEffect(useCallback(() => {
-    if (destination) router.replace(takeStartupScreen() ?? destination);
-  }, [destination, takeStartupScreen]));
+    if (!destination) return;
+    let focused = true;
+    void readPendingInvitation().then((code) => {
+      if (!focused) return;
+      router.replace(session && code ? "/invitacion" : takeStartupScreen() ?? destination);
+    });
+    return () => { focused = false; };
+  }, [destination, session?.sessionId, takeStartupScreen]));
 
   if (loading || destination) {
     return <LeuretLoading fullScreen message="Preparando tu espacio de trabajo…" />;

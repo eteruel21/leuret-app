@@ -8,6 +8,7 @@ const contractor: InitialNavigationState = {
   active: true,
   primaryCategory: "construccion",
   hasActiveCompany: true,
+  hasContractorApproval: true,
 };
 
 describe("navegación inicial de Leuret", () => {
@@ -29,6 +30,15 @@ describe("navegación inicial de Leuret", () => {
 
   it("envía a crear o elegir empresa cuando no hay una activa", () => {
     expect(initialRouteFor({ ...contractor, hasActiveCompany: false })).toBe("/empresa");
+  });
+
+  it("abre el equipo de un invitado sin exigir un perfil de contratista", () => {
+    expect(initialRouteFor({ ...contractor, primaryCategory: null, hasContractorApproval: false })).toBe("/(tabs)");
+    expect(initialRouteFor({ ...contractor, role: "client", primaryCategory: null, hasContractorApproval: false })).toBe("/(tabs)");
+  });
+
+  it("permite revisar los espacios si el invitado pierde acceso al equipo", () => {
+    expect(initialRouteFor({ ...contractor, hasActiveCompany: false, hasContractorApproval: false })).toBe("/espacios");
   });
 
   it("envía al inicio de clientes sin requerir empresa de contratista", () => {

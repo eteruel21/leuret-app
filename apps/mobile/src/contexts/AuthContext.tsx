@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
 
@@ -170,6 +171,7 @@ export function AuthProvider({
 
   const [profileError, setProfileError] =
     useState<string | null>(null);
+  const currentSessionId = useRef<string | null>(null);
 
   const applySession = useCallback(
     (
@@ -177,6 +179,7 @@ export function AuthProvider({
         | StoredSession
         | null
     ) => {
+      currentSessionId.current = nextSession?.sessionId ?? null;
       setSession(nextSession);
       setProfile(
         nextSession?.user ?? null
@@ -231,9 +234,10 @@ export function AuthProvider({
     };
   }, [applySession]);
 
+  const sessionId = session?.sessionId;
   const refreshProfile =
     useCallback(async () => {
-      if (!session) {
+      if (!sessionId) {
         setProfile(null);
         return;
       }
@@ -242,20 +246,19 @@ export function AuthProvider({
         const current =
           await getCurrentUser();
 
-        const nextSession: StoredSession = {
-          ...session,
-          user: current.user,
-          requiresApproval:
-            current.requiresApproval
-        };
-
-        applySession(nextSession);
+        if (currentSessionId.current !== sessionId) return;
+        setSession((previous) => previous
+          ? { ...previous, user: current.user, requiresApproval: current.requiresApproval }
+          : null);
+        setProfile(current.user);
+        setProfileError(null);
       } catch (error) {
+        if (currentSessionId.current !== sessionId) return;
         setProfileError(
           errorMessage(error)
         );
       }
-    }, [applySession, session]);
+    }, [sessionId]);
 
   const signIn = useCallback(
     async (

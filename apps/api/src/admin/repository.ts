@@ -33,6 +33,8 @@ export async function getAdminDashboardDataRepo(userId: string) {
         profile.active,
         profile.approved_at,
         profile.approved_by,
+        profile.contractor_requested_at,
+        profile.contractor_approved_at,
         profile.created_at,
         COALESCE(
           (
@@ -232,6 +234,8 @@ export async function getAdminDashboardDataRepo(userId: string) {
         active: Boolean(row.active),
         approvedAt: row.approved_at ?? null,
         approvedBy: row.approved_by ?? null,
+        contractorRequestedAt: row.contractor_requested_at ?? null,
+        contractorApprovedAt: row.contractor_approved_at ?? null,
         createdAt: row.created_at,
         companyName: row.company_name
       })),
@@ -343,8 +347,27 @@ export async function updateAdminUserRepo(userId: string, targetUserId: string, 
             WHEN $4 THEN COALESCE(approved_by, $5::uuid)
             ELSE approved_by
           END,
+          contractor_approved_at = CASE
+            WHEN $3::public.global_user_role = 'super_admin' THEN NULL
+            WHEN $4 AND (
+              ($3::public.global_user_role = 'contractor' AND (approved_at IS NULL OR role <> 'contractor'))
+              OR $7
+            ) THEN COALESCE(contractor_approved_at, now())
+            WHEN role = 'contractor' AND $3::public.global_user_role = 'client' THEN NULL
+            ELSE contractor_approved_at
+          END,
           updated_at = now()
         WHERE id = $6
+          AND (NOT $7 OR ($4 AND contractor_requested_at IS NOT NULL
+            AND $3::public.global_user_role IN ('contractor', 'client')
+            AND role IN ('contractor', 'client')
+            AND NULLIF(btrim(id_document), '') IS NOT NULL
+            AND NULLIF(btrim(primary_category), '') IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM app_auth.users AS account
+              WHERE account.id = profiles.id AND account.deleted_at IS NULL
+                AND account.email_confirmed_at IS NOT NULL
+            )))
         RETURNING id
       `,
       [
@@ -353,7 +376,8 @@ export async function updateAdminUserRepo(userId: string, targetUserId: string, 
         input.role,
         input.active,
         userId,
-        targetUserId
+        targetUserId,
+        input.approveContractor === true
       ]
     );
 

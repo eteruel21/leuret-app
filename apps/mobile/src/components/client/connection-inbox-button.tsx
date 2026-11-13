@@ -5,16 +5,19 @@ import { useCallback, useState } from "react";
 import { AppState, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors, radius } from "@/constants/theme";
+import { useCompany } from "@/contexts/CompanyContext";
 import { listClientConnections } from "@/services/client-connections-service";
 
 export function ConnectionInboxButton() {
+  const { activeCompany } = useCompany();
+  const space = activeCompany ? "company" : "client";
   const [count, setCount] = useState(0);
 
   useFocusEffect(useCallback(() => {
     let active = true;
     async function refresh() {
       try {
-        const { requests } = await listClientConnections(true);
+        const { requests } = await listClientConnections(true, space);
         if (active) setCount(requests.filter((item) => item.incoming).length);
       } catch {
         // La bandeja muestra el error y permite reintentar.
@@ -36,7 +39,7 @@ export function ConnectionInboxButton() {
       appState.remove();
       push?.remove();
     };
-  }, []));
+  }, [space]));
 
   return (
     <Pressable

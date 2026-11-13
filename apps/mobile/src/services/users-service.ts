@@ -131,11 +131,23 @@ export async function listCompanyInvitations(
   }
 }
 
+export type ReceivedCompanyInvitation = {
+  id: string;
+  company_id: string;
+  company_name: string;
+  role: InvitableCompanyRole;
+  expires_at: string;
+};
+
+export async function listReceivedCompanyInvitations() {
+  return authenticatedRequest<{ invitations: ReceivedCompanyInvitation[] }>("/companies/invitations/received");
+}
+
 /**
  * Aceptar una invitación a una empresa utilizando el token seguro recibido.
  */
 export async function acceptCompanyInvitation(
-  token: string
+  invitation: string | { invitationId: string }
 ): Promise<{ success: boolean; companyId: string | null; error: string | null }> {
   try {
     const response = await authenticatedRequest<{
@@ -143,7 +155,7 @@ export async function acceptCompanyInvitation(
       companyId?: string;
     }>("/companies/invitations/accept", {
       method: "POST",
-      body: JSON.stringify({ token: token.trim() })
+      body: JSON.stringify(typeof invitation === "string" ? { token: invitation.trim() } : invitation)
     });
     return {
       success: true,

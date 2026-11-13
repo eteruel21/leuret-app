@@ -39,9 +39,10 @@ export async function registerClientConnectionRoutes(app: FastifyInstance) {
   const preHandler = [authenticateRequest, requireActiveUser];
 
   app.get("/client-connections", { preHandler }, async (request, reply) => {
-    const pendingOnly = (request.query as { pending?: unknown } | null)?.pending === "true";
+    const query = request.query as { pending?: unknown; space?: unknown };
+    const asClient = query.space === "client" ? true : query.space === "company" ? false : undefined;
     reply.header("Cache-Control", "private, no-store");
-    return { requests: await listClientConnections(request.authenticatedUser!.id, pendingOnly) };
+    return { requests: await listClientConnections(request.authenticatedUser!.id, query.pending === "true", asClient) };
   });
 
   app.post("/client-connections", {

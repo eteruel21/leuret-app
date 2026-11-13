@@ -37,6 +37,7 @@ import {
   deleteCompanyMemberService,
   getAdminAuditLogsService
 } from "./services.js";
+import { listReceivedCompanyInvitationsRepo } from "./repository.js";
 
 function authenticatedUserId(
   request: FastifyRequest,
@@ -88,7 +89,15 @@ export async function registerCompanyRoutes(
         });
       }
 
-      const companyId = await createCompanyService(userId, parsedBody.data);
+      let companyId;
+      try {
+        companyId = await createCompanyService(userId, parsedBody.data);
+      } catch (error) {
+        if ((error as { code?: string }).code === "42501") {
+          return reply.status(403).send({ message: "Tu cuenta debe estar aprobada como contratista para crear una empresa." });
+        }
+        throw error;
+      }
 
       if (!companyId) {
         return reply.status(500).send({
@@ -135,7 +144,8 @@ export async function registerCompanyRoutes(
   app.post(
     "/companies/:companyId/invitations",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"])],
+      config: { rateLimit: { max: 12, timeWindow: "1 minute" } }
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -164,7 +174,7 @@ export async function registerCompanyRoutes(
         });
       }
 
-      return reply.status(201).send({ invitation });
+      return reply.header("Cache-Control", "private, no-store").status(201).send({ invitation });
     }
   );
 
@@ -187,10 +197,22 @@ export async function registerCompanyRoutes(
     }
   );
 
+  app.get(
+    "/companies/invitations/received",
+    { preHandler: authenticateRequest },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+      reply.header("Cache-Control", "private, no-store");
+      return { invitations: await listReceivedCompanyInvitationsRepo(userId) };
+    }
+  );
+
   app.post(
     "/companies/invitations/accept",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: authenticateRequest,
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } }
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -198,10 +220,10 @@ export async function registerCompanyRoutes(
 
       const parsedBody = acceptInvitationSchema.safeParse(request.body);
       if (!parsedBody.success) {
-        return reply.status(400).send({ message: "El token de invitación no es válido." });
+        return reply.status(400).send({ message: "La invitación no es válida." });
       }
 
-      const result = await acceptCompanyInvitationService(userId, parsedBody.data.token);
+      const result = await acceptCompanyInvitationService(userId, parsedBody.data);
       if (!result.success) {
         return reply.status(400).send({ message: result.error });
       }

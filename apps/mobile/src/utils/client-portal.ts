@@ -141,6 +141,10 @@ export function notificationRoute(
   const id = (value: unknown) => (typeof value === "string" && UUID_PATTERN.test(value) ? value : null);
 
   switch (data.type) {
+    case "company_invitation.received": {
+      const invitationId = id(data.invitationId);
+      return invitationId ? { pathname: "/invitacion", params: { id: invitationId } } : null;
+    }
     case "client_connection.requested": {
       const requestId = id(data.requestId);
       return requestId ? { pathname: "/solicitudes", params: { id: requestId } } : null;

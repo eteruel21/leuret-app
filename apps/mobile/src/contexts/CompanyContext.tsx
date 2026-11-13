@@ -21,6 +21,7 @@ import type {
 
 const ACTIVE_COMPANY_KEY =
   "@contractor-pro:active-company-id";
+const CLIENT_SPACE = "client";
 
 type CreateCompanyInput = {
   name: string;
@@ -39,11 +40,12 @@ type CompanyContextValue = {
   refreshing: boolean;
 
   /** Recarga las empresas. Si se indica `preferredCompanyId` y existe, la activa. */
-  refreshCompanies: (preferredCompanyId?: string) => Promise<void>;
+  refreshCompanies: (preferredCompanyId?: string) => Promise<boolean>;
 
   setActiveCompanyId: (
     companyId: string
   ) => Promise<void>;
+  useClientSpace: () => Promise<void>;
 
   createCompany: (
     input: CreateCompanyInput
@@ -67,10 +69,9 @@ export function CompanyProvider({
     loading: authLoading
   } = useAuth();
 
-  const userId =
-    profile?.active
-      ? user?.id ?? null
-      : null;
+  const userId = user?.id ?? null;
+  const canLoadCompanies = Boolean(profile?.active);
+  const hasClientSpace = profile?.role === "client";
 
   const [memberships, setMemberships] =
     useState<CompanyMembership[]>([]);
@@ -134,7 +135,7 @@ export function CompanyProvider({
           ACTIVE_COMPANY_KEY
         );
 
-        return;
+        return false;
       }
 
       setRefreshing(true);
@@ -185,12 +186,15 @@ export function CompanyProvider({
             storedCompanyId
           );
 
-          return;
+          return !preferredCompanyId || storedCompanyId === preferredCompanyId;
         }
 
-        const firstCompanyId =
-          result.memberships[0]
-            ?.company_id ?? null;
+        if (hasClientSpace && storedCompanyId === CLIENT_SPACE) {
+          setActiveCompanyIdState(null);
+          return !preferredCompanyId;
+        }
+
+        const firstCompanyId = hasClientSpace ? null : result.memberships[0]?.company_id ?? null;
 
         setActiveCompanyIdState(
           firstCompanyId
@@ -206,19 +210,19 @@ export function CompanyProvider({
             ACTIVE_COMPANY_KEY
           );
         }
+        return !preferredCompanyId || firstCompanyId === preferredCompanyId;
       } catch (error) {
         console.error(
           "Error cargando empresas:",
           error
         );
 
-        setMemberships([]);
-        setActiveCompanyIdState(null);
+        return false;
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
-    }, [userId]);
+    }, [hasClientSpace, userId]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -228,6 +232,12 @@ export function CompanyProvider({
     void Promise.resolve().then(() => {
       if (!active) return;
 
+      if (userId && !canLoadCompanies) {
+        setMemberships([]);
+        setActiveCompanyIdState(null);
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       void refreshCompanies();
     });
@@ -237,6 +247,8 @@ export function CompanyProvider({
     };
   }, [
     authLoading,
+    canLoadCompanies,
+    userId,
     refreshCompanies
   ]);
 
@@ -267,6 +279,12 @@ export function CompanyProvider({
       },
       [memberships]
     );
+
+  const useClientSpace = useCallback(async () => {
+    if (!hasClientSpace) return;
+    await AsyncStorage.setItem(ACTIVE_COMPANY_KEY, CLIENT_SPACE);
+    setActiveCompanyIdState(null);
+  }, [hasClientSpace]);
 
   const createCompany =
     useCallback(
@@ -299,16 +317,9 @@ export function CompanyProvider({
           return result;
         }
 
-        await refreshCompanies();
-
-        setActiveCompanyIdState(
-          result.companyId
-        );
-
-        await AsyncStorage.setItem(
-          ACTIVE_COMPANY_KEY,
-          result.companyId
-        );
+        if (!await refreshCompanies(result.companyId)) {
+          return { ...result, error: "La empresa fue creada. Vuelve al inicio para cargar tu espacio de trabajo." };
+        }
 
         return result;
       },
@@ -326,6 +337,7 @@ export function CompanyProvider({
         refreshing,
         refreshCompanies,
         setActiveCompanyId,
+        useClientSpace,
         createCompany
       }),
       [
@@ -337,6 +349,7 @@ export function CompanyProvider({
         refreshing,
         refreshCompanies,
         setActiveCompanyId,
+        useClientSpace,
         createCompany
       ]
     );

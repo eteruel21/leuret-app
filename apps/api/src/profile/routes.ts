@@ -349,9 +349,25 @@ export async function registerProfileRoutes(
                 doc_technical_certs_urls = $21,
                 doc_references_url = $22,
                 doc_address_proof_url = $23,
+                contractor_requested_at = CASE
+                  WHEN active AND contractor_approved_at IS NULL
+                    AND NULLIF($2, '') IS NOT NULL AND NULLIF($5, '') IS NOT NULL
+                    THEN COALESCE(contractor_requested_at, now())
+                  ELSE contractor_requested_at
+                END,
                 updated_at = now()
               WHERE id = app.current_user_id()
-                AND role = 'contractor'
+                AND (
+                  role = 'contractor'
+                  OR (role = 'client' AND active AND (
+                    contractor_approved_at IS NOT NULL OR EXISTS (
+                      SELECT 1
+                      FROM public.company_members AS member
+                      JOIN public.companies AS company ON company.id = member.company_id AND company.active
+                      WHERE member.user_id = app.current_user_id() AND member.active
+                    )
+                  ))
+                )
               RETURNING id
             `,
             [

@@ -45,11 +45,11 @@ export function requestClientConnection(userId: string, input: ConnectionInput) 
   return withUserTransaction(userId, (client) => createConnectionRequest(client, input));
 }
 
-export async function listClientConnections(userId: string, pendingOnly = false) {
+export async function listClientConnections(userId: string, pendingOnly = false, asClient?: boolean) {
   return withUserTransaction(userId, async (client) => {
     const result = await client.query<ClientConnectionRow>(
-      `SELECT * FROM private.list_client_connection_requests() WHERE NOT $1::boolean OR status = 'pending'`,
-      [pendingOnly]
+      `SELECT * FROM private.list_client_connection_requests($2::boolean) WHERE NOT $1::boolean OR status = 'pending'`,
+      [pendingOnly, asClient ?? null]
     );
     return result.rows;
   });

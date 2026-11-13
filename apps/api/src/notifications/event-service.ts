@@ -62,6 +62,15 @@ export async function notifyClientConnectionRequest(requestId: string | null, re
   )));
 }
 
+export async function notifyCompanyInvitation(recipientId: string | null, invitationId: string) {
+  await dispatchEventPush(
+    recipientId,
+    "Invitación a un equipo en Leuret",
+    "Abre Leuret para revisar la invitación y unirte al equipo.",
+    { type: "company_invitation.received", invitationId }
+  );
+}
+
 /** Destinatarios sin repetir: el creador primero y luego owners/admins. */
 export function budgetDecisionRecipients(creatorId: string | null, managerIds: string[]): string[] {
   return [...new Set([creatorId, ...managerIds].filter((id): id is string => Boolean(id)))];
