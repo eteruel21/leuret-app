@@ -102,6 +102,7 @@ function RootNavigator() {
     void processOfflineSyncQueue();
   }, [
     isApproved,
+    profile?.id,
     profile?.notifications_opt_in,
   ]);
   const isPendingApproval = isAuthenticated && !profile?.active && !needsProfileSetup;
@@ -153,7 +154,7 @@ function RootNavigator() {
     });
   }, [canUseCompany, hasActiveCompany]);
 
-  // Tocar un aviso push abre su presupuesto o factura (también en arranque en frío).
+  // Tocar un aviso abre su solicitud o documento, incluso en arranque en frío.
   useNotificationNavigation({
     enabled: navigationReady && (isClientAuthenticated || hasActiveCompany),
     isClient: isClientAuthenticated,
@@ -222,6 +223,7 @@ function RootNavigator() {
 
         <Stack.Protected guard={isClientAuthenticated}>
           <Stack.Screen name="(client-tabs)" />
+          <Stack.Screen name="contratistas" />
           <Stack.Screen name="cliente-presupuestos" />
           <Stack.Screen name="cliente-facturas" />
           <Stack.Screen name="cliente-proyectos" />
@@ -229,6 +231,7 @@ function RootNavigator() {
 
         <Stack.Protected guard={hasActiveCompany || isClientAuthenticated}>
           <Stack.Screen name="perfil" />
+          <Stack.Screen name="solicitudes" options={{ ...stackBackOptions(initialRoute ?? "/"), headerShown: true, title: "Solicitudes de vinculación" }} />
         </Stack.Protected>
       </Stack>
     </ScreenResumeContext.Provider>

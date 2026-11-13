@@ -1,4 +1,5 @@
 import { withUserTransaction } from "../db/with-user-transaction.js";
+import { createConnectionRequest } from "../client-connections/repository.js";
 import type { z } from "zod";
 import type {
   clientFieldsSchema,
@@ -125,7 +126,16 @@ export async function createClientRepo(userId: string, input: CreateClientInput)
       );
     }
 
-    return customer;
+    const connection = customer && (input.email || input.phone || input.secondaryPhone)
+      ? await createConnectionRequest(client, {
+        companyId: input.companyId,
+        clientId: customer.id,
+        email: input.email,
+        phone: input.phone || input.secondaryPhone
+      })
+      : null;
+
+    return { customer, connection };
   });
 }
 

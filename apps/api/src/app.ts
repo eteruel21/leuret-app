@@ -26,6 +26,7 @@ import { registerStorageRoutes } from "./storage/routes.js";
 import { registerNotificationRoutes } from "./notifications/routes.js";
 import { registerAccountLegalRoutes } from "./account/routes.js";
 import { registerClientPortalRoutes } from "./client-portal/routes.js";
+import { registerClientConnectionRoutes } from "./client-connections/routes.js";
 import { safeErrorDetails } from "./security/redaction.js";
 import { createAppLogger, defaultLogLevel } from "./observability/logger.js";
 import { getClientIp } from "./security/client-ip.js";
@@ -161,6 +162,7 @@ export async function buildApp() {
   app.register(registerAccountLegalRoutes);
   app.register(registerDashboardRoutes);
   app.register(registerClientPortalRoutes);
+  app.register(registerClientConnectionRoutes);
 
   app.get("/health", async () => {
     return {

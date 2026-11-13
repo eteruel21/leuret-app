@@ -10,6 +10,7 @@ import {
 } from "../../budgets/repository.js";
 import { createInvoiceRepo, issueInvoiceRepo, recordInvoicePaymentRepo } from "../../invoices/repository.js";
 import { updateProjectPhotoSharingRepo } from "../../storage/repository.js";
+import { findClientContractorProfile, findContractorClientProcesses } from "../../clients/processes.js";
 import {
   findClientInvoicesRepo,
   findClientUpcomingActivitiesRepo,
@@ -247,5 +248,15 @@ describe("Portal del cliente: visibilidad y aislamiento", () => {
 
     const projectDetail = await getClientProjectDetailRepo(clientUserId, projectId);
     expect(projectDetail?.invoices.map((invoice: { id: string }) => invoice.id)).toEqual([invoiceId]);
+
+    const contractorProfile = await findClientContractorProfile(clientUserId, companyId);
+    expect(contractorProfile?.processes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "budget", id: budgetId }),
+      expect.objectContaining({ kind: "invoice", id: invoiceId }),
+      expect.objectContaining({ kind: "payment", amount: 100, parent_id: invoiceId })
+    ]));
+    expect(contractorProfile?.processes.some((item) => item.id === draftBudgetId)).toBe(false);
+    const companyProcesses = await findContractorClientProcesses(ownerId, companyId, clientId);
+    expect(companyProcesses).toContainEqual(expect.objectContaining({ kind: "budget", id: draftBudgetId }));
   });
 });

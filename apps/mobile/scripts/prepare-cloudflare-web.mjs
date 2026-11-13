@@ -9,40 +9,26 @@ import path from "node:path";
 
 const projectRoot = process.cwd();
 const distDirectory = path.join(projectRoot, "dist");
-const expoFontDirectory = path.join(
-  distDirectory,
-  "assets",
-  "node_modules",
-  "@expo",
-  "vector-icons",
-  "build",
-  "vendor",
-  "react-native-vector-icons",
-  "Fonts",
-);
 const publicFontDirectory = path.join(distDirectory, "fonts");
 
-const fontFiles = await readdir(expoFontDirectory);
-const ioniconsFile = fontFiles.find(
-  (fileName) =>
-    fileName.startsWith("Ionicons.") && fileName.endsWith(".ttf"),
-);
+const assetsDirectory = path.join(distDirectory, "assets");
+const assets = await readdir(assetsDirectory, { recursive: true });
+const ioniconsAsset = assets.find((file) => /^Ionicons\.[\da-f]+\.ttf$/i.test(path.basename(file)));
 
-if (!ioniconsFile) {
+if (!ioniconsAsset) {
   throw new Error(
     "No se encontró la fuente Ionicons en la exportación web de Expo.",
   );
 }
 
+const ioniconsFile = path.basename(ioniconsAsset);
 await mkdir(publicFontDirectory, { recursive: true });
 await copyFile(
-  path.join(expoFontDirectory, ioniconsFile),
+  path.join(assetsDirectory, ioniconsAsset),
   path.join(publicFontDirectory, ioniconsFile),
 );
 
-const oldFontUrl =
-  `/assets/node_modules/@expo/vector-icons/build/vendor/` +
-  `react-native-vector-icons/Fonts/${ioniconsFile}`;
+const oldFontUrl = `/assets/${ioniconsAsset.split(path.sep).join("/")}`;
 const newFontUrl = `/fonts/${ioniconsFile}`;
 const webBundleDirectory = path.join(
   distDirectory,

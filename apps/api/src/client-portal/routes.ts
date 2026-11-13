@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import { authenticateRequest, requireActiveUser } from "../auth/authenticate.js";
+import { findClientContractorProfile } from "../clients/processes.js";
 import { getStorageSignedUrl } from "../storage/provider.js";
 
 import {
@@ -14,6 +15,7 @@ import {
 
 const invoiceParamsSchema = z.object({ invoiceId: z.string().uuid() });
 const projectParamsSchema = z.object({ projectId: z.string().uuid() });
+const companyParamsSchema = z.object({ companyId: z.string().uuid() });
 
 function authenticatedUserId(request: FastifyRequest, reply: FastifyReply): string | null {
   const userId = request.authenticatedUser?.id;
@@ -25,11 +27,23 @@ function authenticatedUserId(request: FastifyRequest, reply: FastifyReply): stri
 }
 
 /**
- * Portal del cliente final. Solo lectura: lo que el cliente puede hacer
- * (aprobar o rechazar presupuestos) sigue en /budgets/:id/approve|reject.
+ * Consultas de solo lectura del portal del cliente.
  */
 export async function registerClientPortalRoutes(app: FastifyInstance): Promise<void> {
   const preHandler = [authenticateRequest, requireActiveUser];
+
+  app.get("/client/contractors/:companyId", { preHandler }, async (request, reply) => {
+    const userId = authenticatedUserId(request, reply);
+    if (!userId) return;
+
+    const parsed = companyParamsSchema.safeParse(request.params);
+    if (!parsed.success) return reply.status(400).send({ message: "Identificador de contratista no válido." });
+
+    const profile = await findClientContractorProfile(userId, parsed.data.companyId);
+    if (!profile) return reply.status(404).send({ message: "No se encontró el contratista vinculado." });
+    reply.header("Cache-Control", "private, no-store");
+    return profile;
+  });
 
   app.get("/client/summary", { preHandler }, async (request, reply) => {
     const userId = authenticatedUserId(request, reply);

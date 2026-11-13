@@ -19,10 +19,10 @@ export type SavedScreen = {
 const SCREEN_GROUPS: Record<ResumeScope, readonly string[]> = {
   "/(tabs)": [
     "(tabs)", "agenda", "calculos", "catalogo", "clientes", "equipo",
-    "facturas", "perfil", "presupuestos", "proyectos", "tareas",
+    "facturas", "perfil", "presupuestos", "proyectos", "solicitudes", "tareas",
   ],
   "/(client-tabs)": [
-    "(client-tabs)", "cliente-facturas", "cliente-presupuestos", "cliente-proyectos", "perfil",
+    "(client-tabs)", "cliente-facturas", "cliente-presupuestos", "cliente-proyectos", "contratistas", "perfil", "solicitudes",
   ],
   "/empresa": ["empresa"],
   "/pendiente": ["pendiente"],
@@ -68,6 +68,10 @@ export function resumableScreen(
     const id = routeParameter(params, "id");
     if (!id) return null;
     screenParams.id = id;
+  }
+  if (pathname === "/solicitudes") {
+    const id = routeParameter(params, "id");
+    if (id) screenParams.id = id;
   }
   if (group === "calculos") {
     const budgetId = routeParameter(params, "budgetId");

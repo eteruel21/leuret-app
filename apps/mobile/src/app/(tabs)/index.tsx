@@ -11,6 +11,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { ConnectionInboxButton } from "@/components/client/connection-inbox-button";
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -274,22 +275,17 @@ export default function HomeScreen() {
           >
             <View style={styles.brand}><Image source={require("../../../assets/images/leuret-logo-header.png")} style={styles.brandLogo} resizeMode="contain" /></View>
 
-            <Pressable
-              accessibilityLabel="Abrir perfil"
-              accessibilityRole="button"
-              onPress={() => router.push("/perfil" as Href)}
-              style={({ pressed }) => [
-                styles.avatar,
-                pressed && styles.avatarPressed,
-              ]}
-            >
-              <UserAvatar
-                fallback={initial}
-                size={40}
-                textStyle={styles.avatarText}
-                uri={profile?.avatar_url}
-              />
-            </Pressable>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <ConnectionInboxButton />
+              <Pressable
+                accessibilityLabel="Abrir perfil"
+                accessibilityRole="button"
+                onPress={() => router.push("/perfil" as Href)}
+                style={({ pressed }) => [styles.avatar, pressed && styles.avatarPressed]}
+              >
+                <UserAvatar fallback={initial} size={40} textStyle={styles.avatarText} uri={profile?.avatar_url} />
+              </Pressable>
+            </View>
           </Animated.View>
 
           <Animated.View

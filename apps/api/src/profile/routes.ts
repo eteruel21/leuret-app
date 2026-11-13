@@ -18,7 +18,8 @@ const updateProfileSchema = z.object({
     .string()
     .trim()
     .max(30)
-    .nullable()
+    .nullable(),
+  notificationsOptIn: z.boolean().optional()
 });
 
 const updateAvatarSchema = z.object({
@@ -178,7 +179,7 @@ export async function registerProfileRoutes(
         });
       }
 
-      const { fullName, phone } =
+      const { fullName, phone, notificationsOptIn } =
         parsedBody.data;
 
       const updated = await withUserTransaction(
@@ -192,13 +193,15 @@ export async function registerProfileRoutes(
               SET
                 full_name = $1,
                 phone = $2,
+                notifications_opt_in = COALESCE($3, notifications_opt_in),
                 updated_at = now()
               WHERE id = app.current_user_id()
               RETURNING id
             `,
             [
               fullName,
-              phone
+              phone,
+              notificationsOptIn ?? null
             ]
           );
 

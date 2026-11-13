@@ -98,6 +98,10 @@ export async function findUserPushTokensRepo(userId: string) {
         SELECT id, user_id, expo_push_token, device_platform
         FROM public.user_push_tokens
         WHERE user_id = app.current_user_id()
+          AND EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = app.current_user_id() AND notifications_opt_in = true
+          )
       `
     );
     return result.rows;

@@ -5,6 +5,7 @@ import { type SavedScreen, resumableScreen, startupScreen } from "../screen-resu
 const paths = new Set([
   "/", "/(tabs)", "/(tabs)/calculos", "/(client-tabs)/facturas",
   "/calculos/concreto", "/facturas", "/facturas/[id]",
+  "/contratistas/[id]", "/solicitudes",
   "/empresa", "/empresa/unirme", "/invitacion", "/(auth)/reset-password",
 ]);
 
@@ -42,6 +43,12 @@ describe("retomar la última pantalla de Leuret", () => {
     })).toEqual({
       pathname: "/calculos/concreto", params: { uso: "viga", budgetId: "budget-123" },
     });
+  });
+
+  it("recupera la ficha del contratista y la solicitud abierta", () => {
+    const params = { id: "item-123" };
+    expect(resumableScreen("/(client-tabs)", paths, "/contratistas/[id]", params)).toEqual({ pathname: "/contratistas/[id]", params });
+    expect(resumableScreen(scope, paths, "/solicitudes", params)).toEqual({ pathname: "/solicitudes", params });
   });
 
   it("omite rutas transitorias, de autenticación, eliminadas o sin un identificador válido", () => {

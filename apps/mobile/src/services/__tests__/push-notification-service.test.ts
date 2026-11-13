@@ -59,6 +59,10 @@ vi.mock("expo-device", () => ({
   isDevice: true
 }));
 
+vi.mock("expo-constants", () => ({
+  default: { expoConfig: { extra: { eas: { projectId: "app-config-project-id" } } } }
+}));
+
 vi.mock(
   "expo-notifications",
   () => ({

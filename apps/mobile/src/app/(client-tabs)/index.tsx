@@ -1,10 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { type Href, router, useFocusEffect } from "expo-router";
+import { Link, type Href, router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ContactActions } from "@/components/client/ContactActions";
+import { ConnectionInboxButton } from "@/components/client/connection-inbox-button";
+import { LeuretButton } from "@/components/LeuretButton";
 import { LeuretEmptyState } from "@/components/LeuretEmptyState";
 import { LeuretFeedback } from "@/components/LeuretFeedback";
 import { LeuretLoading } from "@/components/LeuretLoading";
@@ -28,7 +30,7 @@ function greeting(): string {
 }
 
 export default function ClientHomeScreen() {
-  const { profile, user } = useAuth();
+  const { profile } = useAuth();
   const profileId = profile?.id;
   const [contractors, setContractors] = useState<ContractorCompany[]>([]);
   const [summary, setSummary] = useState<ClientSummary | null>(null);
@@ -78,6 +80,7 @@ export default function ClientHomeScreen() {
             {firstName}
           </Text>
         </View>
+        <ConnectionInboxButton />
         <Pressable
           accessibilityLabel="Mi cuenta"
           onPress={() => router.navigate("/(client-tabs)/cuenta" as Href)}
@@ -184,30 +187,32 @@ export default function ClientHomeScreen() {
               </View>
             )}
 
-            <Text style={styles.sectionTitle}>Tus contratistas</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Tus contratistas</Text>
+              <LeuretButton label="Agregar contratista" icon="add" variant="secondary" onPress={() => router.push("/solicitudes")} />
+            </View>
             {contractors.length === 0 ? (
               <LeuretEmptyState
                 icon="business-outline"
                 title="Sin contratistas vinculados"
-                description={`Pídele a tu contratista que te registre con tu correo (${user?.email || "el que usaste al registrarte"}) para vincularte automáticamente.`}
+                description="Envía una solicitud con el correo o celular de tu contratista. También puedes aceptar las solicitudes que te envíen."
                 compact
               />
             ) : (
               contractors.map((company) => (
                 <View key={company.id} style={styles.companyCard}>
-                  <View style={styles.companyHeader}>
-                    <View style={styles.companyAvatar}>
-                      <Text style={styles.companyInitial}>{company.name.trim().charAt(0).toUpperCase()}</Text>
-                    </View>
-                    <View style={styles.companyInfo}>
-                      <Text style={styles.companyName}>{company.name}</Text>
-                      {company.address ? (
-                        <Text style={styles.companyMeta} numberOfLines={1}>
-                          {company.address}
-                        </Text>
-                      ) : null}
-                    </View>
-                  </View>
+                  <Link href={{ pathname: "/contratistas/[id]", params: { id: company.id } }} asChild>
+                    <Pressable style={styles.companyHeader} accessibilityLabel={`Ver perfil de ${company.name}`}>
+                      <View style={styles.companyAvatar}>
+                        <Text style={styles.companyInitial}>{company.name.trim().charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <View style={styles.companyInfo}>
+                        <Text style={styles.companyName}>{company.name}</Text>
+                        {company.address ? <Text style={styles.companyMeta} numberOfLines={1}>{company.address}</Text> : null}
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+                    </Pressable>
+                  </Link>
                   <View style={styles.companyActions}>
                     <ContactActions
                       phone={company.phone}
@@ -315,6 +320,7 @@ const styles = StyleSheet.create({
   tileLabel: { marginTop: 2, color: colors.textSecondary, fontSize: 12, fontWeight: "700" },
   tileLabelAlert: { color: colors.danger },
   sectionTitle: { marginTop: 10, fontSize: 17, fontWeight: "900", color: colors.text },
+  sectionHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8 },
   visitCard: {
     flexDirection: "row",
     gap: 14,

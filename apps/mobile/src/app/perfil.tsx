@@ -47,6 +47,7 @@ export default function ProfileScreen() {
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
   const [phone, setPhone] = useState(profile?.phone ?? "");
+  const [notificationsOptIn, setNotificationsOptIn] = useState(Boolean(profile?.notifications_opt_in));
   const [saving, setSaving] = useState(false);
   const [accountAction, setAccountAction] = useState<"export" | "delete" | null>(null);
   const [details, setDetails] = useState<UserProfileDetails | null>(null);
@@ -90,12 +91,13 @@ export default function ProfileScreen() {
       if (!active) return;
       setFullName(profile?.full_name ?? "");
       setPhone(profile?.phone ?? "");
+      setNotificationsOptIn(Boolean(profile?.notifications_opt_in));
     });
 
     return () => {
       active = false;
     };
-  }, [profile?.id, profile?.updated_at, profile?.full_name, profile?.phone]);
+  }, [profile?.id, profile?.updated_at, profile?.full_name, profile?.phone, profile?.notifications_opt_in]);
 
   const initial = useMemo(
     () => (fullName.trim().charAt(0) || "P").toUpperCase(),
@@ -178,13 +180,14 @@ export default function ProfileScreen() {
 
   const hasChanges =
     fullName.trim() !== (profile?.full_name ?? "").trim() ||
-    phone.trim() !== (profile?.phone ?? "").trim();
+    phone.trim() !== (profile?.phone ?? "").trim() ||
+    notificationsOptIn !== Boolean(profile?.notifications_opt_in);
 
   const handleSave = async () => {
     if (saving || !hasChanges) return;
 
     setSaving(true);
-    const { error } = await updateProfile({ fullName, phone });
+    const { error } = await updateProfile({ fullName, phone, notificationsOptIn });
     setSaving(false);
 
     if (error) {
@@ -421,6 +424,15 @@ export default function ProfileScreen() {
             <Text style={styles.helperText}>
               El correo de acceso no se modifica desde esta pantalla.
             </Text>
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: notificationsOptIn }}
+              onPress={() => setNotificationsOptIn((enabled) => !enabled)}
+              style={styles.notificationsOption}
+            >
+              <Ionicons name={notificationsOptIn ? "checkbox" : "square-outline"} size={23} color={colors.primary} />
+              <Text style={styles.notificationsLabel}>Recibir avisos de solicitudes, presupuestos y facturas en mi dispositivo</Text>
+            </Pressable>
           </View>
 
           <Pressable
@@ -513,6 +525,8 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  notificationsOption: { minHeight: 48, marginTop: 12, flexDirection: "row", alignItems: "center", gap: 10 },
+  notificationsLabel: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "700" },
   flex: { flex: 1 },
   safeArea: { flex: 1, backgroundColor: colors.surfaceDark },
   header: {
