@@ -3,7 +3,7 @@ import type {
   JobRequestQuoteStatus,
   JobRequestTiming,
 } from "@/types/job-request";
-import { formatMoney } from "@/utils/format";
+import { formatMoney } from "./format";
 import type { StatusTone } from "@/utils/client-portal";
 
 export const JOB_REQUEST_TIMINGS: { value: JobRequestTiming; label: string }[] = [
