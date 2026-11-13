@@ -5,7 +5,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "r
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ContactActions } from "@/components/client/ContactActions";
-import { ConnectionInboxButton } from "@/components/client/connection-inbox-button";
+import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { LeuretButton } from "@/components/LeuretButton";
 import { LeuretEmptyState } from "@/components/LeuretEmptyState";
 import { LeuretFeedback } from "@/components/LeuretFeedback";
@@ -80,7 +80,7 @@ export default function ClientHomeScreen() {
             {firstName}
           </Text>
         </View>
-        <ConnectionInboxButton />
+        <NotificationsBell />
         <Pressable
           accessibilityLabel="Mi cuenta"
           onPress={() => router.navigate("/(client-tabs)/cuenta" as Href)}

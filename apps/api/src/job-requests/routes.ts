@@ -13,6 +13,7 @@ import {
   createJobRequestRepo,
   deleteJobRequestPhotoRepo,
   findJobRequestFeedRepo,
+  findJobRequestInboxRepo,
   findMatchingRecipientsRepo,
   findMyJobRequestsRepo,
   getContractorJobRequestRepo,
@@ -30,6 +31,7 @@ import {
   conversationParamsSchema,
   createJobRequestSchema,
   feedQuerySchema,
+  inboxQuerySchema,
   photoParamsSchema,
   requestParamsSchema,
   sendJobRequestMessageSchema,
@@ -158,6 +160,17 @@ export async function registerJobRequestRoutes(app: FastifyInstance): Promise<vo
     }
 
     return reply.status(201).send({ requestId });
+  });
+
+  // Bandeja de la campana: conversaciones de cliente y de contratista.
+  app.get("/job-requests/inbox", { preHandler: activeUser }, async (request, reply) => {
+    const userId = authenticatedUserId(request, reply);
+    if (!userId) return;
+
+    const query = inboxQuerySchema.safeParse(request.query ?? {});
+    if (!query.success) return reply.status(400).send({ message: "Parámetros no válidos." });
+
+    return findJobRequestInboxRepo(userId, query.data.limit, query.data.space);
   });
 
   app.get("/job-requests/mine", { preHandler: activeUser }, async (request, reply) => {

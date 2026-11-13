@@ -7,6 +7,7 @@ import type {
   JobRequestConversation,
   JobRequestFeed,
   JobRequestFeedScope,
+  JobRequestInbox,
   JobRequestMessage,
   JobRequestPhoto,
 } from "@/types/job-request";
@@ -137,4 +138,13 @@ export async function sendJobRequestMessage(
     { method: "POST", body: JSON.stringify(input) },
   );
   return res.message;
+}
+
+/** Conversaciones del usuario para la campana, con las no leídas primero. */
+export function getJobRequestInbox(
+  options: { limit?: number; space?: "client" | "company" } = {},
+): Promise<JobRequestInbox> {
+  const params = new URLSearchParams({ limit: String(options.limit ?? 30) });
+  if (options.space) params.set("space", options.space);
+  return authenticatedRequest<JobRequestInbox>(`/job-requests/inbox?${params.toString()}`);
 }

@@ -7,6 +7,7 @@ import {
   closeJobRequestRepo,
   createJobRequestRepo,
   findJobRequestFeedRepo,
+  findJobRequestInboxRepo,
   findMatchingRecipientsRepo,
   findMyJobRequestsRepo,
   getContractorJobRequestRepo,
@@ -223,6 +224,46 @@ describe("Peticiones de trabajo: publicación, privacidad y presupuestos", () =>
     await expect(
       sendJobRequestMessageRepo(clientUserId, requestId, plumbingCompanyId, "Hola", null, null)
     ).rejects.toMatchObject({ code: "P0002" });
+  });
+
+  it("muestra los mensajes nuevos en la campana de cada lado", async () => {
+    await sendJobRequestMessageRepo(electricianId, requestId, electricCompanyId, "¿Cuántos son dobles?", null, null);
+
+    const clientInbox = await findJobRequestInboxRepo(clientUserId, 30);
+    expect(clientInbox).toMatchObject({ unreadMessages: 1, unreadConversations: 1 });
+    expect(clientInbox.conversations[0]).toMatchObject({
+      request_id: requestId,
+      company_id: electricCompanyId,
+      side: "client",
+      unread_count: 1,
+      last_sender_side: "company",
+      last_body: "¿Cuántos son dobles?"
+    });
+    // Con el espacio de empresa activo, el cliente no ve sus conversaciones de cliente.
+    expect((await findJobRequestInboxRepo(clientUserId, 30, "company")).conversations).toEqual([]);
+    expect((await findJobRequestInboxRepo(clientUserId, 30, "client")).unreadMessages).toBe(1);
+    // Lo que escribe uno mismo no cuenta como nuevo.
+    expect((await findJobRequestInboxRepo(electricianId, 30)).unreadMessages).toBe(0);
+
+    // Abrir la conversación la marca como leída.
+    await getConversationRepo(clientUserId, requestId, electricCompanyId);
+    expect((await findJobRequestInboxRepo(clientUserId, 30)).unreadMessages).toBe(0);
+
+    await sendJobRequestMessageRepo(clientUserId, requestId, electricCompanyId, "Dos dobles.", null, null);
+    const companyInbox = await findJobRequestInboxRepo(electricianId, 30);
+    expect(companyInbox).toMatchObject({ unreadMessages: 1, unreadConversations: 1 });
+    expect(companyInbox.conversations[0]).toMatchObject({
+      side: "company",
+      counterpart_name: "María",
+      unread_count: 1,
+      last_body: "Dos dobles."
+    });
+
+    // Otra empresa y otro cliente no ven la conversación.
+    expect((await findJobRequestInboxRepo(plumberId, 30)).conversations).toEqual([]);
+    expect((await findJobRequestInboxRepo(outsiderClientId, 30)).conversations).toEqual([]);
+
+    await getConversationRepo(electricianId, requestId, electricCompanyId);
   });
 
   it("crea el presupuesto en borrador y revela el contacto al enviarlo", async () => {

@@ -19,10 +19,10 @@ export type SavedScreen = {
 const SCREEN_GROUPS: Record<ResumeScope, readonly string[]> = {
   "/(tabs)": [
     "(tabs)", "agenda", "calculos", "catalogo", "clientes", "equipo",
-    "espacios", "facturas", "perfil", "presupuestos", "proyectos", "solicitudes", "tareas",
+    "espacios", "facturas", "notificaciones", "perfil", "presupuestos", "proyectos", "solicitudes", "tareas",
   ],
   "/(client-tabs)": [
-    "(client-tabs)", "cliente-facturas", "cliente-presupuestos", "cliente-proyectos", "contratistas", "espacios", "perfil", "solicitudes",
+    "(client-tabs)", "cliente-facturas", "cliente-presupuestos", "cliente-proyectos", "contratistas", "espacios", "notificaciones", "perfil", "solicitudes",
   ],
   "/empresa": ["empresa"],
   "/espacios": ["espacios", "perfil"],
