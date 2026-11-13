@@ -24,6 +24,10 @@ export const CAPABILITIES = {
   "budgets.view": ["owner", "admin", "estimator"],
   "budgets.edit": ["owner", "admin", "estimator"],
 
+  // Peticiones de trabajo de clientes — job-requests/routes.ts
+  "jobRequests.view": ["owner", "admin", "estimator", "sales"],
+  "jobRequests.quote": ["owner", "admin", "estimator"],
+
   // Proyectos — projects/routes.ts
   "projects.list": ALL_ROLES,
   "projects.view": ALL_ROLES,

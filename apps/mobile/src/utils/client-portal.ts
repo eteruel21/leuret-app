@@ -136,7 +136,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 export function notificationRoute(
   data: Record<string, unknown> | null | undefined,
   isClient: boolean,
-): { pathname: string; params: { id: string } } | null {
+): { pathname: string; params: Record<string, string> } | null {
   if (!data || typeof data.type !== "string") return null;
   const id = (value: unknown) => (typeof value === "string" && UUID_PATTERN.test(value) ? value : null);
 
@@ -162,6 +162,18 @@ export function notificationRoute(
       return isClient
         ? { pathname: "/cliente-facturas/[id]", params: { id: invoiceId } }
         : { pathname: "/facturas/[id]", params: { id: invoiceId } };
+    }
+    case "job_request.created": {
+      const requestId = id(data.requestId);
+      return requestId && !isClient ? { pathname: "/peticiones/[id]", params: { id: requestId } } : null;
+    }
+    case "job_request.message": {
+      const requestId = id(data.requestId);
+      const companyId = id(data.companyId);
+      if (!requestId || !companyId) return null;
+      return isClient
+        ? { pathname: "/cliente-peticiones/conversacion", params: { requestId, companyId } }
+        : { pathname: "/peticiones/conversacion", params: { requestId, companyId } };
     }
     default:
       return null;
