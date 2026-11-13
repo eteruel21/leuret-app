@@ -378,7 +378,10 @@ export async function getContractorJobRequestRepo(userId: string, companyId: str
           detail.reference
         FROM public.job_requests AS job
         CROSS JOIN me
-        LEFT JOIN public.job_request_details AS detail ON detail.request_id = job.id
+        -- Además de RLS: la dirección solo sale si la empresa ya envió su presupuesto.
+        LEFT JOIN public.job_request_details AS detail
+          ON detail.request_id = job.id
+         AND private.job_request_contact_revealed(job.id)
         WHERE job.id = $1
           AND job.requester_id <> app.current_user_id()
         LIMIT 1

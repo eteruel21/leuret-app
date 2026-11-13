@@ -77,6 +77,24 @@ async function addItem(companyId: string, budgetId: string) {
   );
 }
 
+/** Cuenta filas visibles con RLS real (los repositorios en CI usan superusuario). */
+async function visibleRowsAs(userId: string, table: string, requestId: string) {
+  const client = await adminPool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SET LOCAL ROLE contractor_api");
+    await client.query("SELECT set_config('app.user_id', $1, true)", [userId]);
+    const result = await client.query<{ total: number }>(
+      `SELECT count(*)::int AS total FROM public.${table} WHERE request_id = $1`,
+      [requestId]
+    );
+    await client.query("ROLLBACK");
+    return result.rows[0]!.total;
+  } finally {
+    client.release();
+  }
+}
+
 const feed = { search: null, category: null, province: null, limit: 20, offset: 0 } as const;
 
 describe("Peticiones de trabajo: publicación, privacidad y presupuestos", () => {
@@ -172,6 +190,11 @@ describe("Peticiones de trabajo: publicación, privacidad y presupuestos", () =>
     expect(detail?.request.address_line).toBeNull();
     expect(detail?.photos).toHaveLength(1);
 
+    // Con RLS: la dirección privada solo la ve quien publicó.
+    expect(await visibleRowsAs(clientUserId, "job_request_details", requestId)).toBe(1);
+    expect(await visibleRowsAs(electricianId, "job_request_details", requestId)).toBe(0);
+    expect(await visibleRowsAs(outsiderClientId, "job_request_photos", requestId)).toBe(0);
+
     // Otro cliente no ve peticiones ajenas.
     expect(await findMyJobRequestsRepo(outsiderClientId)).toHaveLength(0);
     expect(await getMyJobRequestRepo(outsiderClientId, requestId)).toBeNull();
@@ -193,6 +216,8 @@ describe("Peticiones de trabajo: publicación, privacidad y presupuestos", () =>
     ]);
 
     // La otra empresa no puede leer esa conversación.
+    expect(await visibleRowsAs(plumberId, "job_request_messages", requestId)).toBe(0);
+    expect(await visibleRowsAs(electricianId, "job_request_messages", requestId)).toBe(2);
     expect(await getConversationRepo(plumberId, requestId, electricCompanyId)).toBeNull();
     // El cliente no puede iniciar una conversación con una empresa que no le escribió.
     await expect(
@@ -225,6 +250,8 @@ describe("Peticiones de trabajo: publicación, privacidad y presupuestos", () =>
     const detail = await getContractorJobRequestRepo(electricianId, electricCompanyId, requestId);
     expect(detail?.request.address_line).toBe("Calle 5, casa 22");
     expect(detail?.request.quotes_sent_count).toBe(1);
+    expect(await visibleRowsAs(electricianId, "job_request_details", requestId)).toBe(1);
+    expect(await visibleRowsAs(plumberId, "job_request_details", requestId)).toBe(0);
 
     const mine = await getMyJobRequestRepo(clientUserId, requestId);
     expect(mine?.conversations[0]?.budget_id).toBe(budgetId);
