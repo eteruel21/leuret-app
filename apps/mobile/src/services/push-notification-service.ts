@@ -1,3 +1,4 @@
+import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
@@ -15,10 +16,10 @@ Notifications.setNotificationHandler({
 });
 
 function expoProjectId(): string | null {
-  return (
-    process.env.EXPO_PUBLIC_PROJECT_ID
-      ?.trim() || null
-  );
+  const configuredId: unknown = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+  return process.env.EXPO_PUBLIC_PROJECT_ID?.trim()
+    || (typeof configuredId === "string" ? configuredId.trim() : null)
+    || null;
 }
 
 async function currentExpoPushToken():
@@ -67,6 +68,15 @@ Promise<string | null> {
       return null;
     }
 
+    if (Platform.OS === "android") {
+      await Notifications.setNotificationChannelAsync("default", {
+        name: "default",
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#FF231F7C"
+      });
+    }
+
     const {
       status: existingStatus
     } =
@@ -84,26 +94,6 @@ Promise<string | null> {
 
     if (finalStatus !== "granted") {
       return null;
-    }
-
-    if (Platform.OS === "android") {
-      await Notifications
-        .setNotificationChannelAsync(
-          "default",
-          {
-            name: "default",
-            importance:
-              Notifications
-                .AndroidImportance.MAX,
-            vibrationPattern: [
-              0,
-              250,
-              250,
-              250
-            ],
-            lightColor: "#FF231F7C"
-          }
-        );
     }
 
     const tokenData =

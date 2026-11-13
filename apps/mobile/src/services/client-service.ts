@@ -11,6 +11,8 @@ import type {
 import type {
   Company
 } from "@/types/company";
+import type { RelationshipProcess } from "@/types/relationship-process";
+import type { ConnectionOutcome } from "./client-connections-service";
 
 export type ContractorCompany = Pick<
   Company,
@@ -72,12 +74,14 @@ export async function createClient(
   input: CreateClientInput
 ): Promise<{
   client: Client | null;
+  connection: ConnectionOutcome | null;
   error: string | null;
 }> {
   try {
     const response =
       await authenticatedRequest<{
         client: Client;
+        connection: ConnectionOutcome | null;
       }>(
         "/clients",
         {
@@ -88,11 +92,13 @@ export async function createClient(
 
     return {
       client: response.client,
+      connection: response.connection ?? null,
       error: null
     };
   } catch (error) {
     return {
       client: null,
+      connection: null,
       error: errorMessage(error)
     };
   }
@@ -130,23 +136,27 @@ export async function getClientById(
   clientId: string
 ): Promise<{
   client: ClientWithDetails | null;
+  processes: RelationshipProcess[];
   error: string | null;
 }> {
   try {
     const response =
       await authenticatedRequest<{
         client: ClientWithDetails;
+        processes: RelationshipProcess[];
       }>(
         `/clients/${clientId}?companyId=${encodeURIComponent(companyId)}`
       );
 
     return {
       client: response.client,
+      processes: response.processes ?? [],
       error: null
     };
   } catch (error) {
     return {
       client: null,
+      processes: [],
       error: errorMessage(error)
     };
   }

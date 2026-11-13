@@ -51,6 +51,17 @@ function formatAmount(value: unknown, currency: string | null): string | null {
   }
 }
 
+export async function notifyClientConnectionRequest(requestId: string | null, recipientIds: string[] | null) {
+  if (!requestId || !recipientIds?.length) return;
+
+  await Promise.all(recipientIds.map((recipient) => dispatchEventPush(
+    recipient,
+    "Nueva solicitud en Leuret",
+    "Abre Leuret para revisar y responder la solicitud de vinculación.",
+    { type: "client_connection.requested", requestId }
+  )));
+}
+
 /** Destinatarios sin repetir: el creador primero y luego owners/admins. */
 export function budgetDecisionRecipients(creatorId: string | null, managerIds: string[]): string[] {
   return [...new Set([creatorId, ...managerIds].filter((id): id is string => Boolean(id)))];

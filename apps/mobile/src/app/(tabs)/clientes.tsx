@@ -28,6 +28,7 @@ import { FadeInUp } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LeuretEmptyState } from "@/components/LeuretEmptyState";
+import { LeuretButton } from "@/components/LeuretButton";
 import { LeuretLoading } from "@/components/LeuretLoading";
 import { MotionPressable } from "@/components/MotionPressable";
 import {
@@ -262,6 +263,9 @@ export default function ClientsScreen() {
               ) : null}
             </View>
 
+            <LeuretButton label="Solicitudes de vinculación" icon="notifications-outline" variant="secondary"
+              onPress={() => router.push("/solicitudes")} />
+
             <View style={styles.searchBox}>
               <Ionicons
                 name="search-outline"
@@ -422,7 +426,7 @@ function CreateClientModal({
     try {
       setSubmitting(true);
 
-      const { error } = await createClient({
+      const { error, connection } = await createClient({
         companyId,
         clientType,
         firstName,
@@ -447,6 +451,13 @@ function CreateClientModal({
       resetForm();
       onClose();
       onCreated();
+      if (connection === "sent") {
+        Alert.alert("Cliente guardado", "Enviamos una solicitud para que el cliente acepte la vinculación en Leuret.");
+      } else if (connection === "pending") {
+        Alert.alert("Cliente guardado", "Ya hay una solicitud pendiente. Puedes revisarla en Solicitudes de vinculación.");
+      } else if (connection === "not_found" || connection === "ambiguous") {
+        Alert.alert("Cliente guardado", "Revisa el correo o celular registrado en Leuret y envía una solicitud desde su ficha.");
+      }
     } finally {
       setSubmitting(false);
     }

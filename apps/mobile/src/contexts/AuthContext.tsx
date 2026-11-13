@@ -92,6 +92,7 @@ type AuthResult = {
 type UpdateProfileInput = {
   fullName: string;
   phone?: string;
+  notificationsOptIn?: boolean;
 };
 
 type UpdateProfileResult = {
@@ -369,7 +370,8 @@ export function AuthProvider({
   const updateProfile = useCallback(
     async ({
       fullName,
-      phone = ""
+      phone = "",
+      notificationsOptIn
     }: UpdateProfileInput):
     Promise<UpdateProfileResult> => {
       try {
@@ -377,7 +379,8 @@ export function AuthProvider({
           fullName:
             fullName.trim(),
           phone:
-            phone.trim() || null
+            phone.trim() || null,
+          notificationsOptIn
         });
 
         await refreshProfile();

@@ -74,4 +74,10 @@ describe("notificationRoute", () => {
     expect(notificationRoute({ type: "otro" }, true)).toBeNull();
     expect(notificationRoute(null, true)).toBeNull();
   });
+  it("abre la solicitud desde un aviso en cualquiera de los dos roles", () => {
+    const data = { type: "client_connection.requested", requestId: id };
+    expect(notificationRoute(data, true)).toEqual({ pathname: "/solicitudes", params: { id } });
+    expect(notificationRoute(data, false)).toEqual({ pathname: "/solicitudes", params: { id } });
+    expect(notificationRoute({ ...data, requestId: "../perfil" }, false)).toBeNull();
+  });
 });

@@ -459,6 +459,7 @@ export async function updateOwnProfile(
   input: {
     fullName: string;
     phone: string | null;
+    notificationsOptIn?: boolean;
   }
 ): Promise<void> {
   await authenticatedRequest(

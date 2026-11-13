@@ -9,6 +9,8 @@ import {
   requireActiveUser,
   requireCompanyRole
 } from "../auth/authenticate.js";
+import { notifyClientConnectionRequest } from "../notifications/event-service.js";
+import { findContractorClientProcesses } from "./processes.js";
 
 import {
   companyQuerySchema,
@@ -120,15 +122,16 @@ export async function registerClientRoutes(
         return reply.status(400).send({ message: nameError });
       }
 
-      const createdClient = await createClientService(userId, input);
+      const { customer, connection } = await createClientService(userId, input);
 
-      if (!createdClient) {
+      if (!customer) {
         return reply.status(500).send({
           message: "No se pudo crear el cliente."
         });
       }
 
-      return reply.status(201).send({ client: createdClient });
+      if (connection) await notifyClientConnectionRequest(connection.request_id, connection.notify_user_ids);
+      return reply.status(201).send({ client: customer, connection: connection?.outcome ?? null });
     }
   );
 
@@ -158,7 +161,9 @@ export async function registerClientRoutes(
         });
       }
 
-      return { client: customer };
+      const processes = await findContractorClientProcesses(userId, parsedQuery.data.companyId, customer.id);
+      reply.header("Cache-Control", "private, no-store");
+      return { client: customer, processes };
     }
   );
 

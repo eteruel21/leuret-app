@@ -1,4 +1,5 @@
 import { authenticatedRequest } from "@/services/api";
+import type { RelationshipProcess } from "@/types/relationship-process";
 import type { BudgetStatus } from "@/types/budget";
 import type {
   InvoicePaymentMethod,
@@ -20,6 +21,17 @@ export type ClientCompanyInfo = {
   timezone?: string | null;
   payment_instructions?: string | null;
 };
+
+export type ContractorProfile = { company: ClientCompanyInfo; processes: RelationshipProcess[] };
+
+export async function getClientContractorProfile(id: string): Promise<{ profile: ContractorProfile | null; error: string | null }> {
+  try {
+    const profile = await authenticatedRequest<ContractorProfile>(`/client/contractors/${encodeURIComponent(id)}`);
+    return { profile, error: null };
+  } catch (error) {
+    return { profile: null, error: errorMessage(error) };
+  }
+}
 
 export type ClientInvoice = {
   id: string;

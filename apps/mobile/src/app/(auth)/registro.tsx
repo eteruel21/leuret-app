@@ -613,7 +613,7 @@ export default function RegisterScreen() {
                 color={notificationsOptIn ? colors.primary : colors.textSecondary}
               />
               <Text style={styles.checkboxLabel}>
-                Autorizo recibir notificaciones sobre presupuestos, estados y facturas.
+                Autorizo recibir avisos sobre solicitudes, presupuestos y facturas.
               </Text>
             </Pressable>
 

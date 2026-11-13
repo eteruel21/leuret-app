@@ -3,12 +3,13 @@ import {
   type Href,
   router,
   Stack,
+  useFocusEffect,
   useLocalSearchParams,
 } from "expo-router";
 import {
   useCallback,
-  useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -32,8 +33,14 @@ import {
   radius,
 } from "@/constants/theme";
 import { LeuretLoading } from "@/components/LeuretLoading";
+import { LeuretFeedback } from "@/components/LeuretFeedback";
+import { LeuretButton } from "@/components/LeuretButton";
+import { StatusPill } from "@/components/client/StatusPill";
+import { RelationshipProcesses } from "@/components/client/relationship-processes";
+import type { RelationshipProcess } from "@/types/relationship-process";
 import { useCompany } from "@/contexts/CompanyContext";
 import { usePermissions } from "@/hooks/usePermissions";
+import { requestClientConnection } from "@/services/client-connections-service";
 import {
   addClientAddress,
   createClientContact,
@@ -80,6 +87,9 @@ export default function ClientDetailScreen() {
   const [projects, setProjects] = useState<
     Project[]
   >([]);
+  const [processes, setProcesses] = useState<RelationshipProcess[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [sendingConnection, setSendingConnection] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] =
     useState(false);
@@ -93,6 +103,7 @@ export default function ClientDetailScreen() {
     useState(false);
   const [contactModalVisible, setContactModalVisible] = useState(false);
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
+  const requestNumber = useRef(0);
 
   const primaryAddress = useMemo(() => {
     if (!client) return null;
@@ -103,15 +114,16 @@ export default function ClientDetailScreen() {
       ) ?? client.addresses[0] ?? null
     );
   }, [client]);
+  const email = client?.email;
+  const phone = client?.phone || client?.secondary_phone;
 
   const loadData = useCallback(
     async (showRefresh = false) => {
       if (!activeCompany || !clientId) return;
+      const number = ++requestNumber.current;
 
       if (showRefresh) {
         setRefreshing(true);
-      } else {
-        setLoading(true);
       }
 
       const [clientResult, projectsResult] =
@@ -123,21 +135,17 @@ export default function ClientDetailScreen() {
           ),
         ]);
 
+      if (number !== requestNumber.current) return;
+
       if (clientResult.error) {
-        Alert.alert(
-          "No fue posible cargar el cliente",
-          clientResult.error,
-        );
+        setLoadError(clientResult.error);
       } else {
         setClient(clientResult.client);
+        setProcesses(clientResult.processes);
+        setLoadError(projectsResult.error);
       }
 
-      if (projectsResult.error) {
-        Alert.alert(
-          "No fue posible cargar los proyectos",
-          projectsResult.error,
-        );
-      } else {
+      if (!projectsResult.error) {
         setProjects(projectsResult.projects);
       }
 
@@ -147,17 +155,27 @@ export default function ClientDetailScreen() {
     [activeCompany, clientId],
   );
 
-  useEffect(() => {
-    let active = true;
+  useFocusEffect(useCallback(() => {
+    void loadData();
+    return () => { requestNumber.current += 1; };
+  }, [loadData]));
 
-    void Promise.resolve().then(() => {
-      if (active) void loadData();
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [loadData]);
+  async function sendConnection(contact: { email: string } | { phone: string }) {
+    if (!activeCompany || !client || sendingConnection) return;
+    setSendingConnection(true);
+    try {
+      const { outcome } = await requestClientConnection({ companyId: activeCompany.id, clientId: client.id, ...contact });
+      if (outcome === "linked") {
+        await loadData(true);
+      } else {
+        router.push("/solicitudes");
+      }
+    } catch (error) {
+      Alert.alert("No pudimos enviar la solicitud", error instanceof Error ? error.message : "Inténtalo de nuevo.");
+    } finally {
+      setSendingConnection(false);
+    }
+  }
 
   function handleDeleteAddress(address: ClientAddress) {
     Alert.alert(
@@ -251,14 +269,15 @@ export default function ClientDetailScreen() {
     );
   }
 
-  if (loading) return <LeuretLoading message="Cargando cliente…" fullScreen />;
+  if (loading || (client && (client.company_id !== activeCompany.id || client.id !== clientId) && !loadError)) {
+    return <LeuretLoading message="Cargando cliente…" fullScreen />;
+  }
 
-  if (!client) {
+  if (!client || client.company_id !== activeCompany.id || client.id !== clientId) {
     return (
       <View style={styles.loading}>
-        <Text style={styles.emptyTitle}>
-          Cliente no encontrado
-        </Text>
+        <LeuretFeedback title="No pudimos abrir la ficha" message={loadError ?? "Cliente no encontrado."}
+          tone="error" actionLabel="Reintentar" onAction={() => void loadData(true)} />
       </View>
     );
   }
@@ -282,6 +301,8 @@ export default function ClientDetailScreen() {
           />
         }
       >
+        {loadError ? <LeuretFeedback title="No pudimos actualizar la ficha" message={loadError}
+          tone="error" actionLabel="Reintentar" onAction={() => void loadData(true)} /> : null}
         <View style={styles.profileCard}>
           <View style={styles.profileIcon}>
             <Ionicons
@@ -307,6 +328,20 @@ export default function ClientDetailScreen() {
             </Text>
           </View>
         </View>
+
+        {client.user_id || canEditClient ? (
+          <InfoSection title="Vinculación en Leuret">
+            {client.user_id ? <StatusPill label="Cuenta vinculada" tone="success" /> : (
+              <View style={{ gap: 8 }}>
+                {email ? <LeuretButton label="Enviar solicitud por correo" icon="mail-outline" variant="secondary"
+                  disabled={sendingConnection} onPress={() => void sendConnection({ email })} /> : null}
+                {phone ? <LeuretButton label="Enviar solicitud por celular" icon="call-outline" variant="secondary"
+                  disabled={sendingConnection} onPress={() => void sendConnection({ phone })} /> : null}
+                {!email && !phone ? <EmptySmall text="Agrega el correo o celular registrado en Leuret para enviarle una solicitud." /> : null}
+              </View>
+            )}
+          </InfoSection>
+        ) : null}
 
         <InfoSection
           title="Información"
@@ -405,7 +440,7 @@ export default function ClientDetailScreen() {
             ))
           )}
         </InfoSection>
-
+        <RelationshipProcesses processes={processes} isClient={false} includeProjects={false} />
         <View style={styles.section}>
           <SavedCalculationsSection clientId={client.id} />
         </View>
