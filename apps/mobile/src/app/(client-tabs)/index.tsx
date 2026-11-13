@@ -128,10 +128,9 @@ export default function ClientHomeScreen() {
               </MotionPressable>
             ) : null}
 
-            <MotionPressable
+            <Pressable
               onPress={() => router.push("/cliente-peticiones/nueva" as Href)}
-              pressedScale={0.985}
-              style={[styles.actionBanner, styles.requestBanner]}
+              style={({ pressed }) => [styles.actionBanner, styles.requestBanner, pressed && styles.requestBannerPressed]}
               accessibilityRole="button"
               accessibilityLabel="Publicar una petición de trabajo"
             >
@@ -143,7 +142,7 @@ export default function ClientHomeScreen() {
                 <Text style={styles.actionBody}>Publica una petición y recibe hasta 5 presupuestos de contratistas de tu zona.</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.textInverse} />
-            </MotionPressable>
+            </Pressable>
 
             <View style={styles.tiles}>
               <Tile
@@ -310,6 +309,7 @@ const styles = StyleSheet.create({
     ...shadows.glow,
   },
   requestBanner: { backgroundColor: colors.primary },
+  requestBannerPressed: { opacity: 0.9, transform: [{ scale: 0.985 }] },
   actionIcon: {
     width: 40,
     height: 40,

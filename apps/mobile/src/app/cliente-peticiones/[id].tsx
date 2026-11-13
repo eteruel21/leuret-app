@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
-import { Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { StatusPill } from "@/components/client/StatusPill";
@@ -9,7 +9,6 @@ import { PhotoStrip } from "@/components/job-requests/PhotoStrip";
 import { LeuretButton } from "@/components/LeuretButton";
 import { LeuretFeedback } from "@/components/LeuretFeedback";
 import { LeuretLoading } from "@/components/LeuretLoading";
-import { MotionPressable } from "@/components/MotionPressable";
 import { colors, radius, shadows } from "@/constants/theme";
 import {
   closeJobRequest,
@@ -43,17 +42,16 @@ function ConversationRow({ conversation, requestId }: { conversation: JobRequest
 
   return (
     <View style={styles.companyCard}>
-      <MotionPressable
+      <Pressable
         onPress={() =>
           router.push({
             pathname: "/cliente-peticiones/conversacion",
             params: { requestId, companyId: conversation.company_id },
           } as Href)
         }
-        pressedScale={0.985}
         accessibilityRole="button"
         accessibilityLabel={`Conversación con ${conversation.company_name}`}
-        style={styles.companyHeader}
+        style={({ pressed }) => [styles.companyHeader, pressed && styles.pressed]}
       >
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{conversation.company_name.trim().charAt(0).toUpperCase()}</Text>
@@ -76,17 +74,16 @@ function ConversationRow({ conversation, requestId }: { conversation: JobRequest
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           )}
         </View>
-      </MotionPressable>
+      </Pressable>
 
       {conversation.budget_id ? (
-        <MotionPressable
+        <Pressable
           onPress={() =>
             router.push({ pathname: "/cliente-presupuestos/[id]", params: { id: conversation.budget_id! } } as Href)
           }
-          pressedScale={0.985}
           accessibilityRole="button"
           accessibilityLabel={`Ver presupuesto ${conversation.budget_number ?? ""}`}
-          style={styles.quote}
+          style={({ pressed }) => [styles.quote, pressed && styles.pressed]}
         >
           <Ionicons name="document-text-outline" size={18} color={colors.primary} />
           <View style={styles.quoteInfo}>
@@ -96,7 +93,7 @@ function ConversationRow({ conversation, requestId }: { conversation: JobRequest
             </Text>
           </View>
           {budgetState ? <StatusPill label={budgetState.label} tone={budgetState.tone} /> : null}
-        </MotionPressable>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -359,6 +356,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     ...shadows.soft,
   },
+  pressed: { backgroundColor: colors.surfaceRaised },
   companyHeader: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
   avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
   avatarText: { color: colors.primary, fontSize: 17, fontWeight: "900" },
