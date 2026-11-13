@@ -34,8 +34,11 @@ export function MotionPressable({ children, pressedScale = 0.97, style, onPressI
         setIsPressed(false);
         onPressOut?.(event);
       }}
-      style={(state: PressableStateCallbackType) => [
-        typeof style === "function" ? style(state) : style,
+      // Reanimated no acepta `style` como función en un componente animado: en la web
+      // descartaba todos los estilos (botones sin fondo, filas en columna). Se resuelve aquí
+      // con el estado de presión que ya se lleva, y se pasa un arreglo normal.
+      style={[
+        typeof style === "function" ? style({ pressed: isPressed, hovered: false } as PressableStateCallbackType) : style,
         animatedStyle,
       ]}
     >
