@@ -266,9 +266,11 @@ export default function NewJobRequestScreen() {
               />
             </View>
           </Field>
+        </ScrollView>
 
+        <View style={styles.footer}>
+          {/* El error va junto al botón para que se vea sin desplazarse. */}
           {formError ? <LeuretFeedback tone="error" title="Revisa la petición" message={formError} style={styles.feedback} /> : null}
-
           <LeuretButton
             label={progress ?? "Publicar petición"}
             icon="megaphone-outline"
@@ -278,7 +280,7 @@ export default function NewJobRequestScreen() {
             fullWidth
           />
           <Text style={styles.footnote}>La petición queda abierta 30 días o hasta recibir 5 presupuestos.</Text>
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -287,7 +289,15 @@ export default function NewJobRequestScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  content: { padding: 20, paddingBottom: 48 },
+  content: { padding: 20, paddingBottom: 28 },
+  footer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surface,
+  },
   intro: {
     color: colors.textSecondary,
     fontSize: 13,
@@ -316,7 +326,8 @@ const styles = StyleSheet.create({
   stacked: { marginTop: 8 },
   counter: { alignSelf: "flex-end", marginTop: 4, color: colors.textMuted, fontSize: 11, fontWeight: "700" },
   row: { flexDirection: "row", gap: 10 },
-  half: { flex: 1 },
-  feedback: { marginTop: 18 },
-  footnote: { marginTop: 10, color: colors.textMuted, fontSize: 12, fontWeight: "600", textAlign: "center" },
+  // minWidth 0: en la web un TextInput no se encoge por debajo de su ancho propio y se salía de la pantalla.
+  half: { flex: 1, minWidth: 0 },
+  feedback: { marginBottom: 10 },
+  footnote: { marginTop: 8, color: colors.textMuted, fontSize: 12, fontWeight: "600", textAlign: "center" },
 });

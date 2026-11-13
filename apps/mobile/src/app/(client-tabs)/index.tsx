@@ -128,21 +128,39 @@ export default function ClientHomeScreen() {
               </MotionPressable>
             ) : null}
 
-            <Pressable
+            <MotionPressable
               onPress={() => router.push("/cliente-peticiones/nueva" as Href)}
-              style={({ pressed }) => [styles.actionBanner, styles.requestBanner, pressed && styles.requestBannerPressed]}
+              pressedScale={0.985}
+              style={styles.requestCard}
               accessibilityRole="button"
               accessibilityLabel="Publicar una petición de trabajo"
             >
-              <View style={styles.actionIcon}>
-                <Ionicons name="megaphone" size={22} color={colors.textInverse} />
+              <View style={styles.requestGlow} />
+              <View style={styles.requestTop}>
+                <View style={styles.requestIcon}>
+                  <Ionicons name="megaphone" size={22} color={colors.textInverse} />
+                </View>
+                <View style={styles.actionText}>
+                  <Text style={styles.requestEyebrow}>PETICIONES DE TRABAJO</Text>
+                  <Text style={styles.requestTitle}>¿Necesitas un trabajo?</Text>
+                </View>
               </View>
-              <View style={styles.actionText}>
-                <Text style={styles.actionTitle}>¿Necesitas un trabajo?</Text>
-                <Text style={styles.actionBody}>Publica una petición y recibe hasta 5 presupuestos de contratistas de tu zona.</Text>
+              <Text style={styles.requestBody}>
+                Describe lo que necesitas y recibe hasta 5 presupuestos de contratistas de tu zona.
+              </Text>
+              <View style={styles.requestPerks}>
+                {(["Gratis", "Sin compromiso", "Tus datos protegidos"] as const).map((perk) => (
+                  <View key={perk} style={styles.requestPerk}>
+                    <Ionicons name="checkmark-circle" size={14} color={colors.sand} />
+                    <Text style={styles.requestPerkText}>{perk}</Text>
+                  </View>
+                ))}
               </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textInverse} />
-            </Pressable>
+              <View style={styles.requestCta}>
+                <Text style={styles.requestCtaText}>Publicar petición</Text>
+                <Ionicons name="arrow-forward" size={17} color={colors.textInverse} />
+              </View>
+            </MotionPressable>
 
             <View style={styles.tiles}>
               <Tile
@@ -308,8 +326,61 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     ...shadows.glow,
   },
-  requestBanner: { backgroundColor: colors.primary },
-  requestBannerPressed: { opacity: 0.9, transform: [{ scale: 0.985 }] },
+  requestCard: {
+    overflow: "hidden",
+    padding: 18,
+    gap: 12,
+    borderRadius: radius.xl,
+    backgroundColor: colors.surfaceDark,
+    borderWidth: 1,
+    borderColor: colors.surfaceDarkRaised,
+    ...shadows.raised,
+  },
+  requestGlow: {
+    position: "absolute",
+    top: -70,
+    right: -60,
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    backgroundColor: colors.accent,
+    opacity: 0.16,
+    pointerEvents: "none",
+  },
+  requestTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+  requestIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.accent,
+  },
+  requestEyebrow: { color: colors.sand, fontSize: 10, fontWeight: "900", letterSpacing: 1.2 },
+  requestTitle: { marginTop: 2, color: colors.textInverse, fontSize: 19, fontWeight: "900", letterSpacing: -0.3 },
+  requestBody: { color: colors.textLightMuted, fontSize: 13, lineHeight: 19, fontWeight: "600" },
+  requestPerks: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  requestPerk: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceDarkRaised,
+  },
+  requestPerkText: { color: colors.textLight, fontSize: 11, fontWeight: "800" },
+  requestCta: {
+    marginTop: 2,
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: radius.md,
+    backgroundColor: colors.accent,
+  },
+  requestCtaText: { color: colors.textInverse, fontSize: 14, fontWeight: "900" },
   actionIcon: {
     width: 40,
     height: 40,

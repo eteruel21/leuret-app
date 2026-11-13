@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+
 export const colors = {
   // LEURET — Beacon Dusk
   primary: "#1E2A3A",
@@ -148,30 +150,33 @@ export const typography = {
   },
 };
 
+type ShadowSpec = { color: string; y: number; opacity: number; blur: number; elevation: number };
+
+/**
+ * En la web se usa `boxShadow` (las props shadow* están obsoletas en react-native-web);
+ * en iOS y Android se mantienen shadow* + elevation.
+ */
+function shadow({ color, y, opacity, blur, elevation }: ShadowSpec) {
+  if (Platform.OS === "web") {
+    const hex = color.replace("#", "");
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    return { boxShadow: `0px ${y}px ${blur}px rgba(${r}, ${g}, ${b}, ${opacity})` };
+  }
+  return {
+    shadowColor: color,
+    shadowOffset: { width: 0, height: y },
+    shadowOpacity: opacity,
+    shadowRadius: blur,
+    elevation,
+  };
+}
+
 export const shadows = {
-  soft: {
-    shadowColor: "#1E2A3A",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.06,
-    shadowRadius: 15,
-    elevation: 3,
-  },
-
-  raised: {
-    shadowColor: "#1E2A3A",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.10,
-    shadowRadius: 24,
-    elevation: 6,
-  },
-
-  glow: {
-    shadowColor: "#E23D3D",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 5,
-  },
+  soft: shadow({ color: "#1E2A3A", y: 5, opacity: 0.06, blur: 15, elevation: 3 }),
+  raised: shadow({ color: "#1E2A3A", y: 10, opacity: 0.1, blur: 24, elevation: 6 }),
+  glow: shadow({ color: "#E23D3D", y: 0, opacity: 0.18, blur: 16, elevation: 5 }),
 };
 
 export const motion = {
