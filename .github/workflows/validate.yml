@@ -87,7 +87,8 @@ jobs:
             --exclude src/invoices/__tests__/document_numbering.test.ts \
             --exclude src/client-portal/__tests__/client-portal.test.ts \
             --exclude src/client-connections/__tests__/client-connections.test.ts \
-            --exclude src/job-requests/__tests__/job-requests.test.ts
+            --exclude src/job-requests/__tests__/job-requests.test.ts \
+            --exclude src/account/__tests__/account-deletion.test.ts
 
       - name: 8. Prepare isolated authorization database
         env:
@@ -133,7 +134,8 @@ jobs:
             src/invoices/__tests__/document_numbering.test.ts \
             src/client-portal/__tests__/client-portal.test.ts \
             src/client-connections/__tests__/client-connections.test.ts \
-            src/job-requests/__tests__/job-requests.test.ts
+            src/job-requests/__tests__/job-requests.test.ts \
+            src/account/__tests__/account-deletion.test.ts
 
       - name: 11. Test mobile app
         run: npm run test -w apps/mobile

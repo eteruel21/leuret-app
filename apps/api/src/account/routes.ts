@@ -1,48 +1,48 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { authenticateRequest } from "../auth/authenticate.js";
 import { env } from "../config/env.js";
 import { withUserTransaction } from "../db/with-user-transaction.js";
 import { safeErrorDetails } from "../security/redaction.js";
 import {
+  generateAccountExportToken,
+  verifyAccountExportToken
+} from "../storage/signed-url.js";
+import {
   isObjectStorageConfigured
 } from "../storage/provider.js";
+import {
+  AccountNotAvailableError,
+  buildAccountExport
+} from "./export.js";
+import {
+  type AccountDeletionScope,
+  type RawRetainedCategory,
+  buildDeletionPreview,
+  describeRetainedCategories
+} from "./retention.js";
 import { processAccountDeletionStorageQueue } from "./storage-cleanup.js";
 import {
   PRIVACY_POLICY_CONTENT,
   TERMS_OF_SERVICE_CONTENT
 } from "./legal-content.js";
 
-type ProfileStorageReferences = {
-  id: string;
-  doc_id_url: string | null;
-  doc_operation_notice_url: string | null;
-  doc_references_url: string | null;
-  doc_address_proof_url: string | null;
+const EXPORT_LINK_MINUTES = 10;
+
+type DeleteOwnAccountResult = {
+  deletedAt: string;
+  deleted: Record<string, number>;
+  storageObjectsQueued: number;
+  retained: RawRetainedCategory[];
+  retentionUntil: string | null;
 };
 
-type StorageCleanupItem = {
-  objectReference: string;
+type DatabaseErrorLike = {
+  code?: string;
+  detail?: string;
+  hint?: string;
+  message?: string;
 };
-
-const PROFILE_DOCUMENT_FIELDS = [
-  {
-    column: "doc_id_url",
-    documentType: "identification"
-  },
-  {
-    column: "doc_operation_notice_url",
-    documentType: "operation_notice"
-  },
-  {
-    column: "doc_references_url",
-    documentType: "references"
-  },
-  {
-    column: "doc_address_proof_url",
-    documentType: "address_proof"
-  }
-] as const;
 
 function getRefreshTokenClearOptions() {
   const isProductionOrStaging =
@@ -67,22 +67,52 @@ function getRefreshTokenClearOptions() {
   return options;
 }
 
-function buildStorageCleanupItems(
-  profile: ProfileStorageReferences | undefined
-): StorageCleanupItem[] {
-  if (!profile) {
+function requestOrigin(request: FastifyRequest): string {
+  return `${request.protocol}://${request.host}`;
+}
+
+function exportFileName(): string {
+  return `leuret-datos-${new Date().toISOString().slice(0, 10)}.json`;
+}
+
+function parseBlockers(detail: string | undefined): AccountDeletionScope["blockers"] {
+  if (!detail) return [];
+  try {
+    const parsed: unknown = JSON.parse(detail);
+    return Array.isArray(parsed) ? parsed as AccountDeletionScope["blockers"] : [];
+  } catch {
     return [];
   }
+}
 
-  return PROFILE_DOCUMENT_FIELDS.flatMap((document) => {
-    const expectedObjectReference =
-      `profile-documents/${profile.id}/${document.documentType}`;
-    const storedReference = profile[document.column];
+async function sendAccountExport(
+  app: FastifyInstance,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  userId: string
+) {
+  try {
+    const exportData = await buildAccountExport(userId, requestOrigin(request));
 
-    return storedReference?.trim() === expectedObjectReference
-      ? [{ objectReference: expectedObjectReference }]
-      : [];
-  });
+    reply.header(
+      "Content-Disposition",
+      `attachment; filename="${exportFileName()}"`
+    );
+    reply.header("Content-Type", "application/json; charset=utf-8");
+    reply.header("Cache-Control", "no-store");
+    return exportData;
+  } catch (error) {
+    if (error instanceof AccountNotAvailableError) {
+      return reply.status(410).send({
+        message: "La cuenta ya no está disponible."
+      });
+    }
+
+    app.log.error(safeErrorDetails(error), "Falló una operación de cuenta.");
+    return reply.status(500).send({
+      message: "Error al exportar los datos de la cuenta."
+    });
+  }
 }
 
 export async function registerAccountLegalRoutes(
@@ -104,9 +134,77 @@ export async function registerAccountLegalRoutes(
     content: PRIVACY_POLICY_CONTENT
   }));
 
-  // T-135: Data Export Endpoint
+  // Exportación de datos (acceso y portabilidad). Incluye un índice de los
+  // documentos y fotos del usuario con enlaces firmados de 24 horas.
   app.get(
     "/account/export",
+    {
+      preHandler: authenticateRequest,
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } }
+    },
+    async (request, reply) => {
+      const userId = request.authenticatedUser?.id;
+      if (!userId) {
+        return reply.status(401).send({
+          message: "Se requiere autenticación."
+        });
+      }
+
+      return sendAccountExport(app, request, reply, userId);
+    }
+  );
+
+  // En iOS y Android la app no puede guardar el JSON como archivo: pide un
+  // enlace de 10 minutos y lo abre en el navegador, que lo descarga.
+  app.post(
+    "/account/export/link",
+    {
+      preHandler: authenticateRequest,
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } }
+    },
+    async (request, reply) => {
+      const userId = request.authenticatedUser?.id;
+      if (!userId) {
+        return reply.status(401).send({
+          message: "Se requiere autenticación."
+        });
+      }
+
+      const token = await generateAccountExportToken(userId, EXPORT_LINK_MINUTES);
+      reply.header("Cache-Control", "no-store");
+      return {
+        path: `/account/export/download?token=${encodeURIComponent(token)}`,
+        expiresAt: new Date(Date.now() + EXPORT_LINK_MINUTES * 60_000).toISOString()
+      };
+    }
+  );
+
+  app.get(
+    "/account/export/download",
+    {
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } }
+    },
+    async (request, reply) => {
+      const token = (request.query as { token?: unknown }).token;
+      const userId =
+        typeof token === "string" && token
+          ? await verifyAccountExportToken(token)
+          : null;
+
+      if (!userId) {
+        return reply.status(403).send({
+          message: "El enlace de descarga no es válido o venció. Genera uno nuevo desde la app."
+        });
+      }
+
+      reply.header("Referrer-Policy", "no-referrer");
+      return sendAccountExport(app, request, reply, userId);
+    }
+  );
+
+  // Qué se eliminará, qué se conserva y por qué, y si algo lo impide.
+  app.get(
+    "/account/deletion-preview",
     {
       preHandler: authenticateRequest
     },
@@ -119,424 +217,32 @@ export async function registerAccountLegalRoutes(
       }
 
       try {
-        const exportData = await withUserTransaction(userId, async (client) => {
-          const accountRes = await client.query(
-            `SELECT
-               account.id,
-               account.email,
-               account.email_confirmed_at,
-               account.last_sign_in_at,
-               account.raw_app_meta_data,
-               account.raw_user_meta_data,
-               account.created_at,
-               account.updated_at,
-               account.deleted_at
-             FROM app_auth.users AS account
-             WHERE account.id = app.current_user_id()`
+        const scope = await withUserTransaction(userId, async (client) => {
+          const result = await client.query<{ scope: AccountDeletionScope }>(
+            `SELECT private.account_deletion_preview() AS scope`
           );
-
-          const profileRes = await client.query(
-            `SELECT profile.*
-             FROM public.profiles AS profile
-             WHERE profile.id = app.current_user_id()`
-          );
-
-          const identitiesRes = await client.query(
-            `SELECT
-               identity.id,
-               identity.provider_id,
-               identity.provider,
-               identity.identity_data,
-               identity.last_sign_in_at,
-               identity.created_at,
-               identity.updated_at
-             FROM app_auth.identities AS identity
-             WHERE identity.user_id = app.current_user_id()
-             ORDER BY identity.created_at ASC`
-          );
-
-          const sessionsRes = await client.query(
-            `SELECT
-               session.id,
-               session.user_agent,
-               session.ip_address::text AS ip_address,
-               session.created_at,
-               session.last_used_at,
-               session.expires_at,
-               session.revoked_at
-             FROM app_auth.sessions AS session
-             WHERE session.user_id = app.current_user_id()
-             ORDER BY session.created_at DESC`
-          );
-
-          const companiesRes = await client.query(
-            `SELECT company.*
-             FROM public.companies AS company
-             WHERE EXISTS (
-               SELECT 1
-               FROM public.company_members AS membership
-               WHERE membership.company_id = company.id
-                 AND membership.user_id = app.current_user_id()
-             )
-             OR EXISTS (
-               SELECT 1
-               FROM public.clients AS customer
-               WHERE customer.company_id = company.id
-                 AND customer.user_id = app.current_user_id()
-             )
-             ORDER BY company.created_at ASC`
-          );
-
-          const membershipsRes = await client.query(
-            `SELECT membership.*
-             FROM public.company_members AS membership
-             WHERE membership.user_id = app.current_user_id()
-             ORDER BY membership.created_at ASC`
-          );
-
-          const clientsRes = await client.query(
-            `SELECT customer.*
-             FROM public.clients AS customer
-             WHERE customer.user_id = app.current_user_id()
-                OR customer.created_by = app.current_user_id()
-             ORDER BY customer.created_at ASC`
-          );
-
-          const clientAddressesRes = await client.query(
-            `SELECT address.*
-             FROM public.client_addresses AS address
-             WHERE EXISTS (
-               SELECT 1
-               FROM public.clients AS customer
-               WHERE customer.id = address.client_id
-                 AND customer.company_id = address.company_id
-                 AND (
-                   customer.user_id = app.current_user_id()
-                   OR customer.created_by = app.current_user_id()
-                 )
-             )
-             ORDER BY address.created_at ASC`
-          );
-
-          const clientContactsRes = await client.query(
-            `SELECT contact.*
-             FROM public.client_contacts AS contact
-             WHERE EXISTS (
-               SELECT 1
-               FROM public.clients AS customer
-               WHERE customer.id = contact.client_id
-                 AND customer.company_id = contact.company_id
-                 AND (
-                   customer.user_id = app.current_user_id()
-                   OR customer.created_by = app.current_user_id()
-                 )
-             )
-             ORDER BY contact.created_at ASC`
-          );
-
-          const projectsRes = await client.query(
-            `SELECT project.*
-             FROM public.projects AS project
-             WHERE project.created_by = app.current_user_id()
-                OR project.project_manager_id = app.current_user_id()
-                OR EXISTS (
-                  SELECT 1
-                  FROM public.clients AS customer
-                  WHERE customer.id = project.client_id
-                    AND customer.company_id = project.company_id
-                    AND customer.user_id = app.current_user_id()
-                )
-             ORDER BY project.created_at ASC`
-          );
-
-          const projectMembershipsRes = await client.query(
-            `SELECT membership.*
-             FROM public.project_members AS membership
-             WHERE membership.user_id = app.current_user_id()
-             ORDER BY membership.created_at ASC`
-          );
-
-          const budgetsRes = await client.query(
-            `SELECT budget.*
-             FROM public.budgets AS budget
-             WHERE budget.created_by = app.current_user_id()
-                OR budget.approved_by = app.current_user_id()
-                OR EXISTS (
-                  SELECT 1
-                  FROM public.clients AS customer
-                  WHERE customer.id = budget.client_id
-                    AND customer.company_id = budget.company_id
-                    AND customer.user_id = app.current_user_id()
-                )
-             ORDER BY budget.created_at ASC`
-          );
-
-          const budgetHistoryRes = await client.query(
-            `SELECT history.*
-             FROM public.budget_change_history AS history
-             WHERE history.performed_by = app.current_user_id()
-                OR EXISTS (
-                  SELECT 1
-                  FROM public.budgets AS budget
-                  JOIN public.clients AS customer
-                    ON customer.id = budget.client_id
-                   AND customer.company_id = budget.company_id
-                  WHERE budget.id = history.budget_id
-                    AND budget.company_id = history.company_id
-                    AND customer.user_id = app.current_user_id()
-                )
-             ORDER BY history.created_at ASC`
-          );
-
-          const savedCalculationsRes = await client.query(
-            `SELECT calculation.*
-             FROM public.saved_calculations AS calculation
-             WHERE calculation.created_by = app.current_user_id()
-                OR EXISTS (
-                  SELECT 1
-                  FROM public.clients AS customer
-                  WHERE customer.id = calculation.client_id
-                    AND customer.company_id = calculation.company_id
-                    AND customer.user_id = app.current_user_id()
-                )
-             ORDER BY calculation.created_at ASC`
-          );
-
-          const invoicesRes = await client.query(
-            `SELECT invoice.*
-             FROM public.invoices AS invoice
-             WHERE invoice.created_by = app.current_user_id()
-                OR invoice.issued_by = app.current_user_id()
-                OR EXISTS (
-                  SELECT 1
-                  FROM public.clients AS customer
-                  WHERE customer.id = invoice.client_id
-                    AND customer.company_id = invoice.company_id
-                    AND customer.user_id = app.current_user_id()
-                )
-             ORDER BY invoice.created_at ASC`
-          );
-
-          const invoiceHistoryRes = await client.query(
-            `SELECT history.*
-             FROM public.invoice_history AS history
-             WHERE history.actor_user_id = app.current_user_id()
-                OR EXISTS (
-                  SELECT 1
-                  FROM public.invoices AS invoice
-                  JOIN public.clients AS customer
-                    ON customer.id = invoice.client_id
-                   AND customer.company_id = invoice.company_id
-                  WHERE invoice.id = history.invoice_id
-                    AND invoice.company_id = history.company_id
-                    AND customer.user_id = app.current_user_id()
-                )
-             ORDER BY history.created_at ASC`
-          );
-
-          const invoicePaymentsRes = await client.query(
-            `SELECT payment.*
-             FROM public.invoice_payments AS payment
-             WHERE payment.created_by = app.current_user_id()
-                OR payment.reversed_by = app.current_user_id()
-                OR EXISTS (
-                  SELECT 1
-                  FROM public.invoices AS invoice
-                  JOIN public.clients AS customer
-                    ON customer.id = invoice.client_id
-                   AND customer.company_id = invoice.company_id
-                  WHERE invoice.id = payment.invoice_id
-                    AND invoice.company_id = payment.company_id
-                    AND customer.user_id = app.current_user_id()
-                )
-             ORDER BY payment.created_at ASC`
-          );
-
-          const invoiceCreditNotesRes = await client.query(
-            `SELECT credit_note.*
-             FROM public.invoice_credit_notes AS credit_note
-             WHERE credit_note.issued_by = app.current_user_id()
-                OR credit_note.cancelled_by = app.current_user_id()
-                OR EXISTS (
-                  SELECT 1
-                  FROM public.invoices AS invoice
-                  JOIN public.clients AS customer
-                    ON customer.id = invoice.client_id
-                   AND customer.company_id = invoice.company_id
-                  WHERE invoice.id = credit_note.invoice_id
-                    AND invoice.company_id = credit_note.company_id
-                    AND customer.user_id = app.current_user_id()
-                )
-             ORDER BY credit_note.created_at ASC`
-          );
-
-          const activitiesRes = await client.query(
-            `SELECT activity.*
-             FROM public.activities AS activity
-             WHERE activity.created_by = app.current_user_id()
-                OR activity.assigned_user_id = app.current_user_id()
-                OR EXISTS (
-                  SELECT 1
-                  FROM public.clients AS customer
-                  WHERE customer.id = activity.client_id
-                    AND customer.company_id = activity.company_id
-                    AND customer.user_id = app.current_user_id()
-                )
-             ORDER BY activity.created_at ASC`
-          );
-
-          const projectTasksRes = await client.query(
-            `SELECT task.*
-             FROM public.project_tasks AS task
-             WHERE task.created_by = app.current_user_id()
-                OR task.assigned_user_id = app.current_user_id()
-                OR EXISTS (
-                  SELECT 1
-                  FROM public.projects AS project
-                  JOIN public.clients AS customer
-                    ON customer.id = project.client_id
-                   AND customer.company_id = project.company_id
-                  WHERE project.id = task.project_id
-                    AND project.company_id = task.company_id
-                    AND customer.user_id = app.current_user_id()
-                )
-             ORDER BY task.created_at ASC`
-          );
-
-          const projectProgressRes = await client.query(
-            `SELECT progress.*
-             FROM public.project_progress_history AS progress
-             WHERE progress.created_by = app.current_user_id()
-                OR EXISTS (
-                  SELECT 1
-                  FROM public.projects AS project
-                  JOIN public.clients AS customer
-                    ON customer.id = project.client_id
-                   AND customer.company_id = project.company_id
-                  WHERE project.id = progress.project_id
-                    AND project.company_id = progress.company_id
-                    AND customer.user_id = app.current_user_id()
-                )
-             ORDER BY progress.created_at ASC`
-          );
-
-          const projectPhotosRes = await client.query(
-            `SELECT photo.*
-             FROM public.project_photos AS photo
-             WHERE photo.created_by = app.current_user_id()
-                OR EXISTS (
-                  SELECT 1
-                  FROM public.projects AS project
-                  JOIN public.clients AS customer
-                    ON customer.id = project.client_id
-                   AND customer.company_id = project.company_id
-                  WHERE project.id = photo.project_id
-                    AND project.company_id = photo.company_id
-                    AND customer.user_id = app.current_user_id()
-                )
-             ORDER BY photo.created_at ASC`
-          );
-
-          const notificationsRes = await client.query(
-            `SELECT notification.*
-             FROM public.notifications AS notification
-             WHERE notification.user_id = app.current_user_id()
-             ORDER BY notification.created_at ASC`
-          );
-
-          const invitationsRes = await client.query(
-            `SELECT
-               invitation.id,
-               invitation.company_id,
-               invitation.email,
-               invitation.role,
-               invitation.invited_by,
-               invitation.status,
-               invitation.expires_at,
-               invitation.created_at,
-               invitation.updated_at
-             FROM public.company_invitations AS invitation
-             WHERE invitation.invited_by = app.current_user_id()
-                OR lower(invitation.email) = lower((
-                  SELECT account.email
-                  FROM app_auth.users AS account
-                  WHERE account.id = app.current_user_id()
-                ))
-             ORDER BY invitation.created_at ASC`
-          );
-
-          const auditLogsRes = await client.query(
-            `SELECT audit_log.*
-             FROM public.admin_audit_logs AS audit_log
-             WHERE audit_log.user_id = app.current_user_id()
-             ORDER BY audit_log.created_at ASC`
-          );
-
-          const catalogOverridesRes = await client.query(
-            `SELECT override.*
-             FROM public.user_catalog_price_overrides AS override
-             WHERE override.user_id = app.current_user_id()
-             ORDER BY override.created_at ASC`
-          );
-
-          return {
-            schemaVersion: 1,
-            exportedAt: new Date().toISOString(),
-            account: accountRes.rows[0] ?? null,
-            profile: profileRes.rows[0] ?? null,
-            authentication: {
-              identities: identitiesRes.rows,
-              sessions: sessionsRes.rows
-            },
-            organizations: {
-              companies: companiesRes.rows,
-              memberships: membershipsRes.rows,
-              invitations: invitationsRes.rows
-            },
-            commercial: {
-              clients: clientsRes.rows,
-              clientAddresses: clientAddressesRes.rows,
-              clientContacts: clientContactsRes.rows,
-              projects: projectsRes.rows,
-              projectMemberships: projectMembershipsRes.rows,
-              budgets: budgetsRes.rows,
-              budgetHistory: budgetHistoryRes.rows,
-              savedCalculations: savedCalculationsRes.rows,
-              invoices: invoicesRes.rows,
-              invoiceHistory: invoiceHistoryRes.rows,
-              invoicePayments: invoicePaymentsRes.rows,
-              invoiceCreditNotes: invoiceCreditNotesRes.rows
-            },
-            operations: {
-              activities: activitiesRes.rows,
-              projectTasks: projectTasksRes.rows,
-              projectProgress: projectProgressRes.rows,
-              projectPhotos: projectPhotosRes.rows
-            },
-            communications: {
-              notifications: notificationsRes.rows
-            },
-            administrativeAuditLogs: auditLogsRes.rows,
-            catalogPriceOverrides: catalogOverridesRes.rows
-          };
+          return result.rows[0]?.scope;
         });
 
-        reply.header(
-          "Content-Disposition",
-          `attachment; filename="contractor-data-export-${userId}.json"`
-        );
+        if (!scope) {
+          return reply.status(404).send({
+            message: "No se encontró la cuenta."
+          });
+        }
+
         reply.header("Cache-Control", "no-store");
-        return exportData;
+        return buildDeletionPreview(scope);
       } catch (error) {
         app.log.error(safeErrorDetails(error), "Falló una operación de cuenta.");
         return reply.status(500).send({
-          message: "Error al exportar los datos de la cuenta."
+          message: "No se pudo preparar la eliminación de la cuenta."
         });
       }
     }
   );
 
-  // T-134: Account Deletion Endpoint
+  // Eliminación de cuenta. Toda la lógica de datos vive en
+  // private.delete_own_account() (migración 045), en una sola transacción.
   app.delete(
     "/account",
     {
@@ -550,223 +256,125 @@ export async function registerAccountLegalRoutes(
         });
       }
 
+      const requiresExternalStorage =
+        env.NODE_ENV === "production" || env.NODE_ENV === "staging";
+
+      if (requiresExternalStorage && !isObjectStorageConfigured()) {
+        app.log.error("El almacenamiento de objetos no está configurado; no se elimina la cuenta.");
+        return reply.status(503).send({
+          message: "No podemos eliminar la cuenta en este momento. Inténtalo más tarde."
+        });
+      }
+
+      let deletion: DeleteOwnAccountResult;
+
       try {
-        const deletionResult = await withUserTransaction(
-          userId,
-          async (client) => {
-            const profileStorageRes = await client.query<ProfileStorageReferences>(
-              `SELECT
-                 profile.id,
-                 profile.doc_id_url,
-                 profile.doc_operation_notice_url,
-                 profile.doc_references_url,
-                 profile.doc_address_proof_url
-               FROM public.profiles AS profile
-               WHERE profile.id = app.current_user_id()`
-            );
+        const result = await withUserTransaction(userId, async (client) => {
+          const response = await client.query<{ result: DeleteOwnAccountResult }>(
+            `SELECT private.delete_own_account() AS result`
+          );
+          return response.rows[0]?.result;
+        });
 
-            const sharedPhotoCountRes = await client.query<{
-              shared_photo_count: number | string;
-            }>(
-              `SELECT count(*)::integer AS shared_photo_count
-               FROM public.project_photos AS photo
-               WHERE photo.created_by = app.current_user_id()`
-            );
+        if (!result) {
+          throw new Error("La eliminación no devolvió resultado.");
+        }
+        deletion = result;
+      } catch (error) {
+        const databaseError = error as DatabaseErrorLike;
 
-            const storageCleanupItems = buildStorageCleanupItems(
-              profileStorageRes.rows[0]
-            );
-
-            const requiresExternalStorage =
-              env.NODE_ENV === "production" || env.NODE_ENV === "staging";
-
-            if (
-              requiresExternalStorage &&
-              storageCleanupItems.length > 0 &&
-              !isObjectStorageConfigured()
-            ) {
-              throw new Error(
-                "El almacenamiento de objetos no está configurado; la cuenta no puede eliminarse de forma segura."
-              );
-            }
-
-            for (const item of storageCleanupItems) {
-              await client.query(
-                `SELECT private.enqueue_account_deletion_storage_job(
-                   $1::uuid,
-                   $2::text
-                 )`,
-                [userId, item.objectReference]
-              );
-            }
-
-            await client.query(
-              `DELETE FROM public.user_push_tokens
-               WHERE user_id = app.current_user_id()`
-            );
-
-            await client.query(
-              `UPDATE public.profiles
-               SET full_name = NULL,
-                   phone = NULL,
-                   active = false,
-                   avatar_url = NULL,
-                   first_name = NULL,
-                   last_name = NULL,
-                   province = NULL,
-                   district = NULL,
-                   corregimiento = NULL,
-                   terms_accepted = false,
-                   notifications_opt_in = false,
-                   registration_ip = NULL,
-                   registration_device = NULL,
-                   business_name = NULL,
-                   id_document = NULL,
-                   tax_id = NULL,
-                   tax_dv = NULL,
-                   primary_category = NULL,
-                   specialties = NULL,
-                   experience_years = NULL,
-                   work_areas = NULL,
-                   professional_description = NULL,
-                   company_logo_url = NULL,
-                   portfolio_urls = NULL,
-                   certifications = NULL,
-                   availability = NULL,
-                   preferred_contact_method = NULL,
-                   emits_invoice = false,
-                   has_transport = false,
-                   work_mode = NULL,
-                   doc_id_url = NULL,
-                   doc_operation_notice_url = NULL,
-                   doc_technical_certs_urls = NULL,
-                   doc_references_url = NULL,
-                   doc_address_proof_url = NULL,
-                   updated_at = now()
-               WHERE id = app.current_user_id()`
-            );
-
-            await client.query(
-              `UPDATE app_auth.identities
-               SET provider_id = 'deleted:' || id::text,
-                   identity_data = '{}'::jsonb,
-                   last_sign_in_at = NULL,
-                   updated_at = now()
-               WHERE user_id = app.current_user_id()`
-            );
-
-            await client.query(
-              `UPDATE app_auth.tokens
-               SET token_hash = 'revoked:' || id::text,
-                   used_at = COALESCE(used_at, now())
-               WHERE user_id = app.current_user_id()`
-            );
-
-            await client.query(
-              `UPDATE app_auth.sessions
-               SET refresh_token_hash = 'revoked:' || id::text,
-                   user_agent = NULL,
-                   ip_address = NULL,
-                   revoked_at = COALESCE(revoked_at, now())
-               WHERE user_id = app.current_user_id()`
-            );
-
-            const deletedAccountRes = await client.query<{ id: string }>(
-              `UPDATE app_auth.users
-               SET email = NULL,
-                   password_hash = NULL,
-                   email_confirmed_at = NULL,
-                   last_sign_in_at = NULL,
-                   raw_app_meta_data = '{}'::jsonb,
-                   raw_user_meta_data = '{}'::jsonb,
-                   deleted_at = COALESCE(deleted_at, now()),
-                   updated_at = now()
-               WHERE id = app.current_user_id()
-               RETURNING id`
-            );
-
-            if (!deletedAccountRes.rows[0]) {
-              throw new Error("No se encontró la cuenta que se desea eliminar.");
-            }
-
-            return {
-              storageCleanupItems,
-              sharedProjectPhotoCount: Number(
-                sharedPhotoCountRes.rows[0]?.shared_photo_count ?? 0
-              )
-            };
-          }
-        );
-
-        let completedStorageObjectCount = 0;
-        let failedStorageObjectCount = 0;
-
-        if (deletionResult.storageCleanupItems.length > 0) {
-          try {
-            const cleanupResult =
-              await processAccountDeletionStorageQueue({
-                userId,
-                limit: deletionResult.storageCleanupItems.length
-              });
-
-            completedStorageObjectCount = Math.min(
-              cleanupResult.completed,
-              deletionResult.storageCleanupItems.length
-            );
-            failedStorageObjectCount = cleanupResult.failed;
-          } catch (error) {
-            app.log.error(
-              safeErrorDetails(error),
-              "La cuenta fue anonimizada; la cola durable realizará la limpieza pendiente."
-            );
-          }
+        if (
+          databaseError.code === "55000" &&
+          databaseError.hint === "account_deletion_blocked_by_company_ownership"
+        ) {
+          return reply.status(409).send({
+            code: "COMPANY_OWNERSHIP_TRANSFER_REQUIRED",
+            message:
+              "Eres el único propietario de una empresa con otros miembros. Transfiere la propiedad o elimina a los miembros antes de eliminar tu cuenta.",
+            blockers: parseBlockers(databaseError.detail)
+          });
         }
 
-        const pendingStorageObjectCount = Math.max(
-          deletionResult.storageCleanupItems.length -
-            completedStorageObjectCount,
-          0
-        );
+        if (databaseError.code === "55000") {
+          return reply.status(409).send({
+            code: "ACCOUNT_ALREADY_DELETED",
+            message: "La cuenta ya fue eliminada."
+          });
+        }
 
-        reply.clearCookie(
-          "refreshToken",
-          getRefreshTokenClearOptions()
-        );
-
-        return {
-          success: true,
-          accountStatus: "deleted",
-          authenticationDisabled: true,
-          profilePersonalDataAnonymized: true,
-          sessionsRevoked: true,
-          storageCleanup: {
-            status:
-              deletionResult.storageCleanupItems.length === 0
-                ? "not_required"
-                : pendingStorageObjectCount === 0
-                  ? "completed"
-                  : "queued_for_retry",
-            objectCount: deletionResult.storageCleanupItems.length,
-            completedObjectCount: completedStorageObjectCount,
-            pendingObjectCount: pendingStorageObjectCount,
-            failedObjectCount: failedStorageObjectCount,
-            retryScheduled: pendingStorageObjectCount > 0,
-            sharedProjectPhotosPreserved:
-              deletionResult.sharedProjectPhotoCount,
-            note:
-              deletionResult.storageCleanupItems.length === 0
-                ? "No se encontraron documentos personales internos asociados a la cuenta."
-                : pendingStorageObjectCount === 0
-                  ? "Los documentos personales internos asociados a la cuenta fueron eliminados."
-                  : "La cuenta fue anonimizada y la cola durable reintentará la limpieza pendiente."
-          }
-        };
-      } catch (error) {
         app.log.error(safeErrorDetails(error), "Falló una operación de cuenta.");
         return reply.status(500).send({
           message: "Error al procesar la eliminación de la cuenta."
         });
       }
+
+      const objectCount = Number(deletion.storageObjectsQueued ?? 0);
+      let completedStorageObjectCount = 0;
+      let failedStorageObjectCount = 0;
+
+      if (objectCount > 0) {
+        try {
+          const cleanupResult = await processAccountDeletionStorageQueue({
+            userId,
+            limit: objectCount
+          });
+
+          completedStorageObjectCount = Math.min(cleanupResult.completed, objectCount);
+          failedStorageObjectCount = cleanupResult.failed;
+        } catch (error) {
+          app.log.error(
+            safeErrorDetails(error),
+            "La cuenta fue anonimizada; la cola durable realizará la limpieza pendiente."
+          );
+        }
+      }
+
+      const pendingStorageObjectCount = Math.max(
+        objectCount - completedStorageObjectCount,
+        0
+      );
+
+      const retained = describeRetainedCategories(deletion.retained);
+      const sharedProjectPhotosPreserved =
+        retained.find((item) => item.category === "team_contributions")
+          ?.counts.projectPhotos ?? 0;
+
+      reply.clearCookie(
+        "refreshToken",
+        getRefreshTokenClearOptions()
+      );
+
+      return {
+        success: true,
+        accountStatus: "deleted",
+        deletedAt: deletion.deletedAt,
+        authenticationDisabled: true,
+        profilePersonalDataAnonymized: true,
+        sessionsRevoked: true,
+        deleted: deletion.deleted,
+        retained,
+        retentionUntil: deletion.retentionUntil,
+        storageCleanup: {
+          status:
+            objectCount === 0
+              ? "not_required"
+              : pendingStorageObjectCount === 0
+                ? "completed"
+                : "queued_for_retry",
+          objectCount,
+          completedObjectCount: completedStorageObjectCount,
+          pendingObjectCount: pendingStorageObjectCount,
+          failedObjectCount: failedStorageObjectCount,
+          retryScheduled: pendingStorageObjectCount > 0,
+          sharedProjectPhotosPreserved,
+          note:
+            objectCount === 0
+              ? "No había archivos personales que eliminar."
+              : pendingStorageObjectCount === 0
+                ? "Tus documentos y fotos personales fueron eliminados."
+                : "La cuenta fue anonimizada; el sistema volverá a intentar eliminar los archivos pendientes."
+        }
+      };
     }
   );
 }

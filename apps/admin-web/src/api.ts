@@ -398,6 +398,27 @@ export type AccountDeletionResponse = {
   };
 };
 
+export type AccountDeletionPreview = {
+  canDelete: boolean;
+  blockers: { companyId: string; companyName: string; activeMembers: number }[];
+  companiesToClose: { companyId: string; companyName: string }[];
+  membershipsToEnd: number;
+  toDelete: Record<string, number>;
+  retained: {
+    category: string;
+    title: string;
+    description: string;
+    legalBasis: string;
+    retainUntil: string | null;
+    counts: Record<string, number>;
+  }[];
+  retentionUntil: string | null;
+};
+
+export async function getAccountDeletionPreview(): Promise<AccountDeletionPreview> {
+  return authenticatedRequest<AccountDeletionPreview>("/account/deletion-preview");
+}
+
 export async function deleteAccount(): Promise<AccountDeletionResponse> {
   return authenticatedRequest<AccountDeletionResponse>(
     "/account",

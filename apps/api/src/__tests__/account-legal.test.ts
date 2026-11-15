@@ -210,7 +210,7 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
     expect(accountMocks.transactionUserIds).toEqual([USER_ID]);
 
     const body = response.json();
-    expect(body.schemaVersion).toBe(1);
+    expect(body.schemaVersion).toBe(2);
     expect(body.account).toEqual({
       id: USER_ID,
       email: "persona@example.com"
@@ -222,7 +222,16 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
     expect(body.operations.activities).toEqual([
       { id: "activity-1", assigned_user_id: USER_ID }
     ]);
-    expect(response.headers["content-disposition"]).toContain(USER_ID);
+    expect(response.headers["content-disposition"]).toMatch(/leuret-datos-\d{4}-\d{2}-\d{2}\.json/);
+    expect(body.jobRequests).toEqual({
+      requests: [],
+      addresses: [],
+      photos: [],
+      conversations: [],
+      messages: []
+    });
+    expect(body.connections.clientConnectionRequests).toEqual([]);
+    expect(Array.isArray(body.files)).toBe(true);
     expect(response.headers["cache-control"]).toBe("no-store");
 
     const allSql = accountMocks.executedSql.join("\n");
@@ -232,53 +241,193 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
     expect(allSql).not.toMatch(/\bissuer_id\b|\bactivity_logs\b|\bprofiles\.email\b/i);
     expect(allSql).not.toContain("session.refresh_token_hash");
     expect(allSql).not.toContain("invitation.token_hash");
+    expect(allSql).not.toContain("token.expo_push_token");
+    expect(allSql).not.toContain("phone_code");
+    expect(allSql).toContain("private.export_own_connection_requests()");
     await app.close();
   });
 
-  test("DELETE /account anonymizes PII, enqueues personal documents and preserves shared project photos", async () => {
+  test("GET /account/export lists personal files with signed links and hides storage paths", async () => {
+    accountMocks.authenticated = true;
+    accountMocks.queryHandler = async (sql) => {
+      if (/FROM app_auth\.users AS account/i.test(sql)) {
+        return { rows: [{ id: USER_ID, email: "persona@example.com", deleted_at: null }] };
+      }
+      if (/SELECT profile\.\*[\s\S]+FROM public\.profiles AS profile/i.test(sql)) {
+        return {
+          rows: [{
+            id: USER_ID,
+            avatar_url: "/storage/public/profile-media/x/avatar?v=1",
+            doc_id_url: `profile-documents/${USER_ID}/identification`,
+            doc_references_url: "https://example.com/no-interno.pdf"
+          }]
+        };
+      }
+      if (/FROM public\.job_request_photos AS photo/i.test(sql)) {
+        return {
+          rows: [{
+            id: "44444444-4444-4444-8444-444444444444",
+            request_id: "55555555-5555-4555-8555-555555555555",
+            storage_path: "job-requests/555/foto.jpg",
+            mime_type: "image/jpeg",
+            file_size: 1200,
+            created_at: "2026-11-01T10:00:00.000Z"
+          }]
+        };
+      }
+      return emptyQueryResult();
+    };
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: "GET",
+      url: "/account/export",
+      headers: { ...authenticatedHeaders(), host: "api.example.com" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    const kinds = body.files.map((file: { kind: string }) => file.kind);
+    expect(kinds).toEqual(["profile_document", "profile_media", "job_request_photo"]);
+    expect(body.files[0].downloadUrl).toMatch(
+      new RegExp(`^http://api\\.example\\.com/storage/profile-documents/${USER_ID}/identification\\?token=`)
+    );
+    expect(body.files[2].downloadUrl).toMatch(
+      /^http:\/\/api\.example\.com\/storage\/files\/44444444-4444-4444-8444-444444444444\?token=/
+    );
+    expect(body.jobRequests.photos[0]).not.toHaveProperty("storage_path");
+    expect(JSON.stringify(body)).not.toContain("job-requests/555/foto.jpg");
+    expect(body.format.filesExpireAt).toBeTruthy();
+    await app.close();
+  });
+
+  test("GET /account/export responds 410 for a deleted account", async () => {
+    accountMocks.authenticated = true;
+    accountMocks.queryHandler = async (sql) => {
+      if (/FROM app_auth\.users AS account/i.test(sql)) {
+        return { rows: [{ id: USER_ID, email: null, deleted_at: "2026-11-15T00:00:00.000Z" }] };
+      }
+      return emptyQueryResult();
+    };
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: "GET",
+      url: "/account/export",
+      headers: authenticatedHeaders()
+    });
+
+    expect(response.statusCode).toBe(410);
+    await app.close();
+  });
+
+  test("POST /account/export/link returns a short link that downloads the export without a session", async () => {
+    accountMocks.authenticated = true;
+    accountMocks.queryHandler = async (sql) => {
+      if (/FROM app_auth\.users AS account/i.test(sql)) {
+        return { rows: [{ id: USER_ID, email: "persona@example.com", deleted_at: null }] };
+      }
+      return emptyQueryResult();
+    };
+
+    const app = await buildApp();
+    const linkResponse = await app.inject({
+      method: "POST",
+      url: "/account/export/link",
+      headers: authenticatedHeaders()
+    });
+
+    expect(linkResponse.statusCode).toBe(200);
+    const link = linkResponse.json();
+    expect(link.path).toMatch(/^\/account\/export\/download\?token=/);
+
+    accountMocks.authenticated = false;
+    const download = await app.inject({ method: "GET", url: link.path });
+    expect(download.statusCode).toBe(200);
+    expect(download.headers["content-disposition"]).toContain("attachment");
+    expect(download.json().account.id).toBe(USER_ID);
+    expect(accountMocks.transactionUserIds).toEqual([USER_ID]);
+
+    const forged = await app.inject({
+      method: "GET",
+      url: "/account/export/download?token=no-es-un-token"
+    });
+    expect(forged.statusCode).toBe(403);
+    await app.close();
+  });
+
+  test("GET /account/deletion-preview explains what is deleted, retained and blocked", async () => {
+    accountMocks.authenticated = true;
+    accountMocks.queryHandler = async (sql) => {
+      if (/private\.account_deletion_preview\(\)/.test(sql)) {
+        return {
+          rows: [{
+            scope: {
+              blockers: [{ companyId: "c1", companyName: "Equipo SA", activeMembers: 2 }],
+              companiesToClose: [],
+              membershipsToEnd: 1,
+              toDelete: { jobRequests: 2, notifications: 4 },
+              retained: [
+                { category: "client_fiscal_documents", invoices: 3, creditNotes: 0, payments: 1, retainUntil: "2031-12-31" },
+                { category: "team_contributions", projectPhotos: 0, budgets: 0, retainUntil: null }
+              ],
+              retentionUntil: "2031-12-31"
+            }
+          }]
+        };
+      }
+      return emptyQueryResult();
+    };
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: "GET",
+      url: "/account/deletion-preview",
+      headers: authenticatedHeaders()
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.canDelete).toBe(false);
+    expect(body.blockers[0].companyName).toBe("Equipo SA");
+    expect(body.toDelete.jobRequests).toBe(2);
+    // Las categorías vacías no se muestran.
+    expect(body.retained).toHaveLength(1);
+    expect(body.retained[0]).toMatchObject({
+      category: "client_fiscal_documents",
+      retainUntil: "2031-12-31",
+      counts: { invoices: 3, payments: 1 }
+    });
+    expect(body.retained[0].legalBasis).toContain("cinco años");
+    await app.close();
+  });
+
+  test("DELETE /account runs the database deletion, cleans files and reports what was retained", async () => {
     accountMocks.authenticated = true;
     storageCleanupMocks.process.mockResolvedValue({
-      claimed: 1,
-      completed: 0,
+      claimed: 3,
+      completed: 2,
       failed: 1
     });
 
     accountMocks.queryHandler = async (sql) => {
-      if (/SELECT[\s\S]+profile\.doc_id_url[\s\S]+FROM public\.profiles AS profile/i.test(sql)) {
+      if (/private\.delete_own_account\(\)/.test(sql)) {
         return {
           rows: [{
-            id: USER_ID,
-            doc_id_url:
-              `profile-documents/${USER_ID}/identification`,
-            doc_operation_notice_url: null,
-            doc_references_url: null,
-            doc_address_proof_url: null
+            result: {
+              deletedAt: "2026-11-15T05:00:00.000Z",
+              deleted: { jobRequests: 1, notifications: 2, clientLinksRemoved: 1 },
+              storageObjectsQueued: 3,
+              retained: [
+                { category: "client_fiscal_documents", invoices: 1, creditNotes: 0, payments: 0, retainUntil: "2030-12-31" },
+                { category: "team_contributions", projectPhotos: 2, budgets: 0, retainUntil: null },
+                { category: "security_records", auditEntries: 0, sessions: 0, retainUntil: null }
+              ],
+              retentionUntil: "2030-12-31"
+            }
           }]
         };
       }
-
-      if (/count\(\*\)::integer AS shared_photo_count/i.test(sql)) {
-        return {
-          rows: [{ shared_photo_count: 2 }]
-        };
-      }
-
-      if (/enqueue_account_deletion_storage_job/i.test(sql)) {
-        return {
-          rows: [{
-            enqueue_account_deletion_storage_job:
-              "33333333-3333-4333-8333-333333333333"
-          }]
-        };
-      }
-
-      if (/UPDATE app_auth\.users/i.test(sql)) {
-        return {
-          rows: [{ id: USER_ID }],
-          rowCount: 1
-        };
-      }
-
       return emptyQueryResult();
     };
 
@@ -296,21 +445,12 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
     expect(accountMocks.transactionUserIds).toEqual([USER_ID]);
 
     const allSql = accountMocks.executedSql.join("\n");
-    expect(allSql).toMatch(/UPDATE public\.profiles[\s\S]+full_name = NULL/);
-    expect(allSql).toMatch(/DELETE FROM public\.user_push_tokens/);
-    expect(allSql).toMatch(/active = false/);
-    expect(allSql).toMatch(/registration_ip = NULL/);
-    expect(allSql).toMatch(/doc_address_proof_url = NULL/);
-    expect(allSql).toMatch(/UPDATE app_auth\.identities[\s\S]+identity_data = '\{\}'::jsonb/);
-    expect(allSql).toMatch(/UPDATE app_auth\.tokens[\s\S]+used_at = COALESCE\(used_at, now\(\)\)/);
-    expect(allSql).toMatch(/UPDATE app_auth\.sessions[\s\S]+revoked_at = COALESCE\(revoked_at, now\(\)\)/);
-    expect(allSql).toMatch(/UPDATE app_auth\.users[\s\S]+email = NULL[\s\S]+deleted_at = COALESCE\(deleted_at, now\(\)\)/);
-    expect(allSql).toContain("private.enqueue_account_deletion_storage_job");
-    expect(allSql).not.toContain("photo.storage_path");
-    expect(allSql).not.toContain("public.activity_logs");
+    expect(allSql).toContain("private.delete_own_account()");
+    // La API ya no modifica tablas directamente: lo hace la función de la base.
+    expect(allSql).not.toMatch(/UPDATE public\.profiles|DELETE FROM public\./);
     expect(storageCleanupMocks.process).toHaveBeenCalledWith({
       userId: USER_ID,
-      limit: 1
+      limit: 3
     });
 
     const body = response.json();
@@ -320,16 +460,22 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
       authenticationDisabled: true,
       profilePersonalDataAnonymized: true,
       sessionsRevoked: true,
+      retentionUntil: "2030-12-31",
+      deleted: { jobRequests: 1, notifications: 2, clientLinksRemoved: 1 },
       storageCleanup: {
         status: "queued_for_retry",
-        objectCount: 1,
-        completedObjectCount: 0,
+        objectCount: 3,
+        completedObjectCount: 2,
         pendingObjectCount: 1,
         failedObjectCount: 1,
         retryScheduled: true,
         sharedProjectPhotosPreserved: 2
       }
     });
+    expect(body.retained.map((item: { category: string }) => item.category)).toEqual([
+      "client_fiscal_documents",
+      "team_contributions"
+    ]);
     expect(body.storageCleanup).not.toHaveProperty("objects");
 
     const setCookie = String(response.headers["set-cookie"]);
@@ -338,6 +484,35 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
     expect(setCookie).toContain("HttpOnly");
     expect(setCookie).toContain("SameSite=Lax");
     expect(setCookie).not.toContain("session_token");
+    await app.close();
+  });
+
+  test("DELETE /account responds 409 with the companies that need an ownership transfer", async () => {
+    accountMocks.authenticated = true;
+    accountMocks.queryHandler = async (sql) => {
+      if (/private\.delete_own_account\(\)/.test(sql)) {
+        throw Object.assign(new Error("Transfiere la propiedad de tus empresas antes de eliminar la cuenta."), {
+          code: "55000",
+          hint: "account_deletion_blocked_by_company_ownership",
+          detail: JSON.stringify([{ companyId: "c1", companyName: "Equipo SA", activeMembers: 2 }])
+        });
+      }
+      return emptyQueryResult();
+    };
+
+    const app = await buildApp();
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/account",
+      headers: authenticatedHeaders()
+    });
+
+    expect(response.statusCode).toBe(409);
+    const body = response.json();
+    expect(body.code).toBe("COMPANY_OWNERSHIP_TRANSFER_REQUIRED");
+    expect(body.blockers).toEqual([{ companyId: "c1", companyName: "Equipo SA", activeMembers: 2 }]);
+    expect(storageCleanupMocks.process).not.toHaveBeenCalled();
+    expect(response.headers["set-cookie"]).toBeUndefined();
     await app.close();
   });
 });

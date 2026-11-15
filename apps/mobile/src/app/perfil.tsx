@@ -9,7 +9,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -25,12 +24,18 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
+  createAccountExportLink,
   deleteOwnAccount,
   exportAccountData,
+  getAccountDeletionPreview,
   updateOwnAvatar,
 } from "@/services/api";
 import { uploadProfileMedia } from "@/services/media-upload-service";
 import { confirmAction, showAlert } from "@/utils/alert";
+import {
+  blockedDeletionMessage,
+  deletionConfirmationMessage,
+} from "@/utils/account-deletion";
 import {
   prepareAvatarPhoto,
   type AvatarPhotoSource,
@@ -254,12 +259,11 @@ export default function ProfileScreen() {
 
     setAccountAction("export");
     try {
-      const data = await exportAccountData();
-      const json = JSON.stringify(data, null, 2);
-      const date = new Date().toISOString().slice(0, 10);
-      const fileName = `leuret-data-export-${date}.json`;
-
       if (Platform.OS === "web") {
+        const data = await exportAccountData();
+        const json = JSON.stringify(data, null, 2);
+        const date = new Date().toISOString().slice(0, 10);
+        const fileName = `leuret-datos-${date}.json`;
         const blob = new Blob([json], { type: "application/json;charset=utf-8" });
         const objectUrl = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
@@ -269,19 +273,22 @@ export default function ProfileScreen() {
         anchor.click();
         anchor.remove();
         URL.revokeObjectURL(objectUrl);
-      } else {
-        await Share.share({
-          title: "Exportación de datos de Leuret",
-          message: json,
-        });
-      }
 
-      Alert.alert(
-        "Exportación lista",
-        Platform.OS === "web"
-          ? "Se descargó una copia JSON de tus datos."
-          : "Se generó la copia JSON de tus datos para que puedas guardarla o compartirla."
-      );
+        Alert.alert(
+          "Exportación lista",
+          "Se descargó una copia JSON de tus datos. Incluye enlaces para descargar tus documentos y fotos durante 24 horas."
+        );
+      } else {
+        // En el teléfono, el navegador descarga el archivo con un enlace de
+        // 10 minutos (compartir el JSON como texto falla si es grande).
+        const link = await createAccountExportLink();
+        await Linking.openURL(link.url);
+
+        Alert.alert(
+          "Exportación lista",
+          "Se abrió el navegador para descargar tu archivo JSON. El enlace vence en 10 minutos y los enlaces a tus documentos y fotos, en 24 horas."
+        );
+      }
     } catch (error) {
       Alert.alert(
         "No se pudieron exportar los datos",
@@ -304,12 +311,12 @@ export default function ProfileScreen() {
       if (result.storageCleanup.status === "queued_for_retry") {
         Alert.alert(
           "Cuenta eliminada",
-          "Tu acceso fue deshabilitado y tus datos personales fueron anonimizados. Algunos documentos están pendientes y el sistema volverá a eliminarlos automáticamente."
+          "Tu acceso fue deshabilitado y tus datos personales fueron anonimizados. Algunos archivos están pendientes y el sistema volverá a eliminarlos automáticamente."
         );
       } else {
         Alert.alert(
           "Cuenta eliminada",
-          "Tu cuenta fue deshabilitada y tus datos personales fueron anonimizados correctamente."
+          "Tu acceso fue deshabilitado, tus datos personales fueron anonimizados y tus documentos y fotos personales fueron eliminados."
         );
       }
     } catch (error) {
@@ -322,10 +329,31 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleDeleteAccount = () => {
+  const handleDeleteAccount = async () => {
+    if (accountAction) return;
+
+    setAccountAction("delete");
+    let preview: Awaited<ReturnType<typeof getAccountDeletionPreview>>;
+    try {
+      preview = await getAccountDeletionPreview();
+    } catch (error) {
+      Alert.alert(
+        "No se pudo preparar la eliminación",
+        error instanceof Error ? error.message : "Intenta nuevamente."
+      );
+      return;
+    } finally {
+      setAccountAction(null);
+    }
+
+    if (!preview.canDelete) {
+      Alert.alert("Transfiere tus empresas primero", blockedDeletionMessage(preview.blockers));
+      return;
+    }
+
     Alert.alert(
       "Eliminar mi cuenta",
-      "Esta acción deshabilitará tu acceso, anonimizará tus datos personales y eliminará los archivos asociados que no deban conservarse por obligación legal. No se puede deshacer.",
+      deletionConfirmationMessage(preview),
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -500,7 +528,7 @@ export default function ProfileScreen() {
               style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.border }}
             >
               <Ionicons name="download-outline" size={20} color={colors.accent} />
-              <Text style={{ color: colors.text, fontSize: 14, fontWeight: "700" }}>Exportar mis datos (JSON)</Text>
+              <Text style={{ color: colors.text, fontSize: 14, fontWeight: "700" }}>Exportar mis datos, documentos y fotos</Text>
             </Pressable>
 
             <Pressable
@@ -535,7 +563,9 @@ export default function ProfileScreen() {
 
             <Pressable
               disabled={accountAction !== null}
-              onPress={handleDeleteAccount}
+              onPress={() => {
+                void handleDeleteAccount();
+              }}
               style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingTop: 12 }}
             >
               <Ionicons name="trash-outline" size={20} color={colors.danger} />

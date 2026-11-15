@@ -68,6 +68,7 @@ La última revisión del documento de backups indica que el primer respaldo oper
 - El binding `R2_STORAGE` apunta al bucket operativo privado `contractor-private-storage`; el nombre heredado no implica que se deba renombrar.
 - Revertir código no recupera objetos borrados en R2. Restaurarlos exige un respaldo independiente y verificado.
 - **Migración 029:** conservar `private.account_deletion_storage_queue`. No eliminar la tabla ni sus funciones mientras haya trabajos de limpieza pendientes.
+- **Migración 045:** conservar `private.account_deletion_records` (evidencia de cumplimiento) y la ampliación de `object_kind` de la cola. Para revertir el código, basta con desplegar la API anterior: las funciones nuevas quedan sin uso.
 - Al restablecer el Worker, revisar cron `*/5 * * * *`, errores y reintentos de la cola. No ejecutar manualmente claves de almacenamiento ni registrarlas en logs.
 
 ## 6. Verificación posterior y cierre
