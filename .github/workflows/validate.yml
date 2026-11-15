@@ -164,6 +164,17 @@ jobs:
             src/account/__tests__/account-deletion.test.ts \
             src/settings/__tests__/user-settings-inbox.test.ts
 
+      # SQL integration tests run exclusively on ephemeral localhost PostgreSQL.
+      - name: 10b. Test migrations, invitations and financial workflows
+        env:
+          DATABASE_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/test_leuret
+          CONTRACTOR_MIGRATOR_PASSWORD: ci_migrator_password
+          CONTRACTOR_API_PASSWORD: ci_api_password
+        run: |
+          npm run test:database-tools
+          npm run test:invoice-db
+
       - name: 11. Test mobile app
         run: npm run test -w apps/mobile
 
