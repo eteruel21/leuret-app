@@ -13,6 +13,7 @@ import type { AdminData } from "../admin-data";
 import {
   deleteAccount,
   exportAccountData,
+  getAccountDeletionPreview,
   getLegalDocument,
 } from "../api";
 
@@ -85,7 +86,7 @@ export function SystemTab({
       link.href = url;
 
       link.download =
-        `contractor-data-export-${new Date()
+        `leuret-datos-${new Date()
           .toISOString()
           .slice(0, 10)
         }.json`;
@@ -98,7 +99,7 @@ export function SystemTab({
       URL.revokeObjectURL(url);
 
       setActionMessage(
-        "Exportación de datos completada."
+        "Exportación completada. Los enlaces a documentos y fotos del archivo vencen en 24 horas."
       );
     } catch {
       alert(
@@ -108,9 +109,39 @@ export function SystemTab({
   };
 
   const handleDeleteAccount = async () => {
+    setActionMessage(null);
+
+    let preview;
+    try {
+      preview = await getAccountDeletionPreview();
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "No se pudo preparar la eliminación de la cuenta."
+      );
+      return;
+    }
+
+    if (!preview.canDelete) {
+      alert(
+        "Eres el único propietario de estas empresas con otros miembros:\n\n" +
+          preview.blockers.map((blocker) => `• ${blocker.companyName}`).join("\n") +
+          "\n\nTransfiere la propiedad antes de eliminar la cuenta."
+      );
+      return;
+    }
+
+    const retained = preview.retained.map((item) =>
+      `• ${item.title}${item.retainUntil ? ` (hasta ${item.retainUntil})` : ""}`
+    );
+
     const confirmed =
       window.confirm(
-        "¿Está seguro de que desea solicitar la eliminación y anonimización de su cuenta? Esta acción deshabilitará el acceso."
+        "¿Eliminar tu cuenta? Se deshabilitará el acceso, se anonimizarán tu perfil y credenciales y se eliminarán tus documentos y fotos personales. No se puede deshacer." +
+          (retained.length > 0
+            ? `\n\nSe conserva por obligación legal o porque pertenece a otra empresa:\n${retained.join("\n")}`
+            : "")
       );
 
     if (!confirmed) {
@@ -118,20 +149,20 @@ export function SystemTab({
     }
 
     try {
-      setActionMessage(null);
-
       const result = await deleteAccount();
 
       alert(
         result.storageCleanup.status === "queued_for_retry"
-          ? "Cuenta eliminada y anonimizada. Los documentos pendientes se volverán a eliminar automáticamente."
-          : "Cuenta eliminada y anonimizada exitosamente."
+          ? "Cuenta eliminada y anonimizada. Los archivos pendientes se volverán a eliminar automáticamente."
+          : "Cuenta eliminada y anonimizada."
       );
 
       await onSignOut();
-    } catch {
+    } catch (error) {
       alert(
-        "Error de conexión al eliminar la cuenta."
+        error instanceof Error
+          ? error.message
+          : "Error de conexión al eliminar la cuenta."
       );
     }
   };

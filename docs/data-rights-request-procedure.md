@@ -31,13 +31,13 @@ El cómputo comienza cuando la solicitud y la verificación necesaria son sufici
 ## 5. Ejecución
 
 ### Acceso o portabilidad
-Se puede utilizar la exportación autenticada `GET /account/export` y complementar la respuesta cuando la solicitud abarque información no incluida automáticamente.
+Se puede utilizar la exportación autenticada `GET /account/export` (incluye enlaces de 24 horas a documentos y fotos) y complementar la respuesta cuando la solicitud abarque información no incluida automáticamente.
 
 ### Rectificación
 Se corregirán datos inexactos y, cuando corresponda, se informará a los destinatarios relevantes. Los cambios deben quedar auditados sin registrar valores sensibles innecesarios.
 
 ### Cancelación
-Se determinará qué información puede eliminarse, anonimizarse o debe conservarse de forma restringida. La eliminación de cuenta utiliza `DELETE /account` y la cola durable de documentos personales.
+Se determinará qué información puede eliminarse, anonimizarse o debe conservarse de forma restringida. La eliminación de cuenta utiliza `DELETE /account` (función `private.delete_own_account()`) y la cola durable de archivos. `GET /account/deletion-preview` muestra lo que se eliminará y conservará; la constancia queda en `private.account_deletion_records`. Si la persona es la única propietaria de una empresa con otros miembros, debe transferir la propiedad antes.
 
 ### Oposición
 Se detendrá el tratamiento cuestionado cuando proceda. Si existe un motivo legítimo imperioso o necesidad de defensa de reclamaciones, deberá documentarse y explicarse.
