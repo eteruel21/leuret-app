@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import {
+  getRegistrationLegalDocuments,
+  getVersionedLegalUrl,
   login,
   register,
   resendVerificationEmail,
@@ -111,6 +113,10 @@ test("register: conserva la cuenta cuando falla el correo de verificación", asy
       message: "La cuenta fue creada, pero el correo no pudo enviarse."
     })
   );
+  const legalConfirmations = {
+    terms: { accepted: true, version: "1".repeat(64) },
+    privacy: { acknowledged: true, version: "2".repeat(64) }
+  } as const;
 
   const result = await register({
     fullName: "Usuario Prueba",
@@ -123,11 +129,13 @@ test("register: conserva la cuenta cuando falla el correo de verificación", asy
     province: "Panamá",
     district: "Panamá",
     corregimiento: "Bella Vista",
-    termsAccepted: true,
+    legalConfirmations,
     notificationsOptIn: false,
     registrationDevice: "test"
   });
 
+  const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+  expect(JSON.parse(request.body as string).legalConfirmations).toEqual(legalConfirmations);
   expect(
     result.requiresEmailConfirmation
   ).toBe(true);
@@ -135,4 +143,20 @@ test("register: conserva la cuenta cuando falla el correo de verificación", asy
   expect(
     result.emailDeliverySucceeded
   ).toBe(false);
+});
+
+test("registro vincula cada documento con la versión publicada por la API", async () => {
+  const terms = { title: "Términos", updatedAt: "2026-11-15", version: "1".repeat(64) };
+  const privacy = { title: "Privacidad", updatedAt: "2026-11-15", version: "2".repeat(64) };
+  fetchMock.mockResolvedValueOnce(successfulResponse(terms));
+  fetchMock.mockResolvedValueOnce(successfulResponse(privacy));
+
+  const documents = await getRegistrationLegalDocuments(new AbortController().signal);
+
+  expect(getVersionedLegalUrl("terms", documents.terms.version)).toMatch(
+    new RegExp("/legal/terms/version/" + terms.version + "$")
+  );
+  expect(getVersionedLegalUrl("privacy", documents.privacy.version)).toMatch(
+    new RegExp("/legal/privacy/version/" + privacy.version + "$")
+  );
 });

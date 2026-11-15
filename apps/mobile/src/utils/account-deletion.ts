@@ -30,6 +30,7 @@ export type AccountDeletionPreview = {
 };
 
 const DELETE_LABELS: Array<[key: string, singular: string, plural: string]> = [
+  ["legalAcceptances", "constancia legal", "constancias legales"],
   ["jobRequests", "petición de trabajo (con dirección, fotos y conversaciones)", "peticiones de trabajo (con dirección, fotos y conversaciones)"],
   ["profileDocuments", "documento personal", "documentos personales"],
   ["notifications", "notificación", "notificaciones"],

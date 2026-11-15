@@ -1,20 +1,20 @@
 # Política de Privacidad — Leuret App
 
-**Fecha de última actualización:** 10 de noviembre de 2026
+**Fecha de última actualización:** 2026-11-15
 
-Esta Política explica cómo **LEURET TECH**, operador de **Leuret App**, trata los datos personales de usuarios, clientes, contratistas y demás personas relacionadas con la Plataforma.
+Esta Política explica el tratamiento de datos personales de usuarios, clientes, contratistas y demás personas relacionadas con **Leuret App**, plataforma ofrecida bajo el nombre comercial **LEURET TECH**.
 
-El tratamiento se realiza conforme a la Ley 81 de 26 de marzo de 2019 sobre Protección de Datos Personales, el Decreto Ejecutivo 285 de 28 de mayo de 2021 y demás normas panameñas aplicables.
+El tratamiento se realiza conforme a la Ley 81 de 26 de marzo de 2019 sobre Protección de Datos Personales, el Decreto Ejecutivo 285 de 18 de mayo de 2021 y demás normas panameñas aplicables.
 
 ## 1. Responsable del tratamiento
 
-- **Responsable:** LEURET TECH
+- **Nombre comercial:** LEURET TECH
 - **Producto:** Leuret App
 - **País de operación:** República de Panamá
 - **Contacto de privacidad:** privacidad@leurettech.com
 - **Contacto legal:** legal@leurettech.com
 
-El correo de privacidad es el canal oficial para consultas y ejercicio de derechos. La referencia a este contacto no implica que exista una designación formal de “Delegado de Protección de Datos” cuando la ley no la exija o no se haya realizado.
+Escribe al correo de privacidad para consultar sobre el tratamiento de datos o ejercer tus derechos.
 
 ## 2. Datos que podemos tratar
 
@@ -23,7 +23,8 @@ Según el tipo de cuenta y las funciones utilizadas, podemos tratar:
 - **Identificación y contacto:** nombre, correo, teléfono, ubicación declarada, cédula, RUC u otros identificadores suministrados.
 - **Perfil profesional o empresarial:** nombre comercial, experiencia, especialidades, categorías, áreas de trabajo, aviso de operación, certificaciones, logotipo y portafolio.
 - **Información operativa y comercial:** empresas, clientes, contactos, direcciones, proyectos, actividades, tareas, presupuestos, facturas, pagos, notas, documentos y fotografías.
-- **Cuenta y autenticación:** identificadores internos, estado de verificación, sesiones, proveedores de identidad y registros de acceso. No exportamos contraseñas ni secretos de autenticación.
+- **Cuenta y autenticación:** identificadores internos, estado de verificación, sesiones, proveedores de identidad y registros de acceso.
+- **Constancias legales:** versión de los Términos aceptados y de la Política cuya lectura se confirmó, fecha y hora del registro y si se hizo desde el registro inicial o desde el perfil.
 - **Datos técnicos y de seguridad:** dirección IP, dispositivo, navegador, fecha y hora, registros de auditoría, errores, controles antifraude y eventos de seguridad.
 - **Notificaciones:** token del dispositivo y preferencia de recepción cuando el usuario habilita esa función.
 - **Comunicaciones:** consultas de soporte, solicitudes de privacidad y mensajes relacionados con el Servicio.
@@ -55,7 +56,11 @@ Tratamos datos para:
 9. cumplir obligaciones legales, fiscales, contables o requerimientos de autoridad competente;
 10. mantener, diagnosticar y mejorar la confiabilidad del Servicio.
 
-El tratamiento se apoya, según corresponda, en el consentimiento, la ejecución de la relación de servicio, el cumplimiento de obligaciones legales u otro fundamento permitido por la legislación panameña. Cuando un tratamiento opcional dependa del consentimiento, este podrá retirarse sin afectar el tratamiento realizado lícitamente con anterioridad.
+Usamos los datos de cuenta, contacto y uso necesarios para verificar tu correo, administrar el acceso y prestar las funciones que solicites en el marco de la relación de servicio. El nombre, el correo, el teléfono y la ubicación declarada son necesarios para completar el registro. Los documentos adicionales se solicitan según el tipo de perfil o la función que uses.
+
+Tratamos los datos técnicos necesarios para el interés legítimo de prevenir fraude, proteger las cuentas y resolver fallos, conforme a las condiciones de la Ley 81. Conservamos determinados registros comerciales o fiscales cuando una obligación legal lo exige.
+
+Al registrarte, se guarda constancia de que consultaste este aviso. Los tratamientos opcionales basados en consentimiento se autorizan por separado. Puedes desactivar los avisos opcionales en tu perfil o retirar el permiso de notificaciones del sistema operativo. La revocación surte efecto hacia el futuro y no afecta el tratamiento lícito efectuado anteriormente.
 
 ## 5. Minimización y exactitud
 
@@ -67,13 +72,13 @@ No debe cargar documentos de identidad, información sensible o datos de tercero
 
 No vendemos ni alquilamos datos personales.
 
-Podemos utilizar proveedores que procesan información únicamente para prestar servicios a LEURET TECH, entre ellos:
+- **Cloudflare** distribuye las páginas web, ejecuta la API, aloja archivos y presta servicios de protección contra abusos. Turnstile procesa señales técnicas como la dirección IP y datos del navegador para verificar el acceso. [Aviso de Privacidad de Turnstile](https://www.cloudflare.com/turnstile-privacy-policy/).
+- **Supabase** aloja la base de datos principal de PostgreSQL en Estados Unidos, en la región us-east-1.
+- **Resend** entrega correos de servicio y gestiona los buzones de privacidad y asuntos legales. Trata las direcciones de correo, los mensajes y los adjuntos recibidos por esos buzones. El proveedor almacena datos de correo en Estados Unidos.
+- **Expo** permite compilar y distribuir la app móvil. Cuando habilitas los avisos en el dispositivo, su servicio de notificaciones recibe el identificador de entrega, el texto del aviso y los datos necesarios para abrirlo.
+- **Apple o Google** distribuyen aplicaciones y entregan avisos al dispositivo, según el sistema operativo.
 
-- **Cloudflare:** distribución web, seguridad y verificación antifraude (como Turnstile), así como ejecución o almacenamiento cuando esas funciones estén configuradas;
-- **PostgreSQL y el proveedor de alojamiento de base de datos que corresponda al despliegue vigente:** almacenamiento y procesamiento de datos;
-- **Resend:** entrega de correos transaccionales;
-- **Expo y proveedores de plataforma móvil:** compilación, distribución y notificaciones cuando esas funciones estén habilitadas;
-- **Apple o Google:** distribución y servicios del sistema operativo cuando corresponda.
+Las personas autorizadas de una empresa pueden acceder a la información de sus espacios de trabajo según su rol. Al publicar una petición de trabajo, su descripción, zona y fotos de publicación se comparten con los contratistas habilitados para verla. El acceso a datos de contacto, dirección exacta y conversaciones depende de la relación y los permisos aplicables.
 
 También podremos comunicar información a autoridades competentes cuando exista obligación legal, orden válida o necesidad de formular, ejercer o defender reclamaciones.
 
@@ -81,7 +86,7 @@ Los proveedores pueden cambiar. LEURET TECH evaluará su necesidad, acceso y obl
 
 ## 7. Transferencias internacionales
 
-Algunos proveedores pueden procesar o alojar información fuera de Panamá. Cuando exista una transferencia internacional, se aplicarán las condiciones permitidas por la Ley 81, el Decreto Ejecutivo 285 y las garantías contractuales, técnicas u organizativas correspondientes.
+El alojamiento principal de la base de datos y el tratamiento de correo indicados en la sección anterior implican tratamiento en Estados Unidos. Los servicios de distribución web, seguridad y avisos en el dispositivo pueden tratar datos en otras ubicaciones conforme a su configuración. A las transferencias les corresponden las condiciones del artículo 33 de la Ley 81 y de los artículos 51 a 53 del Decreto Ejecutivo 285. Puedes solicitar información sobre los destinatarios, los países y el fundamento aplicable a través del correo de privacidad.
 
 ## 8. Seguridad
 
@@ -94,6 +99,7 @@ Ningún sistema es absolutamente invulnerable. Cuando corresponda legalmente, in
 Conservamos los datos durante el tiempo necesario para prestar el Servicio y cumplir la finalidad informada.
 
 - Los datos de una cuenta activa se conservan mientras la cuenta permanezca vigente.
+- Las constancias de aceptación y de lectura se conservan durante la vigencia de la cuenta y se incluyen en la exportación de datos. Al eliminar la cuenta se eliminan las constancias vinculadas.
 - Al eliminar una cuenta, se revocan las sesiones y se anonimiza o elimina la información personal que no deba conservarse.
 - Los documentos personales asociados se eliminan mediante una cola segura con reintentos.
 - Los registros comerciales, fiscales, contables, de seguridad o necesarios para reclamaciones se conservan de forma restringida durante el plazo legal o justificable aplicable.
@@ -128,11 +134,9 @@ Confirmaremos la recepción y responderemos incluso cuando no existan datos rela
 
 ## 12. Plazos
 
-Como regla general:
+El plazo para proporcionar acceso es de hasta **10 días hábiles** desde la presentación de la solicitud. La rectificación se tramita en hasta **5 días hábiles** desde la solicitud.
 
-- acceso, cancelación y portabilidad: hasta **10 días hábiles**;
-- rectificación: hasta **5 días hábiles**;
-- oposición: efecto inmediato, salvo que exista un motivo legítimo imperioso o sea necesario para formular, ejercer o defender reclamaciones.
+Para cancelación y portabilidad, respondemos en hasta **10 días hábiles**, conforme al criterio de la ANTAI. La oposición surte efecto inmediato, salvo que el tratamiento deba continuar por un motivo legítimo imperioso o para formular, ejercer o defender reclamaciones.
 
 Si una solicitud no puede atenderse total o parcialmente, comunicaremos la razón y las alternativas disponibles, conforme a la ley.
 
@@ -164,7 +168,7 @@ Si se incorporan herramientas analíticas o publicitarias no esenciales, se info
 
 ## 18. Cambios a esta política
 
-Los cambios materiales se informarán por la Plataforma, correo electrónico u otro medio razonable. La fecha de actualización permanecerá visible.
+Informaremos los cambios materiales por la Plataforma, correo electrónico u otro medio razonable. Si incorporamos una finalidad que requiere consentimiento, lo solicitaremos antes de iniciar el nuevo tratamiento. La fecha de actualización estará visible en el documento.
 
 ## 19. Contacto
 

@@ -5,6 +5,7 @@ import {
   generateSignedPhotoUrl,
   generateSignedProfileDocumentUrl
 } from "../storage/signed-url.js";
+import { loadLegalAcceptances } from "./legal-acceptances.js";
 
 /** Versión del formato del archivo exportado. */
 export const ACCOUNT_EXPORT_SCHEMA_VERSION = 2;
@@ -200,6 +201,7 @@ export async function buildAccountExport(userId: string, origin: string) {
        FROM public.profiles AS profile
        WHERE profile.id = app.current_user_id()`
     );
+    const legalAcceptances = await loadLegalAcceptances(client);
 
     const identitiesRes = await client.query(
       `SELECT
@@ -667,6 +669,7 @@ export async function buildAccountExport(userId: string, origin: string) {
       },
       account,
       profile,
+      legalAcceptances,
       authentication: {
         identities: identitiesRes.rows,
         sessions: sessionsRes.rows

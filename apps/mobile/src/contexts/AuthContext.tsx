@@ -20,6 +20,7 @@ import {
   logout,
   requestPasswordReset,
   register,
+  type RegisterInput,
   type StoredSession,
   updateContractorProfile as updateContractorProfileRequest,
   updateOwnProfile
@@ -37,22 +38,7 @@ export type {
 export type PublicAppRole =
   Exclude<AppRole, "super_admin">;
 
-type SignUpInput = {
-  fullName: string;
-  firstName: string;
-  lastName: string;
-  phone: string;
-  email: string;
-  password: string;
-  captchaToken: string;
-  role?: PublicAppRole;
-  province: string;
-  district: string;
-  corregimiento: string;
-  termsAccepted: boolean;
-  notificationsOptIn: boolean;
-  registrationDevice: string;
-};
+type SignUpInput = RegisterInput;
 
 export type UpdateContractorProfileInput = {
   businessName: string | null;
@@ -82,6 +68,7 @@ export type UpdateContractorProfileInput = {
 
 type AuthError = {
   message: string;
+  code?: string;
 };
 
 type AuthResult = {
@@ -315,8 +302,8 @@ export function AuthProvider({
             district: input.district,
             corregimiento:
               input.corregimiento,
-            termsAccepted:
-              input.termsAccepted,
+            legalConfirmations:
+              input.legalConfirmations,
             notificationsOptIn:
               input.notificationsOptIn,
             registrationDevice:
@@ -339,7 +326,8 @@ export function AuthProvider({
       } catch (error) {
         return {
           error: {
-            message: errorMessage(error)
+            message: errorMessage(error),
+            code: error instanceof ApiError ? error.code : undefined
           }
         };
       }

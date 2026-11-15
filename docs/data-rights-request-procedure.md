@@ -20,13 +20,12 @@ Cuando actúe un representante, se verificará su autorización.
 
 ## 4. Clasificación y plazos
 
-- Acceso: hasta 10 días hábiles.
-- Rectificación: hasta 5 días hábiles.
-- Cancelación: hasta 10 días hábiles.
-- Portabilidad: hasta 10 días hábiles.
-- Oposición: efecto inmediato, salvo excepción legal documentada.
+- Acceso dentro de los 10 días hábiles siguientes a la presentación de la solicitud, conforme al artículo 16 de la Ley 81.
+- Rectificación dentro de los 5 días hábiles siguientes a la solicitud, conforme al artículo 17 de la Ley 81.
+- Para cancelación y portabilidad, responder dentro de 10 días hábiles según el criterio de la ANTAI.
+- Para oposición, cesar el tratamiento de inmediato, salvo que proceda una excepción legal documentada.
 
-El cómputo comienza cuando la solicitud y la verificación necesaria son suficientes para tramitarla.
+Registrar la fecha de presentación y tramitar la verificación de identidad en paralelo para atender la solicitud dentro del plazo que corresponda.
 
 ## 5. Ejecución
 

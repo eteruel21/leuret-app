@@ -1,8 +1,8 @@
 # Términos y Condiciones de Uso — Leuret App
 
-**Fecha de última actualización:** 10 de noviembre de 2026
+**Fecha de última actualización:** 2026-11-15
 
-Estos Términos y Condiciones regulan el acceso y uso de **Leuret App** (la “Plataforma”), operada en la República de Panamá por **LEURET TECH** (el “Operador”). La aceptación de estos Términos se solicita durante el registro. La Política de Privacidad está disponible para informar cómo se tratan los datos personales.
+Estos Términos y Condiciones regulan el acceso y uso de **Leuret App** (la “Plataforma”), ofrecida en la República de Panamá bajo el nombre comercial **LEURET TECH**. Puedes consultar los Términos antes de registrarte y guardar una copia. Al completar el registro, la Plataforma guarda qué versión aceptaste y la fecha y hora de ese acto. La lectura de la Política de Privacidad se confirma por separado.
 
 ## 1. Servicio
 
@@ -36,7 +36,7 @@ LEURET TECH puede limitar o suspender una cuenta cuando sea necesario para prote
 
 ## 5. Contenido de los usuarios
 
-Los usuarios conservan los derechos que les correspondan sobre sus datos, documentos y fotografías. Otorgan a LEURET TECH una licencia limitada, no exclusiva y vigente únicamente durante el tiempo necesario para alojar, procesar, reproducir y mostrar ese contenido con el propósito de prestar, proteger y mejorar el Servicio.
+Los usuarios conservan los derechos que les correspondan sobre sus datos, documentos y fotografías. Otorgan a LEURET TECH una licencia limitada y no exclusiva para alojar, procesar y mostrar el contenido durante el tiempo necesario para prestar y proteger el servicio. La visibilidad del contenido depende de la función utilizada y de los permisos correspondientes.
 
 Cada usuario responde por la licitud, exactitud y autorización del contenido que incorpora.
 
@@ -48,13 +48,13 @@ Leuret App no sustituye la intervención de arquitectos, ingenieros, contadores,
 
 ## 7. Planes, pagos y facturación
 
-Determinadas funciones pueden estar sujetas a planes, límites o cargos informados antes de la contratación. Los documentos comerciales generados entre usuarios son responsabilidad de quienes los emiten y reciben. Su generación en la Plataforma no implica por sí sola certificación, validación tributaria ni firma electrónica cualificada. LEURET TECH no garantiza el pago ni el cumplimiento de obligaciones entre terceros.
+Los documentos comerciales generados entre usuarios son responsabilidad de quienes los emiten y reciben. La Plataforma permite registrar pagos y sus comprobantes. La emisión de un documento en Leuret App no le confiere certificación tributaria ni firma electrónica calificada. LEURET TECH no garantiza el pago ni el cumplimiento de obligaciones entre terceros.
 
-Si se ofrecen funciones de pago, antes de contratar se informarán claramente el precio total, impuestos aplicables, periodicidad de cobro, renovación, condiciones de cancelación y política de reembolso. No se presumirá la aceptación de renovaciones o cargos no informados. Se respetarán los derechos irrenunciables reconocidos a las personas consumidoras por la legislación aplicable.
+Si se ofrecen funciones de pago, antes de contratar se informarán el precio total con los impuestos aplicables, la periodicidad del cobro, las condiciones de renovación y los mecanismos de cancelación y reembolso. Los cobros y las renovaciones requerirán la autorización que corresponda. Se respetarán los derechos irrenunciables de los consumidores.
 
 ## 8. Privacidad y protección de datos
 
-El tratamiento de datos personales se rige por la **Política de Privacidad de Leuret App**, la Ley 81 de 26 de marzo de 2019, el Decreto Ejecutivo 285 de 28 de mayo de 2021 y demás normas panameñas aplicables.
+El tratamiento de datos personales se describe en la **Política de Privacidad de Leuret App** y se rige por la Ley 81 de 26 de marzo de 2019, el Decreto Ejecutivo 285 de 18 de mayo de 2021 y demás normas panameñas aplicables.
 
 ## 9. Exportación, rectificación y eliminación
 
@@ -81,9 +81,7 @@ La Plataforma, su código, diseño, identidad visual, documentación y component
 
 ## 12. Responsabilidad
 
-En la medida permitida por la ley, LEURET TECH no responde por decisiones técnicas o comerciales tomadas sin validar los resultados, por contenido aportado por usuarios, por acuerdos celebrados entre terceros ni por daños derivados de un uso contrario a estos Términos.
-
-Nada en esta cláusula limita responsabilidades que legalmente no puedan excluirse.
+Cada persona usuaria responde por el contenido que aporta, las decisiones que toma con ayuda de las herramientas y las obligaciones que asume frente a terceros. LEURET TECH responde por sus obligaciones en la prestación de la Plataforma conforme al contrato y a la ley. Se respetan los derechos y las responsabilidades que la ley establece con carácter irrenunciable.
 
 ## 13. Terminación
 
@@ -93,15 +91,15 @@ Las obligaciones que por su naturaleza deban sobrevivir —incluidas propiedad i
 
 ## 14. Modificaciones
 
-Los cambios materiales se informarán por la Plataforma, correo electrónico u otro medio razonable antes de entrar en vigor cuando sea necesario. La fecha de actualización permanecerá visible.
+Si un cambio modifica las condiciones del servicio, informaremos su alcance y fecha de aplicación. Cuando corresponda una nueva aceptación, solicitaremos una confirmación expresa y registraremos la versión correspondiente. La fecha de actualización estará visible en el documento.
 
 ## 15. Legislación y jurisdicción
 
-Estos Términos se interpretan conforme a las leyes de la República de Panamá. Las partes procurarán resolver de buena fe cualquier controversia antes de acudir a la autoridad o jurisdicción competente.
+Estos Términos se interpretan conforme a las leyes de la República de Panamá. Puedes comunicarnos una controversia por los canales de contacto o acudir a la autoridad o jurisdicción competente conforme a la ley. Los derechos de los consumidores se rigen, entre otras normas aplicables, por la Ley 45 de 31 de octubre de 2007.
 
 ## 16. Contacto
 
-- **Operador:** LEURET TECH
+- **Nombre comercial:** LEURET TECH
 - **Producto:** Leuret App
 - **Soporte:** soporte@leurettech.com
 - **Asuntos legales:** legal@leurettech.com

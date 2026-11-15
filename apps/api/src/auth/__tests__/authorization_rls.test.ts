@@ -4,6 +4,8 @@ import { pool } from "../../db/pool.js";
 import { adminPool } from "../../db/test-db.js";
 import type { FastifyInstance } from "fastify";
 import { installTurnstileTestMock } from "./turnstile-test-helper.js";
+import { LEGAL_DOCUMENTS } from "../../account/legal-content.js";
+import { withUserTransaction } from "../../db/with-user-transaction.js";
 
 describe("T-054: Suite de Pruebas de Autorización y RLS", () => {
   let app: FastifyInstance;
@@ -45,7 +47,10 @@ describe("T-054: Suite de Pruebas de Autorización y RLS", () => {
           province: "Panamá",
           district: "Panamá",
           corregimiento: "Bella Vista",
-          termsAccepted: true,
+          legalConfirmations: {
+            terms: { accepted: true, version: LEGAL_DOCUMENTS.terms.document.version },
+            privacy: { acknowledged: true, version: LEGAL_DOCUMENTS.privacy.document.version }
+          },
           captchaToken: "register-turnstile-token"
         }
       });
@@ -134,6 +139,15 @@ describe("T-054: Suite de Pruebas de Autorización y RLS", () => {
       }
     });
     expect(loginRes.statusCode).toBe(403);
+  });
+
+  it("limita la lectura de constancias legales al titular mediante RLS", async () => {
+    const owner = await adminPool.query<{ id: string }>("SELECT id FROM app_auth.users WHERE email = $1", [userEmails.ownerA]);
+    const id = owner.rows[0]!.id;
+    const records = await withUserTransaction(id, (client) =>
+      client.query<{ user_id: string }>("SELECT user_id FROM app_auth.legal_acceptances")
+    );
+    expect(records.rows).toEqual([{ user_id: id }, { user_id: id }]);
   });
 
   it("3. Aislamiento RLS entre Compañías (Cross-tenant isolation)", async () => {
