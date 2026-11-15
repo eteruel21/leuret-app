@@ -67,9 +67,6 @@ jobs:
       - name: 4b. Verify legal documents are up to date
         run: npm run legal:check
 
-      - name: 4c. Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high
-
       - name: 4d. Typecheck all workspaces
         run: npm run typecheck
 
@@ -203,3 +200,6 @@ jobs:
             echo "Legacy production API fallback found in client bundles."
             exit 1
           fi
+
+      - name: 16. Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
