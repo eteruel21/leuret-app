@@ -1,0 +1,67 @@
+name: Respaldos de Leuret
+
+on:
+  schedule:
+    # 02:17 en Panamá (UTC−5).
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/production-backup.yml'
+      - 'database/scripts/production_backup*.py'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-fixture:
+    name: Verificar respaldo y recuperación aislada
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    container: postgres:17-bookworm
+    timeout-minutes: 15
+    steps:
+      - name: Instalar herramientas
+        run: |
+          apt-get update
+          apt-get install --no-install-recommends -y age ca-certificates git python3-boto3 python3-psycopg2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Probar con datos sintéticos
+        run: runuser -u postgres -- /usr/bin/python3 database/scripts/production_backup_test.py
+
+  backup:
+    name: Respaldar PostgreSQL y R2
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'schedule' && vars.LEURET_BACKUP_ENABLED == 'true'))
+    runs-on: ubuntu-latest
+    container: postgres:17-bookworm
+    environment: backups
+    concurrency:
+      group: leuret-production-backup
+      cancel-in-progress: false
+    timeout-minutes: 120
+    steps:
+      - name: Instalar herramientas
+        run: |
+          apt-get update
+          apt-get install --no-install-recommends -y age ca-certificates git python3-boto3 python3-psycopg2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Cifrar, copiar y verificar el respaldo
+        env:
+          LEURET_BACKUP_DATABASE_URL: ${{ secrets.LEURET_BACKUP_DATABASE_URL }}
+          LEURET_BACKUP_DATABASE_CA_PEM: ${{ secrets.LEURET_BACKUP_DATABASE_CA_PEM }}
+          LEURET_SOURCE_R2_ENDPOINT: ${{ vars.LEURET_SOURCE_R2_ENDPOINT }}
+          LEURET_SOURCE_R2_KEY_ID: ${{ secrets.LEURET_SOURCE_R2_KEY_ID }}
+          LEURET_SOURCE_R2_SECRET: ${{ secrets.LEURET_SOURCE_R2_SECRET }}
+          LEURET_BACKUP_R2_ENDPOINT: ${{ vars.LEURET_BACKUP_R2_ENDPOINT }}
+          LEURET_BACKUP_R2_KEY_ID: ${{ secrets.LEURET_BACKUP_R2_KEY_ID }}
+          LEURET_BACKUP_R2_SECRET: ${{ secrets.LEURET_BACKUP_R2_SECRET }}
+          LEURET_BACKUP_R2_BUCKET: ${{ vars.LEURET_BACKUP_R2_BUCKET }}
+          LEURET_BACKUP_AGE_RECIPIENT: ${{ vars.LEURET_BACKUP_AGE_RECIPIENT }}
+        run: /usr/bin/python3 database/scripts/production_backup.py backup

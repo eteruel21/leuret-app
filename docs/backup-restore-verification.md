@@ -1,130 +1,105 @@
-# Backups y recuperación — Leuret App
+# Respaldos y recuperación de Leuret App
 
-**Última revisión:** 9 de noviembre de 2026
+**Fecha:** 15 de noviembre de 2026.
 
-**Alcance:** PostgreSQL en Supabase y archivos privados en Cloudflare R2
+**Estado:** automatización preparada. Pendientes la configuración de producción y el simulacro con una copia operativa.
 
-**Estado:** procedimiento definido; recuperación aislada automatizada en CI; respaldo operativo de producción pendiente
+**Verificación inicial:** se recuperaron 63 tablas y 51 registros de migración de una base creada con las migraciones del repositorio. La prueba sintética también reprodujo dos objetos con sus metadatos y rechazó una copia alterada y una carga incompleta.
 
-## Situación actual
+## Cobertura y objetivos
 
-- La base de producción usa Supabase Free. Este plan no incluye backups diarios administrados ni recuperación punto en el tiempo (PITR).
-- El respaldo lógico debe generarse con `pg_dump` y conservarse fuera de Supabase.
-- Los archivos privados se guardan en el bucket R2 `contractor-private-storage`. Un dump de PostgreSQL solo conserva sus referencias; no copia los objetos.
-- Supabase Storage no contiene objetos actualmente. Esto no elimina la necesidad de respaldar R2.
-- El flujo de CI ejecuta un ciclo real `pg_dump` → `pg_restore` sobre PostgreSQL 17 aislado. No usa secretos ni datos de producción.
+El proyecto **Leuret app** en Supabase Free usa PostgreSQL 17. La copia toma los esquemas `app`, `app_auth`, `app_migrations`, `private` y `public`, que contienen los datos de la aplicación y su propia autenticación. Supabase Auth y Supabase Storage tenían cero usuarios y objetos, respectivamente, en la revisión. Si empiezan a contener datos, la tarea falla y se amplía el procedimiento antes de considerar el respaldo completo. El plan Free requiere una copia lógica independiente para sostener el objetivo diario.
 
-No se debe afirmar que un respaldo de producción fue probado hasta restaurar un dump real en un entorno aislado y completar las verificaciones de este documento.
+Los archivos privados se respaldan desde `contractor-private-storage` en Cloudflare R2. Cada paquete conserva las claves de los objetos, el tamaño, SHA-256 y los encabezados HTTP y metadatos compatibles. El dump y el inventario de tablas se toman en un mismo snapshot PostgreSQL. El flujo compara el inventario R2 antes y después y falla si detecta cambios concurrentes. La base y R2 son sistemas independientes. En un incidente se comprueba la correspondencia entre referencias y archivos antes de reabrir el servicio.
 
-## Objetivos provisionales
+| Objetivo | Valor operativo |
+| --- | --- |
+| Ventana de respaldo | Todos los días a las 2:17 a. m. de Panamá (`07:17 UTC`). |
+| RPO objetivo | Hasta 24 horas para PostgreSQL y R2. Registrar la pérdida real desde la última copia recuperable hasta el incidente. |
+| RTO objetivo | Hasta 4 horas. Medir desde la declaración del incidente hasta que la aplicación pasa las comprobaciones funcionales. |
+| Retención prevista | 7 copias diarias, 4 semanales y 12 mensuales en condiciones normales. Las ventanas se cuentan por edad y requieren ejecuciones exitosas en los días correspondientes. |
 
-| Objetivo | Valor | Observación |
-|---|---:|---|
-| RPO de base de datos | 24 horas | Requiere un dump diario exitoso. |
-| RPO de archivos R2 | 24 horas | Requiere una copia diaria independiente. |
-| RTO | 4 horas | Se medirá durante el primer simulacro con un respaldo real. |
-| Retención | 7 diarios, 4 semanales y 12 mensuales | Los archivos deben estar cifrados y fuera del proyecto de producción. |
+## Configuración inicial
 
-## 1. Respaldo de PostgreSQL
+1. En **Cloudflare → R2**, crear un bucket privado destinado a los respaldos, por ejemplo `leuret-dr-backups`. Mantener apagados los accesos públicos y guardar los paquetes fuera del bucket operativo. Configurar estas reglas de bloqueo y caducidad por prefijo en el bucket de respaldos.
 
-### Requisitos
+   | Prefijo | Copia | Bloqueo mínimo | Caducidad |
+   | --- | --- | ---: | ---: |
+   | `leuret/daily/` | Días ordinarios | 7 días | 7 días |
+   | `leuret/weekly/` | Domingo | 28 días | 28 días |
+   | `leuret/monthly/` | Primer día del mes | 365 días | 365 días |
 
-1. PostgreSQL client de la misma versión mayor que producción o una versión posterior compatible.
-2. `database/.env.supabase` creado desde `database/.env.supabase.example`.
-3. Certificado CA de Supabase disponible localmente.
-4. Una base PostgreSQL local y desechable cuyo nombre contenga `backup`, `restore` o `mirror`.
-5. Volumen cifrado con espacio suficiente y una segunda ubicación fuera del equipo que ejecuta el dump.
+   La copia semanal o mensual también cubre el día de su ejecución. El primer día del mes tiene prioridad cuando cae en domingo. El bucket debe tener capacidad para estas copias completas. El runner necesita espacio temporal para el paquete y su versión cifrada. La cuenta de recuperación debe poder acceder al destino aunque el servicio de Leuret esté caído.
 
-### Crear y verificar una copia local
+2. Crear dos credenciales S3 limitadas a sus respectivos buckets. En `contractor-private-storage`, usar **Object Read only**. En el bucket de respaldo, usar **Object Read & Write** para escribir y verificar las copias. Habilitar los bloqueos de retención antes de entregar la credencial del destino al workflow. Para recuperar, usar una credencial independiente de solo lectura del bucket de respaldo.
+3. Generar la clave de cifrado desde una estación de recuperación autorizada mediante `age-keygen -o /ruta/segura/leuret-age.key`. Guardar la identidad privada y una segunda copia en custodia. Obtener el destinatario público con `age-keygen -y /ruta/segura/leuret-age.key`. GitHub recibe únicamente el destinatario público.
+4. En **GitHub → Settings → Environments**, crear `backups` y limitar su uso a `main`. Configurar las variables y secretos siguientes. La cuenta de PostgreSQL debe poder leer todas las filas de los esquemas de aplicación, incluidas las protegidas por RLS, consultar el inventario y obtener un snapshot. La rutina abre la sesión de inventario como solo lectura y usa TLS `verify-full`. En un runner IPv4, usar la URL del **Session Pooler** en el puerto `5432`, sin opciones en la URL, y el certificado CA del Dashboard de Supabase.
 
-Primero se inspecciona el destino sin modificarlo:
+   | Tipo | Nombre | Valor |
+   | --- | --- | --- |
+   | Secreto | `LEURET_BACKUP_DATABASE_URL` | Conexión PostgreSQL del proyecto Leuret. |
+   | Secreto | `LEURET_BACKUP_DATABASE_CA_PEM` | Contenido PEM del certificado CA. |
+   | Variable | `LEURET_SOURCE_R2_ENDPOINT` | Endpoint S3 HTTPS del bucket de archivos. |
+   | Secretos | `LEURET_SOURCE_R2_KEY_ID`, `LEURET_SOURCE_R2_SECRET` | Credencial de solo lectura del bucket de archivos. |
+   | Variable | `LEURET_BACKUP_R2_ENDPOINT` | Endpoint S3 HTTPS del destino. |
+   | Variable | `LEURET_BACKUP_R2_BUCKET` | Nombre del bucket de respaldos. |
+   | Secretos | `LEURET_BACKUP_R2_KEY_ID`, `LEURET_BACKUP_R2_SECRET` | Credencial del bucket de respaldos. |
+   | Variable | `LEURET_BACKUP_AGE_RECIPIENT` | Destinatario público `age1…`. |
 
-```bash
-npm run db:backup:local -- --dry-run
-```
+5. Después de publicar el workflow en `main`, ejecutar **Actions → Respaldos de Leuret → Run workflow**. El job debe terminar exitosamente y publicar en R2 tanto `*.zip.age` como su `*.zip.age.sha256`. El segundo archivo solo se escribe después de descargar y verificar la copia cifrada completa. Un objeto cifrado sin su `.sha256` se considera incompleto.
+6. Restaurar esa primera copia siguiendo el simulacro. Después de verificarla, crear la **variable de repositorio** `LEURET_BACKUP_ENABLED=true` en **Settings → Secrets and variables → Actions → Variables**. Mantener el entorno apto para ejecuciones programadas sin aprobaciones interactivas. Revisar el resultado de la primera ejecución programada y la caducidad de ambos objetos.
 
-Después se genera el dump, se recrea exclusivamente la base local permitida, se restaura y se verifican los objetos principales:
+## Operación habitual
 
-```bash
-npm run db:backup:local
-```
+- Revisar la última copia completa en **Actions** y R2. Una ejecución omitida por el programador puede no generar una alerta de fallo. Si la última copia verificada supera 24 horas, registrar el incidente y lanzar la tarea manualmente. Configurar las notificaciones de fallos para el usuario asociado al horario de GitHub.
+- Si falla por cambios de objetos o bloqueos de PostgreSQL, reintentar fuera de migraciones o cargas masivas. Si el error es de autenticación, certificado, permisos, espacio o capacidad, corregir la causa y comprobar una nueva copia completa. Registrar la ruta del par verificado, la hora UTC, el tamaño y el identificador de GitHub Actions.
+- Ejecutar el simulacro cada mes y antes de cambios importantes de infraestructura. Si se rota la clave de cifrado, mantener las identidades anteriores en custodia hasta la caducidad de todas las copias correspondientes.
+- El procedimiento local anterior sigue disponible con `npm run db:backup:local -- --dry-run` y `npm run db:backup:local`. Requiere `database/.env.supabase`, una base local dedicada y un volumen cifrado. Ese procedimiento recrea la base local de destino. El operador debe cifrar el dump, verificar su SHA-256 y copiarlo fuera del equipo. Los archivos de R2 requieren su propia copia.
 
-El script `database/scripts/backup-supabase-to-local.mjs` impide usar un host remoto como destino y rechaza nombres de base que no indiquen claramente su propósito. Nunca se debe apuntar `LOCAL_BACKUP_DATABASE_URL` a producción.
+## Simulacro con una copia operativa
 
-Al terminar:
+1. Seleccionar el último par completo anterior al fallo o al momento del simulacro. Descargarlo a un volumen cifrado con el perfil AWS CLI de lectura `leuret-backup-lectura`. Usar el mismo directorio y nombre base para ambos archivos.
 
-1. Calcular y guardar SHA-256 del archivo `.dump`.
-2. Cifrar el archivo antes de copiarlo fuera del equipo.
-3. Registrar fecha UTC, tamaño, hash, versión de PostgreSQL y resultado de restauración.
-4. Copiarlo a una ubicación independiente y aplicar la retención definida.
-5. No subir dumps, credenciales ni certificados al repositorio o a artefactos públicos de CI.
+   ```bash
+   ARCHIVE_KEY='leuret/daily/REEMPLAZAR.zip.age'
+   ARCHIVE_FILE="${ARCHIVE_KEY##*/}"
+   aws --profile leuret-backup-lectura --endpoint-url "$LEURET_BACKUP_R2_ENDPOINT" s3 cp \
+     "s3://$LEURET_BACKUP_R2_BUCKET/$ARCHIVE_KEY" "$ARCHIVE_FILE"
+   aws --profile leuret-backup-lectura --endpoint-url "$LEURET_BACKUP_R2_ENDPOINT" s3 cp \
+     "s3://$LEURET_BACKUP_R2_BUCKET/$ARCHIVE_KEY.sha256" "$ARCHIVE_FILE.sha256"
+   ```
 
-## 2. Respaldo de archivos de Cloudflare R2
+2. En una máquina Linux aislada, como usuario sin privilegios administrativos, disponer de Python 3 con `boto3` y `psycopg2`, `age` y los binarios de servidor y cliente PostgreSQL 17. Ejecutar con la salida en un **directorio nuevo** del volumen cifrado. Este paso puede correr sin red y crea un clúster temporal con socket Unix privado.
 
-La base contiene rutas de objetos, no los archivos. El bucket de producción debe copiarse diariamente a un destino de respaldo separado mediante una credencial limitada al bucket.
+   ```bash
+   python3 database/scripts/production_backup.py restore "$ARCHIVE_FILE" \
+     --identity /ruta/segura/leuret-age.key --output /volumen-cifrado/leuret-restaurado
+   ```
 
-Opciones compatibles con R2:
+   El comando comprueba el SHA-256 exterior, descifra, valida el tamaño y SHA-256 de cada entrada, restaura PostgreSQL y compara tablas, filas, indicadores de RLS e historial de migraciones con el inventario. Deja el dump y los objetos verificados en el directorio indicado para la fase funcional.
 
-- `rclone copy` hacia otro bucket o proveedor. Se prefiere `copy` sobre `sync` para que una eliminación accidental en producción no borre automáticamente la copia.
-- AWS CLI con el endpoint S3 de R2.
+3. En un bucket privado y vacío de recuperación, con prefijo `leuret-restore-`, cargar los objetos y verificar la descarga de cada uno. Entregar al script `LEURET_RESTORE_R2_ENDPOINT`, `LEURET_RESTORE_R2_KEY_ID` y `LEURET_RESTORE_R2_SECRET` mediante el entorno de recuperación. Si hay un fallo parcial, revisar el resultado y reintentar en un nuevo bucket vacío.
 
-Controles mínimos:
+   ```bash
+   python3 database/scripts/production_backup.py restore-files /volumen-cifrado/leuret-restaurado \
+     --bucket leuret-restore-simulacro
+   ```
 
-1. Destino separado del bucket `contractor-private-storage`.
-2. Credencial exclusiva, con el mínimo permiso necesario.
-3. Retención o bucket lock en el **bucket de respaldo**, no en el bucket operativo sin revisar antes el flujo de actualizaciones y eliminaciones de la app.
-4. Inventario con clave, tamaño, ETag y fecha de copia.
-5. Verificación mensual descargando una muestra y comparando tamaño/hash.
+4. Para las pruebas funcionales, preparar una base dedicada con el dump verificado, las extensiones necesarias y los roles, propietarios y permisos de aplicación definidos en las migraciones y en `database/scripts/prepare-supabase.mjs`. Configurar una API de recuperación con secretos, Hyperdrive y R2 separados. Desactivar crons de limpieza, notificaciones, correos y otras integraciones durante el ensayo. Verificar inicio de sesión, acceso con permisos de contratista, separación entre dos empresas, presupuestos, facturas y lectura de archivos. La verificación automática en el clúster desechable omite propietarios y ACL del origen mediante `--no-owner` y `--no-privileges`. Validar esos permisos funcionales antes de cualquier reapertura.
+5. Registrar fecha del snapshot, ejecución de GitHub, operador, resultado, recuentos, muestras comprobadas, pérdida estimada y tiempos. El tiempo que imprime el script mide la comprobación técnica de la copia. Para el RTO registrar también descarga, infraestructura, recuperación de R2 y pruebas funcionales. Eliminar cuando termine el ensayo la copia descifrada, las bases desechables y las credenciales de recuperación temporales.
 
-## 3. Prueba automatizada de recuperación
+## Respuesta ante un fallo
 
-El workflow `.github/workflows/validate.yml` prepara `test_leuret` en PostgreSQL 17 y ejecuta:
-
-```bash
-database/scripts/verify-backup-restore.sh
-```
-
-La prueba:
-
-1. Rechaza hosts remotos y nombres que no sean de prueba.
-2. Genera un dump personalizado con blobs.
-3. Crea una base temporal separada.
-4. Restaura con `--no-owner`, `--no-privileges` y `--exit-on-error`.
-5. Compara el número de tablas de aplicación y el historial de migraciones.
-6. Calcula SHA-256 del dump.
-7. Elimina la base temporal y el archivo al finalizar.
-
-Esta prueba valida el mecanismo de recuperación del repositorio. No sustituye el simulacro con una copia real de producción.
-
-## 4. Simulacro con un dump real
-
-Frecuencia recomendada: mensual y antes de cambios de infraestructura relevantes.
-
-1. Seleccionar el respaldo y comprobar su SHA-256.
-2. Preparar PostgreSQL aislado, sin rutas de red hacia producción.
-3. Restaurar con roles equivalentes y `--no-owner` cuando corresponda.
-4. Confirmar tablas de `public`, `app_auth`, `private` y `app_migrations`.
-5. Comparar conteos por tabla y checksums de `app_migrations.schema_migrations`.
-6. Validar inicio de sesión, aislamiento por empresa, presupuestos, facturas y lectura de archivos restaurados.
-7. Medir tiempo total y registrar RPO/RTO reales.
-8. Destruir de forma segura el entorno temporal y sus credenciales.
-
-Una restauración sobre producción exige una autorización independiente, ventana de mantenimiento, respaldo previo y plan de reversión.
-
-## 5. Estado de cumplimiento
-
-- [x] Inventario de base de datos y almacenamiento revisado.
-- [x] Riesgo del plan Supabase Free documentado.
-- [x] Archivos R2 separados del respaldo de base de datos.
-- [x] Ciclo real de dump/restauración aislada agregado a CI.
-- [ ] Primer dump cifrado de producción conservado fuera de Supabase.
-- [ ] Primera restauración de un dump real de producción documentada.
-- [ ] Copia automática de R2 configurada y recuperación de muestra comprobada.
-- [ ] RPO y RTO reales medidos y aprobados.
+1. Registrar la hora UTC del primer error, alcance e identificadores de los despliegues. Contener escrituras y tareas que puedan agravar la pérdida. Mantener la base y el bucket actuales disponibles para preservar evidencia y reconciliar cambios posteriores a la copia.
+2. Determinar si el daño es de aplicación, PostgreSQL o R2. Para código y despliegues, seguir el [procedimiento de rollback](./rollback-procedure.md). Ante una pérdida de archivos, recuperar primero los objetos necesarios en un bucket aislado y comprobar sus referencias en PostgreSQL. Para una pérdida de base de datos, recuperar el último par verificado en un entorno nuevo y cotejar referencias, datos y permisos.
+3. Reconciliar operaciones posteriores al snapshot. Verificar solicitudes de eliminación, archivos ya retirados y sesiones que deban revocarse antes de restablecer accesos o reactivar la cola y las notificaciones.
+4. Antes de cambiar producción, obtener autorización operativa y acordar una ventana de mantenimiento. Preparar una configuración de reversión con la ruta previa de Hyperdrive, el binding R2 y despliegues anteriores. Tras aprobar las pruebas, reconfigurar las conexiones en la ventana acordada y comprobar `/health`, `/health/database`, autenticación y acceso a objetos. Guardar la evidencia de recuperación y reactivar escrituras e integraciones de forma controlada.
 
 ## Referencias
 
-- [Supabase: Database Backups](https://supabase.com/docs/guides/platform/backups)
-- [Cloudflare R2: Durability](https://developers.cloudflare.com/r2/reference/durability/)
-- [Cloudflare R2: Bucket locks](https://developers.cloudflare.com/r2/buckets/bucket-locks/)
-- [Cloudflare R2: CLI tools](https://developers.cloudflare.com/r2/get-started/cli/)
+- [Supabase Database Backups](https://supabase.com/docs/guides/platform/backups)
+- [PostgreSQL 17 pg_restore](https://www.postgresql.org/docs/17/app-pgrestore.html)
+- [Cloudflare R2 API tokens](https://developers.cloudflare.com/r2/api/tokens/)
+- [Cloudflare R2 Bucket Locks](https://developers.cloudflare.com/r2/buckets/bucket-locks/)
+- [Cloudflare R2 Object Lifecycles](https://developers.cloudflare.com/r2/buckets/object-lifecycles/)
+- [GitHub Actions Troubleshooting](https://docs.github.com/en/actions/how-tos/troubleshoot-workflows)
