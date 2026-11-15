@@ -23,6 +23,7 @@
     "db:status": "node --env-file-if-exists=database/.env database/scripts/migrate.mjs --status",
     "db:seed": "node --env-file-if-exists=database/.env database/scripts/seed.mjs",
     "test:api": "npm run test -w apps/api",
+    "test:e2e": "playwright test",
     "test:database-tools": "node --env-file-if-exists=database/.env --env-file=database/test.env --test database/scripts/*.test.mjs",
     "test:database-unit": "node --test database/scripts/db-utils.test.mjs",
     "test:invoice-db": "node --env-file-if-exists=database/.env --env-file=database/test.env database/scripts/invoice-payments.integration.mjs",
@@ -45,6 +46,7 @@
     "validate": "npm run typecheck && npm run build:api && npm run build:admin && npm run build:mobile"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.1",
     "patch-package": "8.0.1",
     "pg": "^8.22.0",
     "react": "19.2.3",

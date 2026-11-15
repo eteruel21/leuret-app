@@ -1,18 +1,26 @@
 name: Deploy to Cloudflare
 
 on:
-  push:
-    branches:
-      - main
+  workflow_call:
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        required: true
+      CLOUDFLARE_ACCOUNT_ID:
+        required: true
+      PRODUCTION_DATABASE_SSL_CA:
+        required: true
+      PRODUCTION_MIGRATOR_DATABASE_URL:
+        required: true
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
   deploy:
     name: Build & Deploy to Cloudflare
-    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
 
     # Base de referencia efímera (misma versión mayor que Supabase) para
     # comparar el esquema de producción con lo que producen las migraciones.
@@ -39,18 +47,19 @@ jobs:
 
     steps:
       - name: 1. Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
 
       - name: 2. Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
-          cache: npm
+          package-manager-cache: false
 
       - name: 3. Install dependencies
-        run: |
-          npm ci
-          npm install @rollup/rollup-linux-x64-gnu -w apps/admin-web --no-save
+        run: npm ci --no-audit --no-fund
 
       - name: 4. Configure production database certificate
         env:
@@ -117,8 +126,18 @@ jobs:
             echo "Production Turnstile sitekey must not be a test key."
             exit 1
           fi
-          if grep -R -F "https://api.contractor.com.pa" apps/admin-web/dist apps/mobile/dist; then
+          if grep -R -l -F "https://api.contractor.com.pa" apps/admin-web/dist apps/mobile/dist; then
             echo "Legacy production API fallback found in client bundles."
+            exit 1
+          fi
+
+      - name: Verify the validated commit is still the tip of main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          main_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          if [ "$main_sha" != "$GITHUB_SHA" ]; then
+            echo "A newer commit is already on main. Publish that commit after its validation."
             exit 1
           fi
 
@@ -139,3 +158,15 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: ./node_modules/.bin/wrangler pages deploy apps/mobile/dist --project-name leuret-pro-web --branch main
+
+      - name: Verify deployed API, database and web clients
+        run: |
+          for url in \
+            https://api.leurettech.com/health \
+            https://api.leurettech.com/health/database \
+            https://admin.leurettech.com/ \
+            https://app.leurettech.com/; do
+            echo "Checking $url"
+            curl --fail --silent --show-error --location --retry 5 \
+              --retry-all-errors --max-time 15 --output /dev/null "$url"
+          done

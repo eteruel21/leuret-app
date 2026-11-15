@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import dotenv from "dotenv";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 import { deriveTestDatabaseEnvironment } from "./src/db/test-database-env.js";
 
@@ -24,20 +24,39 @@ const isolatedDatabase = process.env.TEST_DATABASE_URL
     )
   : {};
 
-const testEnvironment = {
+const integrationEnvironment = {
   NODE_ENV: "test",
-  DATABASE_MODE: process.env.DATABASE_MODE ?? (process.env.TEST_DATABASE_URL ? "postgres" : "hyperdrive"),
+  DATABASE_MODE: "postgres",
   ...isolatedDatabase,
   ...(process.env.PGUSER ? { PGUSER: process.env.PGUSER } : {}),
   ...(process.env.PGPASSWORD ? { PGPASSWORD: process.env.PGPASSWORD } : {})
 } satisfies Record<string, string>;
 
+const integrationTests = "src/**/__tests__/**/*.integration.test.ts";
+
 export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    include: ["src/**/__tests__/**/*.test.ts"],
     testTimeout: 30000,
-    env: testEnvironment
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "unit",
+          include: ["src/**/__tests__/**/*.test.ts"],
+          exclude: [...configDefaults.exclude, integrationTests],
+          env: { NODE_ENV: "test", DATABASE_MODE: "hyperdrive" }
+        }
+      },
+      {
+        extends: true,
+        test: {
+          name: "integration",
+          include: [integrationTests],
+          env: integrationEnvironment
+        }
+      }
+    ]
   }
 });

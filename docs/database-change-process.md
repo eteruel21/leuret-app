@@ -10,7 +10,7 @@ esquema** (CI) y la **detección de deriva** (despliegue).
 | Paso | Dónde | Qué protege |
 |---|---|---|
 | 1. Migración nueva, numerada, en una transacción | PR | Historial inmutable, todo o nada |
-| 2. CI: migraciones desde cero + lint + pruebas RLS | `validate.yml` pasos 8, 8b, 10 | Que la migración aplica, cumple las reglas y no rompe permisos |
+| 2. CI: migraciones desde cero + lint + pruebas RLS | `Validate Codebase & Build` | Que la migración aplica, cumple las reglas y no rompe permisos |
 | 3. Respaldo antes de aplicar | `npm run db:backup:local` | Poder volver atrás con datos |
 | 4. Aplicar en producción | GitHub Actions *Aplicar migraciones a producción* o `npm run db:migrate:supabase` | Aplicar lo probado, con checksum, sin pegar SQL a mano |
 | 5. Verificar | `db:check:supabase`, `db:drift:supabase`, asesores | Que producción quedó igual que el repositorio |
@@ -96,12 +96,9 @@ user_id = (SELECT app.current_user_id())
 
 La PR corre `validate.yml`:
 
-- **Paso 8:** crea una base PostgreSQL 17 vacía y aplica todas las migraciones
-  desde la 001.
-- **Paso 8b:** `schema-lint.mjs` sobre esa base. Cualquier infracción falla la PR.
-- **Paso 9:** respaldo y restauración de esa base.
-- **Paso 10:** pruebas de autenticación, aislamiento entre empresas y RLS como
-  `contractor_api`.
+- Crea una base PostgreSQL 17 vacía, aplica las migraciones desde la 001 y comprueba el esquema con `schema-lint.mjs`.
+- Restaura un respaldo de la base aislada, verifica claves foráneas y exige que el control de deriva rechace un checksum modificado.
+- Prueba autenticación, aislamiento entre empresas, RLS y facturación con `contractor_api`.
 
 Para cambios grandes de RLS, además del CI:
 `database/scripts/rls/generate_rls_consolidation.py` (genera la reescritura y
