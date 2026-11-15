@@ -1,18 +1,28 @@
 name: Deploy to Cloudflare
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: [Validate]
+    types: [completed]
+    branches: [main]
+
+# No se despliega desde PR ni con una validación fallida.
+permissions:
+  contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: leuret-production-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
     name: Build & Deploy to Cloudflare
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     # Base de referencia efímera (misma versión mayor que Supabase) para
     # comparar el esquema de producción con lo que producen las migraciones.
@@ -38,8 +48,24 @@ jobs:
       EXPO_PUBLIC_TURNSTILE_CHALLENGE_URL: https://app.leurettech.com/turnstile
 
     steps:
-      - name: 1. Checkout repository
-        uses: actions/checkout@v7
+      - name: 1. Checkout validated commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: 1b. Reject stale or unexpected commit
+        shell: bash
+        env:
+          VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$VALIDATED_SHA"
+          current_main="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [ -z "$current_main" ] || [ "$current_main" != "$VALIDATED_SHA" ]; then
+            echo "::error::La rama main ya no apunta al commit validado; no se desplegará una versión antigua."
+            exit 1
+          fi
 
       - name: 2. Setup Node.js
         uses: actions/setup-node@v7
