@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from "expo-notifications";
 import {
   createContext,
   type PropsWithChildren,
@@ -6,8 +7,10 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
+import { AppState, Platform } from "react-native";
 
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -18,6 +21,10 @@ import type {
   Company,
   CompanyMembership
 } from "@/types/company";
+import { changesMembership } from "@/utils/notifications-inbox";
+
+/** Al volver a la app, las empresas se recargan como máximo cada minuto. */
+const FOREGROUND_REFRESH_MS = 60_000;
 
 const ACTIVE_COMPANY_KEY =
   "@contractor-pro:active-company-id";
@@ -251,6 +258,25 @@ export function CompanyProvider({
     userId,
     refreshCompanies
   ]);
+
+  // Un rol cambiado o un acceso retirado por otra persona se refleja al volver
+  // a la app o al recibir el aviso, sin esperar a que la API responda 403.
+  const lastForegroundRefresh = useRef(Date.now());
+  useEffect(() => {
+    if (!userId || !canLoadCompanies) return;
+    const appState = AppState.addEventListener("change", (state) => {
+      if (state !== "active" || Date.now() - lastForegroundRefresh.current < FOREGROUND_REFRESH_MS) return;
+      lastForegroundRefresh.current = Date.now();
+      void refreshCompanies();
+    });
+    const push = Platform.OS === "web" ? null : Notifications.addNotificationReceivedListener((notification) => {
+      if (changesMembership(notification.request.content.data?.type)) void refreshCompanies();
+    });
+    return () => {
+      appState.remove();
+      push?.remove();
+    };
+  }, [canLoadCompanies, refreshCompanies, userId]);
 
   const setActiveCompanyId =
     useCallback(

@@ -1,5 +1,5 @@
 import { generateSecureToken, hashSecureToken } from "../auth/tokens.js";
-import { notifyCompanyInvitation } from "../notifications/event-service.js";
+import { notifyCompanyInvitation, notifyCompanyMemberChange } from "../notifications/event-service.js";
 import { sendCompanyInvitationEmail } from "../services/email.js";
 
 import {
@@ -12,12 +12,14 @@ import {
   acceptCompanyInvitationRepo,
   revokeCompanyInvitationRepo,
   findCompanyMembersRepo,
-  findCompanyMemberByIdRepo,
-  countActiveCompanyOwnersRepo,
-  updateCompanyMemberStatusRepo,
-  updateCompanyMemberRoleRepo,
-  deleteCompanyMemberRepo,
+  findCompanyMemberRepo,
+  manageCompanyMemberRepo,
+  leaveCompanyRepo,
+  declineCompanyInvitationRepo,
+  findCompanyInvitationConflictRepo,
   insertAdminAuditLogRepo,
+  type MemberAction,
+  type MemberActionOutcome,
   findAdminAuditLogsRepo,
   type CreateCompanyInput,
   type BillingInput
@@ -64,11 +66,14 @@ export async function createCompanyInvitationService(
   email: string,
   role: string
 ) {
+  const conflict = await findCompanyInvitationConflictRepo(userId, companyId, email, role);
+  if (conflict) return { conflict } as const;
+
   const { token, hash: tokenHash } = generateSecureToken();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 días
 
   const invitation = await createCompanyInvitationRepo(userId, companyId, email, role, tokenHash, expiresAt);
-  if (!invitation) return null;
+  if (!invitation) return { conflict: "forbidden" } as const;
 
   // El correo es una ayuda: si falla, la invitación sigue siendo válida y el
   // código se puede compartir a mano desde la app.
@@ -91,7 +96,11 @@ export async function createCompanyInvitationService(
     emailSent = false;
   }
 
-  return { ...invitation, acceptanceToken: token, emailSent };
+  return { invitation: { ...invitation, acceptanceToken: token, emailSent } } as const;
+}
+
+export async function declineCompanyInvitationService(userId: string, invitationId: string) {
+  return declineCompanyInvitationRepo(userId, invitationId);
 }
 
 export async function getCompanyInvitationsService(userId: string, companyId: string) {
@@ -124,106 +133,45 @@ export async function getCompanyMembersService(userId: string, companyId: string
   return findCompanyMembersRepo(userId, companyId);
 }
 
-export async function updateCompanyMemberStatusService(
+const MEMBER_ERRORS: Record<Exclude<MemberActionOutcome, "ok" | "unchanged">, { status: number; message: string }> = {
+  forbidden: { status: 403, message: "No tienes permiso para gestionar el equipo de esta empresa." },
+  not_found: { status: 404, message: "El miembro no fue encontrado." },
+  self: { status: 409, message: "No puedes desactivarte ni quitarte a ti mismo. Usa «Salir de la empresa»." },
+  last_owner: { status: 409, message: "La empresa debe conservar al menos un propietario activo. Asigna otro propietario primero." },
+  owner_required: { status: 403, message: "Solo un propietario puede gestionar propietarios y administradores." },
+  inactive: { status: 409, message: "Reactiva a la persona antes de hacerla propietaria." },
+  unavailable: { status: 409, message: "La cuenta de esta persona ya no está activa en Leuret." }
+};
+
+export type MemberActionResult =
+  | { success: true; changed: boolean; member: Record<string, unknown> | null }
+  | { success: false; status: number; error: string };
+
+/** Cambia el rol, desactiva, reactiva o quita a un miembro y avisa a la persona. */
+export async function manageCompanyMemberService(
   userId: string,
   companyId: string,
   memberId: string,
-  active: boolean
-) {
-  const member = await findCompanyMemberByIdRepo(userId, companyId, memberId);
-  if (!member) {
-    return { success: false, error: "El miembro no fue encontrado." };
+  action: MemberAction,
+  role: string | null = null
+): Promise<MemberActionResult> {
+  const result = await manageCompanyMemberRepo(userId, companyId, memberId, action, role);
+  if (result.outcome !== "ok" && result.outcome !== "unchanged") {
+    const error = MEMBER_ERRORS[result.outcome];
+    return { success: false, status: error.status, error: error.message };
   }
 
-  if (member.user_id === userId && !active) {
-    return { success: false, error: "No puedes desactivar tu propia membresía." };
+  if (result.outcome === "ok" && result.target_user_id && result.target_user_id !== userId) {
+    await notifyCompanyMemberChange(result.target_user_id, companyId, action, result.assigned_role);
   }
 
-  if (!active && member.role === "owner") {
-    const ownerCount = await countActiveCompanyOwnersRepo(userId, companyId);
-    if (ownerCount <= 1) {
-      return { success: false, error: "No se puede desactivar al único propietario activo de la empresa." };
-    }
-  }
-
-  const updated = await updateCompanyMemberStatusRepo(userId, companyId, memberId, active);
-  if (updated) {
-    await insertAdminAuditLogRepo(userId, companyId, active ? "MEMBER_ACTIVATED" : "MEMBER_DEACTIVATED", "company_member", memberId, {
-      targetUserId: member.user_id,
-      email: member.email
-    });
-  }
-
-  return { success: true, member: updated };
+  // Al quitarse su propio rol de gestión, el usuario ya no puede leer la ficha.
+  const member = action === "remove" ? null : await findCompanyMemberRepo(userId, companyId, memberId).catch(() => null);
+  return { success: true, changed: result.outcome === "ok", member };
 }
 
-export async function updateCompanyMemberRoleService(
-  userId: string,
-  companyId: string,
-  memberId: string,
-  newRole: string
-) {
-  const members = await findCompanyMembersRepo(userId, companyId);
-  const callerMember = members.find((m) => m.user_id === userId);
-  const targetMember = members.find((m) => m.id === memberId);
-
-  if (!targetMember) {
-    return { success: false, error: "El miembro especificado no existe en la empresa." };
-  }
-
-  const callerRole = callerMember?.role ?? "member";
-
-  if (callerRole !== "owner") {
-    if (targetMember.role === "owner" || newRole === "owner") {
-      return { success: false, error: "Solo un propietario ('owner') puede asignar o modificar el rol de propietario." };
-    }
-  }
-
-  if (targetMember.role === "owner" && newRole !== "owner") {
-    const ownerCount = await countActiveCompanyOwnersRepo(userId, companyId);
-    if (ownerCount <= 1) {
-      return { success: false, error: "La empresa debe mantener al menos un propietario activo." };
-    }
-  }
-
-  const updated = await updateCompanyMemberRoleRepo(userId, companyId, memberId, newRole);
-  if (updated) {
-    await insertAdminAuditLogRepo(userId, companyId, "MEMBER_ROLE_UPDATED", "company_member", memberId, {
-      targetUserId: targetMember.user_id,
-      oldRole: targetMember.role,
-      newRole
-    });
-  }
-
-  return { success: true, member: updated };
-}
-
-export async function deleteCompanyMemberService(userId: string, companyId: string, memberId: string) {
-  const member = await findCompanyMemberByIdRepo(userId, companyId, memberId);
-  if (!member) {
-    return { success: false, error: "El miembro no fue encontrado." };
-  }
-
-  if (member.user_id === userId) {
-    return { success: false, error: "No puedes eliminarte a ti mismo de la empresa." };
-  }
-
-  if (member.role === "owner") {
-    const ownerCount = await countActiveCompanyOwnersRepo(userId, companyId);
-    if (ownerCount <= 1) {
-      return { success: false, error: "No se puede eliminar al único propietario de la empresa." };
-    }
-  }
-
-  const deleted = await deleteCompanyMemberRepo(userId, companyId, memberId);
-  if (deleted) {
-    await insertAdminAuditLogRepo(userId, companyId, "MEMBER_REMOVED", "company_member", memberId, {
-      targetUserId: member.user_id,
-      email: member.email
-    });
-  }
-
-  return { success: true, member: deleted };
+export async function leaveCompanyService(userId: string, companyId: string) {
+  return leaveCompanyRepo(userId, companyId);
 }
 
 // --- Auditoría ---

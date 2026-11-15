@@ -71,6 +71,55 @@ export async function notifyCompanyInvitation(recipientId: string | null, invita
   );
 }
 
+const MEMBER_ROLE_LABELS: Record<string, string> = {
+  owner: "Propietario",
+  admin: "Administrador",
+  supervisor: "Supervisor",
+  sales: "Ventas",
+  estimator: "Presupuestista",
+  member: "Equipo de campo"
+};
+
+/** Aviso a la persona cuyo acceso o rol cambió en una empresa. */
+export async function notifyCompanyMemberChange(
+  recipientId: string,
+  companyId: string,
+  action: "set_role" | "activate" | "deactivate" | "remove",
+  role: string | null
+) {
+  const [title, body] = {
+    set_role: ["Tu rol cambió", `Ahora tu rol en el equipo es ${MEMBER_ROLE_LABELS[role ?? ""] ?? "otro"}.`],
+    activate: ["Tu acceso fue reactivado", "Ya puedes volver a entrar al espacio de la empresa."],
+    deactivate: ["Tu acceso fue pausado", "Un administrador desactivó tu acceso a la empresa."],
+    remove: ["Ya no formas parte del equipo", "Un administrador te quitó de la empresa."]
+  }[action] as [string, string];
+  await dispatchEventPush(recipientId, title, body, {
+    type: action === "set_role" || action === "activate" ? "company_member.updated" : "company_member.removed",
+    companyId
+  });
+}
+
+export async function notifyClientConnectionAccepted(requesterId: string | null, requestId: string) {
+  await dispatchEventPush(
+    requesterId,
+    "Solicitud aceptada",
+    "La vinculación en Leuret quedó activa.",
+    { type: "client_connection.accepted", requestId }
+  );
+}
+
+export async function notifyClientConnectionEnded(recipientIds: string[] | null, companyId: string, byClient: boolean) {
+  if (!recipientIds?.length) return;
+  await Promise.all(recipientIds.map((recipient) => dispatchEventPush(
+    recipient,
+    "Vinculación terminada",
+    byClient
+      ? "Un cliente terminó su vinculación con la empresa en Leuret."
+      : "Una empresa terminó su vinculación contigo en Leuret.",
+    { type: "client_connection.ended", companyId }
+  )));
+}
+
 /** Destinatarios sin repetir: el creador primero y luego owners/admins. */
 export function budgetDecisionRecipients(creatorId: string | null, managerIds: string[]): string[] {
   return [...new Set([creatorId, ...managerIds].filter((id): id is string => Boolean(id)))];

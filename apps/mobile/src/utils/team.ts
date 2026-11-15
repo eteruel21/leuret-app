@@ -78,6 +78,9 @@ export type MemberActions = {
 
 const NO_ACTIONS: MemberActions = { changeRole: false, toggleActive: false, remove: false, assignableRoles: [] };
 
+/** Roles que solo un propietario puede gestionar o asignar. */
+const OWNER_MANAGED: CompanyRole[] = ["owner", "admin"];
+
 export function memberActions(params: {
   callerRole: CompanyRole | null;
   callerUserId: string | null;
@@ -90,11 +93,14 @@ export function memberActions(params: {
   const isSelf = target.userId === callerUserId;
   const isLastOwner = target.role === "owner" && target.active && activeOwnerCount <= 1;
 
-  // Solo un propietario puede tocar o asignar el rol de propietario.
-  if (target.role === "owner" && callerRole !== "owner") return NO_ACTIONS;
+  // Solo un propietario gestiona propietarios y administradores. Un
+  // administrador solo puede bajarse su propio rol.
+  if (callerRole !== "owner" && OWNER_MANAGED.includes(target.role) && !isSelf) return NO_ACTIONS;
 
-  const assignableRoles = (callerRole === "owner" ? ROLE_ORDER : ROLE_ORDER.filter((role) => role !== "owner"))
+  const assignableRoles = (callerRole === "owner" ? ROLE_ORDER : ROLE_ORDER.filter((role) => !OWNER_MANAGED.includes(role)))
     .filter((role) => role !== target.role)
+    // Para hacer propietario a alguien, primero se reactiva.
+    .filter((role) => role !== "owner" || target.active)
     .filter(() => !isLastOwner);
 
   return {
@@ -103,6 +109,17 @@ export function memberActions(params: {
     remove: !isSelf && !isLastOwner,
     assignableRoles,
   };
+}
+
+/** Roles que puede elegir quien invita (solo el propietario invita administradores). */
+export function invitableRolesFor(callerRole: CompanyRole | null): InvitableCompanyRole[] {
+  return callerRole === "owner" ? INVITABLE_ROLES : INVITABLE_ROLES.filter((role) => role !== "admin");
+}
+
+/** Salir de la empresa: cualquier miembro activo, salvo el único propietario. */
+export function canLeaveCompany(params: { role: CompanyRole | null; activeOwnerCount: number }): boolean {
+  if (!params.role) return false;
+  return params.role !== "owner" || params.activeOwnerCount > 1;
 }
 
 export function invitationMessage(params: {
@@ -147,6 +164,9 @@ const AUDIT_ACTIONS: Record<string, string> = {
   BILLING_UPDATED: "actualizó los datos de facturación",
   INVITATION_CREATED: "envió una invitación",
   INVITATION_REVOKED: "canceló una invitación",
+  INVITATION_DECLINED: "rechazó una invitación",
+  MEMBER_LEFT: "salió de la empresa",
+  CLIENT_CONNECTION_ENDED: "terminó la vinculación con un cliente",
 };
 
 export function describeAuditAction(

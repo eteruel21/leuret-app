@@ -1,20 +1,25 @@
-import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { router, Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ContactActions } from "@/components/client/ContactActions";
 import { RelationshipProcesses } from "@/components/client/relationship-processes";
+import { LeuretButton } from "@/components/LeuretButton";
 import { LeuretFeedback } from "@/components/LeuretFeedback";
 import { LeuretLoading } from "@/components/LeuretLoading";
 import { UserAvatar } from "@/components/UserAvatar";
 import { colors, radius } from "@/constants/theme";
+import { endClientConnection } from "@/services/client-connections-service";
 import { getClientContractorProfile, type ContractorProfile } from "@/services/client-portal-service";
+import { confirmAction } from "@/utils/alert";
 
 export default function ContractorProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [data, setData] = useState<ContractorProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const [endError, setEndError] = useState<string | null>(null);
   const requestNumber = useRef(0);
 
   const load = useCallback(async (refresh = false) => {
@@ -31,6 +36,27 @@ export default function ContractorProfileScreen() {
     void load();
     return () => { requestNumber.current += 1; };
   }, [load]));
+
+  async function endConnection() {
+    if (!data || ending) return;
+    const confirmed = await confirmAction({
+      title: "Terminar vinculación",
+      message: `Dejarás de ver los presupuestos, obras y facturas de ${data.company.name} en Leuret. Podrás volver a vincularte con una solicitud nueva.`,
+      confirmText: "Terminar",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setEnding(true);
+    setEndError(null);
+    try {
+      await endClientConnection({ companyId: id });
+      if (router.canGoBack()) router.back();
+      else router.replace("/");
+    } catch (err) {
+      setEndError(err instanceof Error ? err.message : "No pudimos terminar la vinculación.");
+      setEnding(false);
+    }
+  }
 
   if (!data && !error) return <LeuretLoading message="Cargando contratista…" fullScreen />;
 
@@ -55,6 +81,9 @@ export default function ContractorProfileScreen() {
             <ContactActions phone={data.company.phone} email={data.company.email} address={data.company.address} />
           </View>
           <RelationshipProcesses processes={data.processes} isClient />
+          {endError ? <LeuretFeedback title={endError} tone="error" compact /> : null}
+          <LeuretButton label="Terminar vinculación" icon="unlink-outline" variant="ghost" accessibilityRole="button"
+            loading={ending} disabled={ending} onPress={() => void endConnection()} />
         </>
       ) : null}
     </ScrollView>

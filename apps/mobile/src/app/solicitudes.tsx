@@ -13,15 +13,17 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
-  listClientConnections, requestClientConnection, respondToClientConnection,
+  endClientConnection, listClientConnections, requestClientConnection, respondToClientConnection,
   type ClientConnection, type ConnectionAction,
 } from "@/services/client-connections-service";
+import { confirmAction } from "@/utils/alert";
 
 const requestStates = {
   pending: { label: "Pendiente", tone: "warning" },
   accepted: { label: "Aceptada", tone: "success" },
   rejected: { label: "Rechazada", tone: "danger" },
   cancelled: { label: "Cancelada", tone: "neutral" },
+  ended: { label: "Finalizada", tone: "neutral" },
 } as const;
 
 function messageFor(error: unknown) {
@@ -109,6 +111,32 @@ export default function ClientConnectionsScreen() {
     }
   }
 
+  async function endConnection(item: ClientConnection) {
+    if (working) return;
+    const confirmed = await confirmAction({
+      title: "Terminar vinculación",
+      message: isClient
+        ? `Dejarás de ver los presupuestos, obras y facturas de ${item.name} en Leuret. Podrás volver a vincularte con una solicitud nueva.`
+        : `${item.name} dejará de ver los presupuestos, obras y facturas de la empresa. La ficha y su historial se conservan.`,
+      confirmText: "Terminar",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setWorking(item.id);
+    setActionError(null);
+    setSuccess(null);
+    try {
+      await endClientConnection(isClient ? { companyId: item.company_id }
+        : { companyId: item.company_id, ...(item.client_id ? { clientId: item.client_id } : {}) });
+      setSuccess("La vinculación terminó.");
+      await load();
+    } catch (error) {
+      setActionError(messageFor(error));
+    } finally {
+      setWorking(null);
+    }
+  }
+
   async function openProfile(item: ClientConnection) {
     if (isClient) {
       router.push({ pathname: "/contratistas/[id]", params: { id: item.company_id } });
@@ -170,19 +198,21 @@ export default function ClientConnectionsScreen() {
       {ordered?.map((item) => (
         <ConnectionCard key={item.id} item={item} companyName={companies.find((company) => company.id === item.company_id)?.name}
           highlighted={item.id === highlightedId} working={working} onAction={handleAction}
-          onOpen={isClient || item.client_id ? () => void openProfile(item) : undefined} />
+          onOpen={isClient || item.client_id ? () => void openProfile(item) : undefined}
+          onEnd={isClient || (item.client_id && canSend) ? () => void endConnection(item) : undefined} />
       ))}
     </ScrollView>
   );
 }
 
-function ConnectionCard({ item, companyName, highlighted, working, onAction, onOpen }: {
+function ConnectionCard({ item, companyName, highlighted, working, onAction, onOpen, onEnd }: {
   item: ClientConnection;
   companyName?: string;
   highlighted: boolean;
   working: string | null;
   onAction: (item: ClientConnection, action: ConnectionAction, code?: string) => Promise<void>;
   onOpen?: () => void;
+  onEnd?: () => void;
 }) {
   const [code, setCode] = useState("");
   const needsCode = item.incoming && item.requires_phone_code;
@@ -231,7 +261,13 @@ function ConnectionCard({ item, companyName, highlighted, working, onAction, onO
       ) : null}
       {pending && !item.incoming ? <LeuretButton label="Cancelar solicitud" variant="ghost" accessibilityRole="button" loading={working === item.id}
         disabled={Boolean(working)} onPress={() => void onAction(item, "cancel")} /> : null}
-      {item.status === "accepted" && onOpen ? <LeuretButton label="Ver perfil" variant="secondary" accessibilityRole="button" onPress={onOpen} /> : null}
+      {item.status === "accepted" && (onOpen || onEnd) ? (
+        <View style={styles.actions}>
+          {onEnd ? <LeuretButton label="Terminar vinculación" variant="ghost" accessibilityRole="button"
+            loading={working === item.id} disabled={Boolean(working)} onPress={onEnd} /> : null}
+          {onOpen ? <LeuretButton label="Ver perfil" variant="secondary" accessibilityRole="button" onPress={onOpen} /> : null}
+        </View>
+      ) : null}
     </View>
   );
 }

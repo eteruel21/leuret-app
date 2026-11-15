@@ -40,7 +40,8 @@ import { RelationshipProcesses } from "@/components/client/relationship-processe
 import type { RelationshipProcess } from "@/types/relationship-process";
 import { useCompany } from "@/contexts/CompanyContext";
 import { usePermissions } from "@/hooks/usePermissions";
-import { requestClientConnection } from "@/services/client-connections-service";
+import { endClientConnection, requestClientConnection } from "@/services/client-connections-service";
+import { confirmAction } from "@/utils/alert";
 import {
   addClientAddress,
   createClientContact,
@@ -172,6 +173,26 @@ export default function ClientDetailScreen() {
       }
     } catch (error) {
       Alert.alert("No pudimos enviar la solicitud", error instanceof Error ? error.message : "Inténtalo de nuevo.");
+    } finally {
+      setSendingConnection(false);
+    }
+  }
+
+  async function endConnection() {
+    if (!activeCompany || !client || sendingConnection) return;
+    const confirmed = await confirmAction({
+      title: "Terminar vinculación",
+      message: `${getClientDisplayName(client)} dejará de ver en Leuret los presupuestos, obras y facturas de ${activeCompany.name}. La ficha y su historial se conservan, y podrás enviarle otra solicitud.`,
+      confirmText: "Terminar",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setSendingConnection(true);
+    try {
+      await endClientConnection({ companyId: activeCompany.id, clientId: client.id });
+      await loadData(true);
+    } catch (error) {
+      Alert.alert("No pudimos terminar la vinculación", error instanceof Error ? error.message : "Inténtalo de nuevo.");
     } finally {
       setSendingConnection(false);
     }
@@ -331,7 +352,13 @@ export default function ClientDetailScreen() {
 
         {client.user_id || canEditClient ? (
           <InfoSection title="Vinculación en Leuret">
-            {client.user_id ? <StatusPill label="Cuenta vinculada" tone="success" /> : (
+            {client.user_id ? (
+              <View style={{ gap: 8 }}>
+                <StatusPill label="Cuenta vinculada" tone="success" />
+                {canEditClient ? <LeuretButton label="Terminar vinculación" icon="unlink-outline" variant="ghost"
+                  loading={sendingConnection} disabled={sendingConnection} onPress={() => void endConnection()} /> : null}
+              </View>
+            ) : (
               <View style={{ gap: 8 }}>
                 {email ? <LeuretButton label="Enviar solicitud por correo" icon="mail-outline" variant="secondary"
                   disabled={sendingConnection} onPress={() => void sendConnection({ email })} /> : null}

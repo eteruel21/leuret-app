@@ -2,8 +2,19 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { authenticateRequest, requireActiveUser } from "../auth/authenticate.js";
-import { notifyClientConnectionRequest } from "../notifications/event-service.js";
-import { listClientConnections, requestClientConnection, respondToClientConnection, type ConnectionDecision } from "./repository.js";
+import {
+  notifyClientConnectionAccepted,
+  notifyClientConnectionEnded,
+  notifyClientConnectionRequest
+} from "../notifications/event-service.js";
+import {
+  endClientConnection,
+  findClientConnectionRequester,
+  listClientConnections,
+  requestClientConnection,
+  respondToClientConnection,
+  type ConnectionDecision
+} from "./repository.js";
 
 const createSchema = z.object({
   companyId: z.uuid().optional(),
@@ -15,6 +26,11 @@ const createSchema = z.object({
   }).optional()
 }).refine((value) => Boolean(value.email) !== Boolean(value.phone))
   .refine((value) => !value.clientId || Boolean(value.companyId));
+
+const endSchema = z.object({
+  companyId: z.uuid(),
+  clientId: z.uuid().optional()
+});
 
 const decisionSchema = z.object({
   action: z.enum(["accept", "reject", "cancel"]),
@@ -74,8 +90,36 @@ export async function registerClientConnectionRoutes(app: FastifyInstance) {
     const { action, phoneCode } = body.data;
     const outcome = await respondToClientConnection(request.authenticatedUser!.id, id.data, action, phoneCode);
     if (outcome === "not_found") return reply.status(404).send({ message: "No se encontró la solicitud." });
-    if (outcome === "accepted" || outcome === "rejected" || outcome === "cancelled") return { outcome };
+    if (outcome === "accepted") {
+      const userId = request.authenticatedUser!.id;
+      // El aviso es secundario: si falla, la vinculación ya quedó aceptada.
+      const requester = await findClientConnectionRequester(userId, id.data).catch(() => null);
+      await notifyClientConnectionAccepted(requester, id.data);
+      return { outcome };
+    }
+    if (outcome === "rejected" || outcome === "cancelled") return { outcome };
     const error = outcomes[outcome];
     return reply.status(error.code).send({ message: error.message });
+  });
+
+  // Termina una vinculación aceptada. El cliente deja de ver presupuestos,
+  // obras y facturas de la empresa; la ficha y el historial se conservan.
+  app.post("/client-connections/end", {
+    preHandler,
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } }
+  }, async (request, reply) => {
+    const body = endSchema.safeParse(request.body);
+    if (!body.success) return reply.status(400).send({ message: "La solicitud no es válida." });
+
+    const { companyId, clientId } = body.data;
+    const result = await endClientConnection(request.authenticatedUser!.id, companyId, clientId ?? null);
+    if (result.outcome === "forbidden") {
+      return reply.status(403).send({ message: "No tienes permiso para realizar esta acción." });
+    }
+    if (result.outcome === "not_linked") {
+      return reply.status(404).send({ message: "No hay una vinculación activa con esa cuenta." });
+    }
+    await notifyClientConnectionEnded(result.notify_user_ids, companyId, !clientId);
+    return { outcome: result.outcome };
   });
 }

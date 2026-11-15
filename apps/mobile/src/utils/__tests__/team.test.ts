@@ -5,6 +5,8 @@ import {
   extractInvitationCode,
   invitationMessage,
   isValidInvitationCode,
+  canLeaveCompany,
+  invitableRolesFor,
   memberActions,
   normalizeMember,
   sortMembers,
@@ -98,8 +100,40 @@ describe("memberActions (mismas reglas que la API)", () => {
 
     const onMember = memberActions({ callerRole: "admin", callerUserId: "a", target: member({}), activeOwnerCount: 1 });
     expect(onMember.assignableRoles).not.toContain("owner");
+    expect(onMember.assignableRoles).not.toContain("admin");
     expect(onMember.assignableRoles).not.toContain("member");
     expect(onMember.changeRole).toBe(true);
+    expect(onMember.remove).toBe(true);
+  });
+
+  it("un admin no gestiona a otro administrador, pero puede bajarse su propio rol", () => {
+    const onAdmin = memberActions({
+      callerRole: "admin",
+      callerUserId: "a",
+      target: member({ role: "admin", userId: "b" }),
+      activeOwnerCount: 1,
+    });
+    expect(onAdmin).toEqual({ changeRole: false, toggleActive: false, remove: false, assignableRoles: [] });
+
+    const onSelf = memberActions({
+      callerRole: "admin",
+      callerUserId: "a",
+      target: member({ role: "admin", userId: "a" }),
+      activeOwnerCount: 1,
+    });
+    expect(onSelf.assignableRoles).toEqual(["supervisor", "sales", "estimator", "member"]);
+    expect(onSelf.remove).toBe(false);
+  });
+
+  it("un miembro inactivo no se puede hacer propietario", () => {
+    const actions = memberActions({
+      callerRole: "owner",
+      callerUserId: "o",
+      target: member({ active: false }),
+      activeOwnerCount: 1,
+    });
+    expect(actions.assignableRoles).not.toContain("owner");
+    expect(actions.assignableRoles).toContain("admin");
   });
 
   it("el único propietario activo no se puede degradar, desactivar ni quitar", () => {
@@ -121,6 +155,21 @@ describe("memberActions (mismas reglas que la API)", () => {
     });
     expect(actions.changeRole).toBe(true);
     expect(actions.remove).toBe(true);
+  });
+});
+
+describe("invitar y salir", () => {
+  it("solo el propietario invita administradores", () => {
+    expect(invitableRolesFor("owner")).toContain("admin");
+    expect(invitableRolesFor("admin")).not.toContain("admin");
+    expect(invitableRolesFor("admin")).toContain("estimator");
+  });
+
+  it("el único propietario no puede salir", () => {
+    expect(canLeaveCompany({ role: "owner", activeOwnerCount: 1 })).toBe(false);
+    expect(canLeaveCompany({ role: "owner", activeOwnerCount: 2 })).toBe(true);
+    expect(canLeaveCompany({ role: "member", activeOwnerCount: 1 })).toBe(true);
+    expect(canLeaveCompany({ role: null, activeOwnerCount: 1 })).toBe(false);
   });
 });
 
@@ -159,6 +208,11 @@ describe("describeAuditAction", () => {
     expect(describeAuditAction("MEMBER_REMOVED", { email: "a@b.com" }, labels)).toBe(
       "quitó a un miembro de la empresa (a@b.com)"
     );
+  });
+
+  it("describe la salida y el rechazo", () => {
+    expect(describeAuditAction("MEMBER_LEFT", { email: "a@b.com" }, labels)).toBe("salió de la empresa (a@b.com)");
+    expect(describeAuditAction("INVITATION_DECLINED", { email: "a@b.com" }, labels)).toBe("rechazó una invitación (a@b.com)");
   });
 
   it("traduce la creación de la empresa", () => {

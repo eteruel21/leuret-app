@@ -11,7 +11,8 @@ export type ClientConnection = {
   client_id: string | null;
   name: string;
   incoming: boolean;
-  status: "pending" | "accepted" | "rejected" | "cancelled";
+  /** "ended": se aceptó y después una de las partes terminó la vinculación. */
+  status: "pending" | "accepted" | "rejected" | "cancelled" | "ended";
   requires_phone_code: boolean;
   phone_code: string | null;
   phone_to_confirm: string | null;
@@ -39,5 +40,16 @@ export function respondToClientConnection(id: string, action: ConnectionAction, 
   return authenticatedRequest(`/client-connections/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify({ action, phoneCode }),
+  });
+}
+
+/**
+ * Termina una vinculación aceptada. Desde el cliente basta la empresa; desde
+ * la empresa se indica la ficha del cliente.
+ */
+export function endClientConnection(input: { companyId: string; clientId?: string }) {
+  return authenticatedRequest<{ outcome: "ended" }>("/client-connections/end", {
+    method: "POST",
+    body: JSON.stringify(input),
   });
 }

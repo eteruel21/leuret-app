@@ -6,6 +6,7 @@ import {
   bellCount,
   inboxConversationRoute,
   inboxPreview,
+  changesMembership,
   refreshesBell,
 } from "../notifications-inbox";
 
@@ -14,6 +15,7 @@ describe("campana de notificaciones", () => {
     expect(bellCount(1, 3)).toBe(4);
     expect(bellCount(0, 0)).toBe(0);
     expect(bellCount(Number.NaN, -2)).toBe(0);
+    expect(bellCount(1, 3, 2)).toBe(6);
   });
 
   it("limita el globo a 9+", () => {
@@ -30,8 +32,17 @@ describe("campana de notificaciones", () => {
   it("se actualiza con los avisos de mensajes y de solicitudes", () => {
     expect(refreshesBell("job_request.message")).toBe(true);
     expect(refreshesBell("client_connection.requested")).toBe(true);
+    expect(refreshesBell("company_invitation.received")).toBe(true);
     expect(refreshesBell("budget.sent")).toBe(false);
     expect(refreshesBell(undefined)).toBe(false);
+  });
+});
+
+describe("avisos de cambios en el equipo", () => {
+  it("recargan las empresas del usuario", () => {
+    expect(changesMembership("company_member.updated")).toBe(true);
+    expect(changesMembership("company_member.removed")).toBe(true);
+    expect(changesMembership("job_request.message")).toBe(false);
   });
 });
 
