@@ -105,6 +105,14 @@ jobs:
           node database/scripts/bootstrap.mjs
           node database/scripts/migrate.mjs
 
+      # Reglas de esquema sobre la base recién migrada: FK sin índice, varias
+      # políticas permisivas por acción, llamadas por fila en RLS, índices
+      # redundantes, tablas sin RLS o sin PK, SECURITY DEFINER sin search_path.
+      - name: 8b. Lint database schema (indexes, RLS, security)
+        env:
+          MIGRATOR_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/test_leuret
+        run: node database/scripts/schema-lint.mjs
+
       - name: 9. Verify isolated backup and restore
         run: |
           docker exec -i \

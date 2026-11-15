@@ -11,6 +11,8 @@ import test from "node:test";
 import {
   checksum,
   detectMigrationDrift,
+  diffSchemaFingerprints,
+  formatSchemaDrift,
   legacyCrLfChecksum,
   postgresClientConfig,
   storedChecksumMatches,
@@ -412,3 +414,51 @@ test(
     );
   },
 );
+
+test("la huella de esquema no reporta deriva si todo coincide", () => {
+  const rows = [
+    { kind: "policy", name: "public.budgets.budgets_select_access", hash: "a" },
+    { kind: "index", name: "public.budgets_pkey", hash: "b" },
+  ];
+  const drift = diffSchemaFingerprints(rows, [...rows].reverse());
+
+  assert.equal(drift.hasDrift, false);
+  assert.equal(formatSchemaDrift(drift), "");
+});
+
+test("la huella de esquema separa objetos faltantes, sobrantes y cambiados", () => {
+  const reference = [
+    { kind: "policy", name: "public.budgets.budgets_select_access", hash: "a" },
+    { kind: "index", name: "public.budgets_pkey", hash: "b" },
+    { kind: "relation", name: "private.account_deletion_records", hash: "rls=true" },
+  ];
+  const actual = [
+    { kind: "index", name: "public.budgets_pkey", hash: "b" },
+    { kind: "relation", name: "private.account_deletion_records", hash: "rls=false", definition: "rls=false" },
+    { kind: "index", name: "public.manual_idx", hash: "c" },
+  ];
+  const drift = diffSchemaFingerprints(reference, actual);
+
+  assert.equal(drift.hasDrift, true);
+  assert.deepEqual(drift.missing.map((row) => row.name), ["public.budgets.budgets_select_access"]);
+  assert.deepEqual(drift.unexpected.map((row) => row.name), ["public.manual_idx"]);
+  assert.deepEqual(drift.changed.map((row) => row.name), ["private.account_deletion_records"]);
+  assert.equal(drift.changed[0].actualDefinition, "rls=false");
+
+  const report = formatSchemaDrift(drift);
+  assert.match(report, /Faltan en la base revisada .*\(1\)/u);
+  assert.match(report, /Sobran en la base revisada .*\(1\)/u);
+  assert.match(report, /Definición distinta \(1\):\n  relation private.account_deletion_records/u);
+});
+
+test("el informe de deriva recorta listas largas", () => {
+  const reference = Array.from({ length: 60 }, (_, index) => ({
+    kind: "index",
+    name: `public.idx_${String(index).padStart(2, "0")}`,
+    hash: "x",
+  }));
+  const report = formatSchemaDrift(diffSchemaFingerprints(reference, []), { limit: 3 });
+
+  assert.match(report, /\(60\):/u);
+  assert.match(report, /… y 57 más/u);
+});
