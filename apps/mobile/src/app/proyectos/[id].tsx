@@ -55,7 +55,8 @@ import { PROJECT_STATUS_OPTIONS } from "@/types/project";
 import {
   createProjectTask,
   deleteProjectTask,
-  listProjectTasks,
+  isUnsyncedTask,
+  listProjectTasksResult,
   updateProjectTask,
   type ProjectTask,
   type ProjectTaskPriority,
@@ -63,7 +64,7 @@ import {
 } from "@/services/task-service";
 
 import {
-  listProjectProgressHistory,
+  listProjectProgressHistoryResult,
   recordProjectProgressHistory,
   type ProjectProgressHistoryRecord
 } from "@/services/progress-service";
@@ -84,6 +85,7 @@ import type { Appointment } from "@/utils/appointment-storage";
 import { prepareProjectPhoto, type ProjectPhotoSource } from "@/utils/project-photo-picker";
 import { RequirePermission } from "@/components/RequirePermission";
 import { SavedCalculationsSection } from "@/components/SavedCalculationsSection";
+import { OfflineSyncNotice } from "@/components/OfflineSyncNotice";
 
 function ProjectDetailScreenContent() {
   const params = useLocalSearchParams<{
@@ -108,6 +110,8 @@ function ProjectDetailScreenContent() {
   const [progressHistory, setProgressHistory] = useState<ProjectProgressHistoryRecord[]>([]);
   const [photos, setPhotos] = useState<ProjectPhoto[]>([]);
   const [activities, setActivities] = useState<Appointment[]>([]);
+  // Tareas o avance mostrados desde la copia del dispositivo (sin conexión).
+  const [staleNotice, setStaleNotice] = useState<string | null>(null);
 
   const [creatingBudget, setCreatingBudget] = useState(false);
   const [budgetCreationError, setBudgetCreationError] = useState<string | null>(null);
@@ -150,8 +154,8 @@ function ProjectDetailScreenContent() {
         canViewBudgets
           ? listBudgetsByProject(activeCompany.id, projectId)
           : Promise.resolve({ budgets: [] as Budget[], error: null }),
-        listProjectTasks(activeCompany.id, projectId),
-        listProjectProgressHistory(activeCompany.id, projectId),
+        listProjectTasksResult(activeCompany.id, projectId),
+        listProjectProgressHistoryResult(activeCompany.id, projectId),
         listProjectPhotos(activeCompany.id, projectId),
         fetchCompanyActivities(activeCompany.id, { projectId }).catch((error: unknown) => {
           Alert.alert(
@@ -175,8 +179,13 @@ function ProjectDetailScreenContent() {
         setBudgets(budgetsResult.budgets);
       }
 
-      setTasks(tasksResult);
-      setProgressHistory(historyResult);
+      setTasks(tasksResult.tasks);
+      setProgressHistory(historyResult.history);
+      setStaleNotice(
+        tasksResult.fromCache || historyResult.fromCache
+          ? tasksResult.error ?? historyResult.error
+          : null
+      );
       if (photosResult.error) {
         Alert.alert("No fue posible cargar las fotos", photosResult.error);
       } else {
@@ -252,7 +261,14 @@ function ProjectDetailScreenContent() {
       setProject({ ...project, progress_percentage: progressNumber });
       setProgressHistory([record, ...progressHistory]);
       setProgressNote("");
-      Alert.alert("Avance guardado", `Progreso actualizado al ${progressNumber}%.`);
+      if (record.is_pending_sync) {
+        Alert.alert(
+          "Avance pendiente de enviar",
+          `No hay conexión. El avance de ${progressNumber}% se guardará en el servidor cuando vuelva la señal.`
+        );
+      } else {
+        Alert.alert("Avance guardado", `Progreso actualizado al ${progressNumber}%.`);
+      }
     } finally {
       setSavingProgress(false);
     }
@@ -271,8 +287,11 @@ function ProjectDetailScreenContent() {
       setTasks([created, ...tasks]);
       setNewTaskTitle("");
       setShowTaskForm(false);
+      if (created.is_pending_sync) {
+        Alert.alert("Tarea pendiente de enviar", "No hay conexión. La tarea se guardará en el servidor cuando vuelva la señal.");
+      }
     } else {
-      Alert.alert("Error", "No se pudo agregar la tarea.");
+      Alert.alert("No se pudo agregar la tarea", "Revisa el título e inténtalo de nuevo.");
     }
   }
 
@@ -282,21 +301,30 @@ function ProjectDetailScreenContent() {
     const nextStatus: ProjectTaskStatus =
       task.status === "completed" ? "todo" : "completed";
 
-    const updated = await updateProjectTask(activeCompany.id, project.id, task.id, {
+    if (isUnsyncedTask(task)) {
+      Alert.alert("Tarea sin sincronizar", "Esta tarea se creó sin conexión. Podrás cambiarla cuando llegue al servidor.");
+      return;
+    }
+
+    const { task: updated, error } = await updateProjectTask(activeCompany.id, project.id, task.id, {
       status: nextStatus
     });
 
     if (updated) {
       setTasks(tasks.map((t) => (t.id === task.id ? updated : t)));
+    } else {
+      Alert.alert("No se pudo actualizar la tarea", error ?? "Inténtalo de nuevo.");
     }
   }
 
   async function handleDeleteTask(taskId: string) {
     if (!activeCompany || !project) return;
 
-    const ok = await deleteProjectTask(activeCompany.id, project.id, taskId);
+    const { ok, error } = await deleteProjectTask(activeCompany.id, project.id, taskId);
     if (ok) {
       setTasks(tasks.filter((t) => t.id !== taskId));
+    } else {
+      Alert.alert("No se pudo eliminar la tarea", error ?? "Inténtalo de nuevo.");
     }
   }
 
@@ -454,6 +482,18 @@ function ProjectDetailScreenContent() {
           </View>
         </View>
 
+        <OfflineSyncNotice onSynced={() => void loadProject(true)} />
+        {staleNotice ? (
+          <LeuretFeedback
+            tone="warning"
+            title="Sin conexión con el servidor"
+            message={`Las tareas y el avance son la última copia guardada en este dispositivo. ${staleNotice}`}
+            actionLabel="Reintentar"
+            onAction={() => void loadProject(true)}
+            compact
+          />
+        ) : null}
+
         {/* Estado del Proyecto */}
         <InfoSection title="Estado del proyecto">
           <View style={styles.statusChipsContainer}>
@@ -610,6 +650,9 @@ function ProjectDetailScreenContent() {
                     </Text>
                     {task.assigned_user?.email ? (
                       <Text style={styles.taskSubtext}>Responsable: {task.assigned_user.email}</Text>
+                    ) : null}
+                    {isUnsyncedTask(task) ? (
+                      <Text style={styles.taskSubtext}>Pendiente de enviar al servidor</Text>
                     ) : null}
                   </View>
 

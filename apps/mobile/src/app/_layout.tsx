@@ -25,7 +25,7 @@ import {
   registerForPushNotificationsAsync,
   unregisterCurrentPushTokenAsync,
 } from "@/services/push-notification-service";
-import { processOfflineSyncQueue } from "@/services/offline-sync-service";
+import { useBackgroundSync } from "@/hooks/useBackgroundSync";
 import { initialRouteFor } from "@/utils/initial-navigation";
 import { useNotificationNavigation } from "@/hooks/useNotificationNavigation";
 import { installWebAlert } from "@/utils/alert";
@@ -99,13 +99,12 @@ function RootNavigator() {
     } else {
       void unregisterCurrentPushTokenAsync();
     }
-
-    void processOfflineSyncQueue();
   }, [
     isApproved,
     profile?.id,
     profile?.notifications_opt_in,
   ]);
+  useBackgroundSync(isApproved, profile?.id ?? null);
   const isPendingApproval = isAuthenticated && !profile?.active && !needsProfileSetup;
 
   const isClientAuthenticated = isApproved && profile?.role === "client";

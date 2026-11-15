@@ -89,7 +89,8 @@ jobs:
             --exclude src/client-connections/__tests__/client-connections.test.ts \
             --exclude src/companies/__tests__/team-relationships.test.ts \
             --exclude src/job-requests/__tests__/job-requests.test.ts \
-            --exclude src/account/__tests__/account-deletion.test.ts
+            --exclude src/account/__tests__/account-deletion.test.ts \
+            --exclude src/settings/__tests__/user-settings-inbox.test.ts
 
       - name: 8. Prepare isolated authorization database
         env:
@@ -137,7 +138,8 @@ jobs:
             src/client-connections/__tests__/client-connections.test.ts \
             src/companies/__tests__/team-relationships.test.ts \
             src/job-requests/__tests__/job-requests.test.ts \
-            src/account/__tests__/account-deletion.test.ts
+            src/account/__tests__/account-deletion.test.ts \
+            src/settings/__tests__/user-settings-inbox.test.ts
 
       - name: 11. Test mobile app
         run: npm run test -w apps/mobile

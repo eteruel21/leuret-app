@@ -31,7 +31,7 @@ import {
   type ElectricalResult,
 } from "../../services/calculators/electricidad";
 import { formatDecimal, formatMoney } from "../../utils/format";
-import { loadLocalData, saveLocalData } from "../../utils/local-storage";
+import { loadSyncedSetting, saveSyncedSetting } from "@/services/user-settings-service";
 import {
   DEVICES_ONLY_SCOPE,
   FULL_INSTALL_SCOPE,
@@ -206,7 +206,7 @@ export default function ElectricalScreen() {
 
   useEffect(() => {
     async function restore() {
-      const saved = await loadLocalData<Saved>(KEY);
+      const saved = await loadSyncedSetting<Saved>(KEY);
       if (saved) {
         const { scope: savedScope, ...settings } = saved;
         setForm((current) => {
@@ -238,7 +238,7 @@ export default function ElectricalScreen() {
       ...settings
     } = form;
 
-    void saveLocalData<Saved>(KEY, { ...settings, scope });
+    void saveSyncedSetting<Saved>(KEY, { ...settings, scope });
   }, [form, scope, loaded]);
 
   useEffect(() => {

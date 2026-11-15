@@ -139,7 +139,7 @@ export default function MyTasksScreen() {
     const action = nextAction(task.status);
     setUpdatingId(task.id);
 
-    const updated = await updateProjectTask(companyId, task.project_id, task.id, {
+    const { task: updated, error } = await updateProjectTask(companyId, task.project_id, task.id, {
       status: action.status,
     });
 
@@ -148,7 +148,7 @@ export default function MyTasksScreen() {
     if (!updated) {
       showAlert(
         "No se pudo actualizar",
-        "Revisa tu conexión e inténtalo de nuevo."
+        error ?? "Revisa tu conexión e inténtalo de nuevo."
       );
       return;
     }

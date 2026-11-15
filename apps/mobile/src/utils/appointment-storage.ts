@@ -1,8 +1,8 @@
-import { loadLocalData, saveLocalData } from "./local-storage";
 import {
   createRemoteActivity,
   deleteRemoteActivity,
   fetchCompanyActivities,
+  fetchCompanyActivity,
   updateRemoteActivity
 } from "@/services/activity-service";
 
@@ -32,74 +32,42 @@ export type Appointment = {
   address: string;
   notes: string;
   reminderMinutes: number;
+  /** Obra vinculada (se conserva al editar). */
+  projectId?: string;
+  projectName?: string;
+  /** Recordatorio local del dispositivo (no se guarda en el servidor). */
   notificationId: string;
   createdAt: string;
   updatedAt: string;
 };
 
-const APPOINTMENTS_KEY = "@contractor-pro/appointments";
+export type AppointmentInput = Omit<Appointment, "id" | "createdAt" | "updatedAt" | "projectName">;
 
-function createId(): string {
-  return `appointment-${Date.now()}-${Math.random()
-    .toString(36)
-    .slice(2, 9)}`;
-}
-
-export async function getAppointments(companyId?: string, projectId?: string): Promise<Appointment[]> {
-  let items: Appointment[];
-  if (companyId) {
-    items = await fetchCompanyActivities(companyId, { projectId });
-  } else {
-    const localItems = await loadLocalData<Appointment[]>(APPOINTMENTS_KEY);
-    items = Array.isArray(localItems) ? localItems : [];
-  }
+/**
+ * La agenda vive en PostgreSQL (`/companies/:id/activities`). En el
+ * dispositivo solo queda el id del recordatorio local de cada actividad.
+ * (Antes, sin empresa activa, se guardaba solo en el teléfono.)
+ */
+export async function getAppointments(companyId: string, projectId?: string): Promise<Appointment[]> {
+  const items = await fetchCompanyActivities(companyId, { projectId });
   return [...items].sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
 }
 
-export async function getAppointmentById(
-  id: string,
-  companyId?: string
-): Promise<Appointment | null> {
-  const items = await getAppointments(companyId);
-  return items.find((item) => item.id === id) ?? null;
+export async function getAppointmentById(id: string, companyId: string): Promise<Appointment> {
+  return fetchCompanyActivity(companyId, id);
 }
 
 export async function saveAppointment(
-  data: Omit<Appointment, "id" | "createdAt" | "updatedAt">,
-  id?: string,
-  companyId?: string,
+  data: AppointmentInput,
+  id: string | undefined,
+  companyId: string,
   projectId?: string
 ): Promise<Appointment> {
-  if (companyId) {
-    if (id && !id.startsWith("local-")) return await updateRemoteActivity(companyId, id, data);
-    return await createRemoteActivity(companyId, data, projectId);
-  }
-  const items = await getAppointments();
-  const now = new Date().toISOString();
-  if (id) {
-    const index = items.findIndex((item) => item.id === id);
-    if (index >= 0) {
-      const updated: Appointment = { ...items[index], ...data, updatedAt: now };
-      items[index] = updated;
-      await saveLocalData(APPOINTMENTS_KEY, items);
-      return updated;
-    }
-  }
-  const created: Appointment = { ...data, id: createId(), createdAt: now, updatedAt: now };
-  await saveLocalData(APPOINTMENTS_KEY, [...items, created]);
-  return created;
+  if (id) return updateRemoteActivity(companyId, id, data);
+  return createRemoteActivity(companyId, data, projectId);
 }
 
-export async function deleteAppointment(
-  id: string,
-  companyId?: string
-): Promise<Appointment[]> {
-  if (companyId && !id.startsWith("local-")) {
-    await deleteRemoteActivity(companyId, id);
-    return await getAppointments(companyId);
-  }
-  const items = await getAppointments();
-  const updated = items.filter((item) => item.id !== id);
-  await saveLocalData(APPOINTMENTS_KEY, updated);
-  return updated;
+export async function deleteAppointment(id: string, companyId: string): Promise<Appointment[]> {
+  await deleteRemoteActivity(companyId, id);
+  return getAppointments(companyId);
 }

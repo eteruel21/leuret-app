@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchCompanyActivities } from "../activity-service";
+import { fetchCompanyActivities, fetchCompanyActivity } from "../activity-service";
 
 const mocks = vi.hoisted(() => ({
   request: vi.fn(),
@@ -93,5 +93,34 @@ describe("fetchCompanyActivities - Supabase es la fuente oficial", () => {
     expect(mocks.request).toHaveBeenCalledWith(
       "/companies/company-1/activities?projectId=project-1&clientId=client-1"
     );
+  });
+
+  it("al editar lee la actividad del servidor por id, con su obra y fechas reales", async () => {
+    mocks.load.mockResolvedValue([{ id: "activity-1", notificationId: "notification-1" }]);
+    mocks.request.mockResolvedValue({
+      activity: {
+        ...serverActivity,
+        project_id: "project-1",
+        project: { id: "project-1", name: "Casa Pérez", project_code: null },
+        created_at: "2026-11-01T10:00:00Z",
+        updated_at: "2026-11-02T10:00:00Z"
+      }
+    });
+
+    const activity = await fetchCompanyActivity("company-1", "activity-1");
+
+    expect(mocks.request).toHaveBeenCalledWith("/companies/company-1/activities/activity-1");
+    expect(activity).toMatchObject({
+      projectId: "project-1",
+      projectName: "Casa Pérez",
+      notificationId: "notification-1",
+      createdAt: "2026-11-01T10:00:00Z",
+      updatedAt: "2026-11-02T10:00:00Z"
+    });
+  });
+
+  it("si no se puede leer la actividad, el error llega a la pantalla", async () => {
+    mocks.request.mockRejectedValue(new Error("Actividad no encontrada."));
+    await expect(fetchCompanyActivity("company-1", "activity-9")).rejects.toThrow("Actividad no encontrada.");
   });
 });

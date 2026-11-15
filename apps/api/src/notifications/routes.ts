@@ -4,9 +4,27 @@ import { authenticateRequest, requireActiveUser, requireCompanyRole } from "../a
 import {
   deletePushTokenRepo,
   findUserNotificationsRepo,
+  listUserInboxRepo,
   markNotificationAsReadRepo,
+  markUserNotificationsReadRepo,
   upsertPushTokenRepo
 } from "./repository.js";
+
+/** Bandeja del usuario: espacio activo y, en el de contratista, la empresa activa. */
+export const inboxQuerySchema = z.object({
+  space: z.enum(["client", "company"]).default("company"),
+  companyId: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(30)
+});
+
+export const inboxReadSchema = z.object({
+  space: z.enum(["client", "company"]).default("company"),
+  companyId: z.string().uuid().nullish(),
+  ids: z.array(z.string().uuid()).min(1).max(100).optional(),
+  all: z.literal(true).optional()
+}).refine((value) => Boolean(value.ids) !== Boolean(value.all), {
+  message: "Indica ids o all."
+});
 
 const companyParamsSchema = z.object({
   companyId: z.string().uuid()
@@ -101,6 +119,43 @@ export async function registerNotificationRoutes(app: FastifyInstance): Promise<
       }
 
       return { notification };
+    }
+  );
+
+  app.get(
+    "/notifications",
+    { preHandler: [authenticateRequest, requireActiveUser] },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+      const parsed = inboxQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        return reply.status(400).send({ message: "Parámetros inválidos." });
+      }
+      return listUserInboxRepo(userId, {
+        space: parsed.data.space,
+        companyId: parsed.data.companyId ?? null,
+        limit: parsed.data.limit
+      });
+    }
+  );
+
+  app.post(
+    "/notifications/read",
+    { preHandler: [authenticateRequest, requireActiveUser] },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+      const parsed = inboxReadSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ message: "Indica qué avisos marcar como leídos." });
+      }
+      const updated = await markUserNotificationsReadRepo(userId, {
+        space: parsed.data.space,
+        companyId: parsed.data.companyId ?? null,
+        ids: parsed.data.ids ?? null
+      });
+      return { updated };
     }
   );
 

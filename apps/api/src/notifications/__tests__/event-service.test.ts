@@ -1,17 +1,73 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
 import {
   notifyBudgetDecision,
+  notifyClientConnectionRequest,
   notifyInvoiceIssued,
-  notifyInvoicePaymentRegistered
+  notifyInvoicePaymentRegistered,
+  notifyJobRequestCreated
 } from "../event-service.js";
 import * as pushService from "../push-service.js";
 import * as notificationRepository from "../repository.js";
 import { budgetDecisionRecipients } from "../event-service.js";
 
 describe("notificaciones push de eventos de negocio", () => {
+  let recordSpy: MockInstance<typeof notificationRepository.recordUserNotificationRepo>;
+
+  beforeEach(() => {
+    recordSpy = vi.spyOn(notificationRepository, "recordUserNotificationRepo").mockResolvedValue("notification-1");
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("guarda el aviso en la bandeja del destinatario y manda su id en el push", async () => {
+    vi.spyOn(notificationRepository, "findCompanyManagerIdsRepo").mockResolvedValue([]);
+    const sendSpy = vi.spyOn(pushService, "sendPushNotificationToUser").mockResolvedValue({ sent: 0, failed: 0 });
+
+    await notifyBudgetDecision({ id: "b-9", company_id: "company-1", created_by: "contractor-1" }, "approved");
+
+    expect(recordSpy).toHaveBeenCalledWith("contractor-1", expect.objectContaining({
+      space: "company",
+      companyId: "company-1",
+      type: "budget.approved",
+      title: "Presupuesto aprobado",
+      data: expect.objectContaining({ budgetId: "b-9" })
+    }));
+    expect(sendSpy).toHaveBeenCalledWith("contractor-1", expect.objectContaining({
+      data: expect.objectContaining({ type: "budget.approved", notificationId: "notification-1" })
+    }));
+  });
+
+  it("los avisos del cliente quedan en su espacio y las peticiones nuevas sin empresa", async () => {
+    vi.spyOn(pushService, "sendPushNotificationToUser").mockResolvedValue({ sent: 0, failed: 0 });
+
+    await notifyInvoiceIssued({ id: "i-1", company_id: "company-1", client: { user_id: "client-1" } });
+    await notifyJobRequestCreated(["contractor-1", "contractor-2"], { id: "r-1", title: "Pintar", category: "Pintura", province: "Panamá" });
+
+    expect(recordSpy).toHaveBeenCalledWith("client-1", expect.objectContaining({ space: "client", companyId: "company-1", type: "invoice.issued" }));
+    expect(recordSpy).toHaveBeenCalledWith("contractor-2", expect.objectContaining({ space: "company", companyId: null, type: "job_request.created" }));
+  });
+
+  it("no duplica en la bandeja lo que ya se muestra en la campana (solicitudes de vinculación)", async () => {
+    vi.spyOn(pushService, "sendPushNotificationToUser").mockResolvedValue({ sent: 0, failed: 0 });
+
+    await notifyClientConnectionRequest("request-1", ["owner-1"]);
+
+    expect(recordSpy).not.toHaveBeenCalled();
+  });
+
+  it("si no se puede guardar el aviso, igual envía el push", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    recordSpy.mockRejectedValue(new Error("db caída"));
+    const sendSpy = vi.spyOn(pushService, "sendPushNotificationToUser").mockResolvedValue({ sent: 1, failed: 0 });
+
+    await notifyInvoiceIssued({ id: "i-2", company_id: "company-1", client: { user_id: "client-1" } });
+
+    expect(sendSpy).toHaveBeenCalledWith("client-1", expect.objectContaining({
+      data: expect.not.objectContaining({ notificationId: expect.anything() })
+    }));
   });
 
   it("notifica al creador cuando el cliente aprueba o rechaza un presupuesto", async () => {

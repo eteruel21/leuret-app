@@ -8,29 +8,34 @@ import { colors, radius } from "@/constants/theme";
 import { useCompany } from "@/contexts/CompanyContext";
 import { listClientConnections } from "@/services/client-connections-service";
 import { getJobRequestInbox } from "@/services/job-request-service";
+import { getNotificationInbox } from "@/services/notifications-service";
 import { listReceivedCompanyInvitations } from "@/services/users-service";
 import { badgeLabel, bellAccessibilityLabel, bellCount, refreshesBell } from "@/utils/notifications-inbox";
 
 /**
  * Campana del Inicio (cliente y contratista). El globo suma las solicitudes
- * de vinculación recibidas, los mensajes nuevos de las peticiones de trabajo
- * y las invitaciones de equipo pendientes.
+ * de vinculación recibidas, los mensajes nuevos de las peticiones de trabajo,
+ * las invitaciones de equipo pendientes y los avisos sin leer guardados en el
+ * servidor (presupuestos, facturas, peticiones nuevas…).
  */
 export function NotificationsBell() {
   const { activeCompany } = useCompany();
   // Un usuario puede tener espacio de cliente y de contratista: se cuenta solo el activo.
   const space = activeCompany ? "company" : "client";
+  const companyId = activeCompany?.id ?? null;
   const [connections, setConnections] = useState(0);
+  const [notices, setNotices] = useState(0);
   const [messages, setMessages] = useState(0);
   const [invitations, setInvitations] = useState(0);
 
   useFocusEffect(useCallback(() => {
     let active = true;
     async function refresh() {
-      const [connectionResult, inboxResult, invitationResult] = await Promise.allSettled([
+      const [connectionResult, inboxResult, invitationResult, noticeResult] = await Promise.allSettled([
         listClientConnections(true, space),
         getJobRequestInbox({ limit: 1, space }),
         listReceivedCompanyInvitations(),
+        getNotificationInbox({ space, companyId, limit: 1 }),
       ]);
       if (!active) return;
       // Si una consulta falla se conserva el último valor; la pantalla muestra el error.
@@ -39,6 +44,7 @@ export function NotificationsBell() {
       }
       if (inboxResult.status === "fulfilled") setMessages(inboxResult.value.unreadMessages);
       if (invitationResult.status === "fulfilled") setInvitations(invitationResult.value.invitations.length);
+      if (noticeResult.status === "fulfilled") setNotices(noticeResult.value.unread);
     }
 
     void refresh();
@@ -56,9 +62,9 @@ export function NotificationsBell() {
       appState.remove();
       push?.remove();
     };
-  }, [space]));
+  }, [space, companyId]));
 
-  const count = bellCount(connections, messages, invitations);
+  const count = bellCount(connections, messages, invitations, notices);
 
   return (
     <Pressable

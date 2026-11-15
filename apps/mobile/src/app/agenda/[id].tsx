@@ -23,6 +23,8 @@ import { useCompany } from "../../contexts/CompanyContext";
 import { listClients } from "../../services/client-service";
 import type { ClientWithDetails } from "../../types/client";
 import { getClientDisplayName } from "../../types/client";
+import { LeuretFeedback } from "@/components/LeuretFeedback";
+import { LeuretLoading } from "@/components/LeuretLoading";
 import {
   getAppointmentById,
   saveAppointment,
@@ -47,6 +49,7 @@ type FormState = {
   notes: string;
   reminderMinutes: string;
   notificationId: string;
+  projectId: string;
 };
 
 const today = new Date().toISOString().slice(0, 10);
@@ -64,6 +67,7 @@ const initialForm: FormState = {
   notes: "",
   reminderMinutes: "60",
   notificationId: "",
+  projectId: "",
 };
 
 const types: { value: AppointmentType; label: string }[] = [
@@ -104,6 +108,11 @@ export default function AppointmentFormScreen() {
   >([]);
   const [showClients, setShowClients] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Al editar, el formulario no se puede guardar hasta leer la actividad del
+  // servidor: así un fallo de red no sobrescribe la actividad con valores vacíos.
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">(isNew ? "ready" : "loading");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     navigation.setOptions({
@@ -113,26 +122,45 @@ export default function AppointmentFormScreen() {
 
   useEffect(() => {
     if (isNew || !id) return;
+    if (!activeCompany?.id) {
+      setLoadState("error");
+      setLoadError("Selecciona una empresa activa para abrir la actividad.");
+      return;
+    }
+    let active = true;
+    setLoadState("loading");
+    setLoadError(null);
 
-    void getAppointmentById(id, activeCompany?.id).then((item) => {
-      if (!item) return;
-
-      setForm({
-        title: item.title,
-        clientId: item.clientId,
-        clientName: item.clientName,
-        date: item.date,
-        time: item.time,
-        endTime: item.endTime,
-        type: item.type,
-        status: item.status,
-        address: item.address,
-        notes: item.notes,
-        reminderMinutes: String(item.reminderMinutes),
-        notificationId: item.notificationId,
+    getAppointmentById(id, activeCompany.id)
+      .then((item) => {
+        if (!active) return;
+        setForm({
+          title: item.title,
+          clientId: item.clientId,
+          clientName: item.clientName,
+          date: item.date,
+          time: item.time,
+          endTime: item.endTime,
+          type: item.type,
+          status: item.status,
+          address: item.address,
+          notes: item.notes,
+          reminderMinutes: String(item.reminderMinutes),
+          notificationId: item.notificationId,
+          projectId: item.projectId ?? "",
+        });
+        setLoadState("ready");
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setLoadState("error");
+        setLoadError(error instanceof Error ? error.message : "No fue posible cargar la actividad.");
       });
-    });
-  }, [id, isNew, activeCompany?.id]);
+
+    return () => {
+      active = false;
+    };
+  }, [id, isNew, activeCompany?.id, reloadKey]);
 
   useEffect(() => {
     let active = true;
@@ -203,6 +231,10 @@ export default function AppointmentFormScreen() {
     }
 
     if (!activeCompany?.id) { Alert.alert("Empresa requerida", "Selecciona una empresa activa antes de guardar."); return; }
+    if (loadState !== "ready") {
+      Alert.alert("Actividad no cargada", "Espera a que cargue la actividad o vuelve a intentarlo.");
+      return;
+    }
 
     const appointmentDate = parseAppointmentDate(
       form.date,
@@ -261,6 +293,7 @@ export default function AppointmentFormScreen() {
           notes: form.notes.trim(),
           reminderMinutes,
           notificationId: scheduledNotificationId,
+          projectId: form.projectId,
         },
         isNew ? undefined : id,
         activeCompany.id,
@@ -276,7 +309,9 @@ export default function AppointmentFormScreen() {
       console.error(error);
       Alert.alert(
         "No se pudo guardar",
-        "Revisa los datos e inténtalo nuevamente.",
+        error instanceof Error && error.message
+          ? error.message
+          : "Revisa los datos e inténtalo nuevamente.",
       );
     } finally {
       setSaving(false);
@@ -296,6 +331,20 @@ export default function AppointmentFormScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
+          {loadState === "loading" ? (
+            <LeuretLoading message="Cargando la actividad…" compact />
+          ) : null}
+          {loadState === "error" ? (
+            <LeuretFeedback
+              tone="error"
+              title="No pudimos cargar la actividad"
+              message={loadError ?? undefined}
+              actionLabel="Reintentar"
+              onAction={() => setReloadKey((value) => value + 1)}
+              compact
+            />
+          ) : null}
+
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>
               Información de la actividad
@@ -436,11 +485,11 @@ export default function AppointmentFormScreen() {
           </View>
 
           <Pressable
-            disabled={saving}
+            disabled={saving || loadState !== "ready"}
             onPress={() => void handleSave()}
             style={({ pressed }) => [
               styles.saveButton,
-              saving && styles.saveButtonDisabled,
+              (saving || loadState !== "ready") && styles.saveButtonDisabled,
               pressed && !saving && styles.pressed,
             ]}
           >

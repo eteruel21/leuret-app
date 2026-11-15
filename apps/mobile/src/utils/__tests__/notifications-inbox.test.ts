@@ -8,6 +8,7 @@ import {
   inboxPreview,
   changesMembership,
   refreshesBell,
+  inboxNotificationIcon,
 } from "../notifications-inbox";
 
 describe("campana de notificaciones", () => {
@@ -33,7 +34,10 @@ describe("campana de notificaciones", () => {
     expect(refreshesBell("job_request.message")).toBe(true);
     expect(refreshesBell("client_connection.requested")).toBe(true);
     expect(refreshesBell("company_invitation.received")).toBe(true);
-    expect(refreshesBell("budget.sent")).toBe(false);
+    // Los avisos guardados en la bandeja también actualizan la campana.
+    expect(refreshesBell("budget.sent")).toBe(true);
+    expect(refreshesBell("invoice.requested")).toBe(true);
+    expect(refreshesBell("algo.desconocido")).toBe(false);
     expect(refreshesBell(undefined)).toBe(false);
   });
 });
@@ -63,5 +67,14 @@ describe("vista previa y destino de cada conversación", () => {
       params: { requestId: "r1", companyId: "c1" },
     });
     expect(inboxConversationRoute({ ...ids, side: "company" }).pathname).toBe("/peticiones/conversacion");
+  });
+});
+
+describe("avisos guardados en la bandeja", () => {
+  it("elige el icono según el tipo", () => {
+    expect(inboxNotificationIcon("budget.approved")).toBe("document-text-outline");
+    expect(inboxNotificationIcon("invoice.issued")).toBe("receipt-outline");
+    expect(inboxNotificationIcon("job_request.created")).toBe("briefcase-outline");
+    expect(inboxNotificationIcon("otro")).toBe("notifications-outline");
   });
 });

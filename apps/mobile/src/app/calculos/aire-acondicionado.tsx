@@ -31,7 +31,7 @@ import {
   type AirConditioningResult,
 } from "../../services/calculators/aire-acondicionado";
 import { formatDecimal, formatMoney } from "../../utils/format";
-import { loadLocalData, saveLocalData } from "../../utils/local-storage";
+import { loadSyncedSetting, saveSyncedSetting } from "@/services/user-settings-service";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
 import { useSavedCalculation } from "@/components/SaveCalculation";
 import type { BudgetLineDraft } from "@/services/budget-service";
@@ -156,7 +156,7 @@ export default function AirConditioningScreen() {
 
   useEffect(() => {
     async function restore() {
-      const saved = await loadLocalData<Saved>(KEY);
+      const saved = await loadSyncedSetting<Saved>(KEY);
 
       if (saved) {
         setForm((current) => ({
@@ -183,7 +183,7 @@ export default function AirConditioningScreen() {
       ...settings
     } = form;
 
-    void saveLocalData<Saved>(KEY, settings);
+    void saveSyncedSetting<Saved>(KEY, settings);
   }, [form, loaded]);
 
   useEffect(() => {

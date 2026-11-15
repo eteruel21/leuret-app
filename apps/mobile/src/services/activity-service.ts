@@ -1,6 +1,6 @@
 import { authenticatedRequest } from "@/services/api";
 import { loadLocalData, saveLocalData } from "@/utils/local-storage";
-import type { Appointment, AppointmentStatus, AppointmentType } from "@/utils/appointment-storage";
+import type { Appointment, AppointmentInput, AppointmentStatus, AppointmentType } from "@/utils/appointment-storage";
 
 export type ServerActivity = {
   id: string;
@@ -17,6 +17,8 @@ export type ServerActivity = {
   address: string | null;
   notes: string | null;
   reminder_minutes: number;
+  created_at?: string;
+  updated_at?: string;
   client?: {
     id: string;
     first_name: string | null;
@@ -54,9 +56,11 @@ function mapServerActivityToAppointment(act: ServerActivity): Appointment {
     address: act.address || "",
     notes: act.notes || "",
     reminderMinutes: act.reminder_minutes ?? 15,
+    projectId: act.project_id || "",
+    projectName: act.project?.name || "",
     notificationId: "",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    createdAt: act.created_at || "",
+    updatedAt: act.updated_at || act.created_at || ""
   };
 }
 
@@ -96,9 +100,19 @@ export async function fetchCompanyActivities(
   return items;
 }
 
+/** Una actividad, leída del servidor (no de la lista en caché). */
+export async function fetchCompanyActivity(companyId: string, id: string): Promise<Appointment> {
+  const res = await authenticatedRequest<{ activity: ServerActivity }>(
+    `/companies/${companyId}/activities/${id}`
+  );
+  const cached = (await loadLocalData<Appointment[]>(companyAppointmentsKey(companyId))) || [];
+  const notificationId = (Array.isArray(cached) ? cached : []).find((item) => item.id === id)?.notificationId ?? "";
+  return { ...mapServerActivityToAppointment(res.activity), notificationId };
+}
+
 export async function createRemoteActivity(
   companyId: string,
-  data: Omit<Appointment, "id" | "createdAt" | "updatedAt">,
+  data: AppointmentInput,
   projectId?: string
 ): Promise<Appointment> {
   const res = await authenticatedRequest<{ activity: ServerActivity }>(
@@ -108,7 +122,7 @@ export async function createRemoteActivity(
       body: JSON.stringify({
         companyId,
         clientId: data.clientId || null,
-        projectId: projectId || null,
+        projectId: projectId || data.projectId || null,
         title: data.title,
         type: data.type,
         status: data.status,
