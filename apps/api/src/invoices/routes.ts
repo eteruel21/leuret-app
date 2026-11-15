@@ -6,6 +6,7 @@ import type {
 
 import {
   authenticateRequest,
+  companyRoles,
   requireActiveUser,
   requireCompanyRole
 } from "../auth/authenticate.js";
@@ -88,7 +89,7 @@ export async function registerInvoiceRoutes(
   app.post(
     "/invoices/from-budget",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "sales"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "sales"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -134,7 +135,7 @@ export async function registerInvoiceRoutes(
   app.get(
     "/invoices",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -155,7 +156,7 @@ export async function registerInvoiceRoutes(
   app.get(
     "/invoices/by-budget",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "sales"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "sales"], "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -176,7 +177,7 @@ export async function registerInvoiceRoutes(
   app.get(
     "/invoices/:invoiceId",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -206,7 +207,7 @@ export async function registerInvoiceRoutes(
   app.post(
     "/invoices",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "sales"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "sales"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -234,7 +235,7 @@ export async function registerInvoiceRoutes(
   app.get(
     "/invoices/:invoiceId/history",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -262,7 +263,7 @@ export async function registerInvoiceRoutes(
   app.patch(
     "/invoices/:invoiceId/status",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "sales"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "sales"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -296,7 +297,7 @@ export async function registerInvoiceRoutes(
   app.post(
     "/invoices/:invoiceId/issue",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "sales"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "sales"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -333,7 +334,7 @@ export async function registerInvoiceRoutes(
       preHandler: [
         authenticateRequest,
         requireActiveUser,
-        requireCompanyRole(["owner", "admin"])
+        requireCompanyRole(["owner", "admin"], "body")
       ]
     },
     async (request, reply) => {
@@ -368,7 +369,7 @@ export async function registerInvoiceRoutes(
   app.get(
     "/invoices/:invoiceId/credit-notes",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -399,7 +400,7 @@ export async function registerInvoiceRoutes(
       preHandler: [
         authenticateRequest,
         requireActiveUser,
-        requireCompanyRole(["owner", "admin"])
+        requireCompanyRole(["owner", "admin"], "body")
       ]
     },
     async (request, reply) => {
@@ -437,7 +438,7 @@ export async function registerInvoiceRoutes(
       preHandler: [
         authenticateRequest,
         requireActiveUser,
-        requireCompanyRole(["owner", "admin"])
+        requireCompanyRole(["owner", "admin"], "body")
       ]
     },
     async (request, reply) => {
@@ -473,7 +474,7 @@ export async function registerInvoiceRoutes(
   app.get(
     "/invoices/:invoiceId/payments",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -501,7 +502,7 @@ export async function registerInvoiceRoutes(
   app.post(
     "/invoices/:invoiceId/payments",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "sales"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "sales"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -535,7 +536,7 @@ export async function registerInvoiceRoutes(
   app.post(
     "/invoices/:invoiceId/payments/:paymentId/reverse",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);

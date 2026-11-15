@@ -2,6 +2,21 @@ import "dotenv/config";
 
 import { z } from "zod";
 
+const defaultAdminWebOrigins = [
+  "https://admin.leurettech.com",
+  "https://staging-admin.contractor.app",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173"
+];
+const defaultAppWebOrigins = [
+  "https://app.leurettech.com",
+  "https://staging-app.contractor.app",
+  "http://localhost:8081",
+  "http://127.0.0.1:8081"
+];
+
 const environmentSchema = z.object({
   NODE_ENV: z
     .enum(["development", "staging", "test", "production"])
@@ -44,11 +59,9 @@ const environmentSchema = z.object({
     .max(65535)
     .default(3001),
 
-  CORS_ORIGINS: z
-    .string()
-    .default(
-      "https://admin.leurettech.com,https://app.leurettech.com,https://staging-admin.contractor.app,https://staging-app.contractor.app,http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:8081,http://127.0.0.1:8081"
-    ),
+  CORS_ORIGINS: z.string().default([...defaultAdminWebOrigins, ...defaultAppWebOrigins].join(",")),
+  ADMIN_WEB_ORIGINS: z.string().default(defaultAdminWebOrigins.join(",")),
+  APP_WEB_ORIGINS: z.string().default(defaultAppWebOrigins.join(",")),
 
   PGHOST: z.string().trim().min(1).optional(),
 
@@ -174,7 +187,12 @@ if (!parsedEnvironment.success) {
 
 export const env = parsedEnvironment.data;
 
-export const corsOrigins = env.CORS_ORIGINS
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+function parseOrigins(value: string): string[] {
+  return value.split(",").map((origin) => origin.trim()).filter(Boolean);
+}
+
+export const corsOrigins = parseOrigins(env.CORS_ORIGINS);
+export const webAuthOrigins = {
+  refreshToken: parseOrigins(env.ADMIN_WEB_ORIGINS).filter((origin) => corsOrigins.includes(origin)),
+  appRefreshToken: parseOrigins(env.APP_WEB_ORIGINS).filter((origin) => corsOrigins.includes(origin))
+};

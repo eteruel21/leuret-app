@@ -8,10 +8,12 @@ export async function findClientProjectsRepo(userId: string) {
   return withUserTransaction(userId, async (client) => {
     const result = await client.query(`
       SELECT
-        project.*,
+        project.id, project.company_id, project.client_id, project.project_code, project.name,
+        project.description, project.status, project.start_date, project.estimated_end_date,
+        project.actual_end_date, project.progress_percentage, project.created_at, project.updated_at,
         jsonb_build_object('name', company.name) AS company
       FROM public.projects AS project
-      JOIN public.clients AS customer ON customer.id = project.client_id
+      JOIN public.clients AS customer ON customer.id = project.client_id AND customer.company_id = project.company_id
       JOIN public.companies AS company ON company.id = project.company_id
       WHERE customer.user_id = app.current_user_id()
         AND customer.active = true
@@ -29,7 +31,7 @@ export async function findCompanyProjectsRepo(userId: string, companyId: string,
         `
           SELECT *
           FROM public.projects
-          WHERE company_id = $1 AND client_id = $2
+          WHERE company_id = $1 AND client_id = $2 AND public.is_company_member($1)
           ORDER BY created_at DESC
         `,
         [companyId, clientId]
@@ -53,7 +55,7 @@ export async function findCompanyProjectsRepo(userId: string, companyId: string,
           END AS client
         FROM public.projects AS project
         LEFT JOIN public.clients AS customer ON customer.id = project.client_id
-        WHERE project.company_id = $1
+        WHERE project.company_id = $1 AND public.is_company_member($1)
         ORDER BY project.created_at DESC
       `,
       [companyId]
@@ -106,7 +108,7 @@ export async function getProjectByIdRepo(userId: string, projectId: string, comp
         FROM public.projects AS project
         LEFT JOIN public.clients AS customer ON customer.id = project.client_id
         LEFT JOIN public.client_addresses AS address ON address.id = project.address_id
-        WHERE project.id = $1 AND project.company_id = $2
+        WHERE project.id = $1 AND project.company_id = $2 AND public.is_company_member($2)
         LIMIT 1
       `,
       [projectId, companyId]
@@ -117,7 +119,7 @@ export async function getProjectByIdRepo(userId: string, projectId: string, comp
 
 export async function updateProjectStatusRepo(userId: string, projectId: string, companyId: string, status: string) {
   return withUserTransaction(userId, async (client) => {
-    await client.query(
+    const result = await client.query(
       `
         UPDATE public.projects
         SET status = $1, updated_at = now()
@@ -125,6 +127,7 @@ export async function updateProjectStatusRepo(userId: string, projectId: string,
       `,
       [status, projectId, companyId]
     );
+    return result.rowCount === 1;
   });
 }
 

@@ -4,7 +4,8 @@ import type {
 } from "fastify";
 
 import {
-  authenticateRequest
+  authenticateRequest,
+  requireActiveUser
 } from "../auth/authenticate.js";
 import {
   withUserTransaction
@@ -19,6 +20,9 @@ export async function requireSuperAdmin(
     reply
   );
 
+  if (reply.sent) return;
+
+  await requireActiveUser(request, reply);
   if (reply.sent) return;
 
   const userId =

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { env } from "../config/env.js";
+import { env, webAuthOrigins } from "../config/env.js";
 import { getClientIp } from "../security/client-ip.js";
 import { pool } from "../db/pool.js";
 import { withUserTransaction } from "../db/with-user-transaction.js";
@@ -13,6 +13,7 @@ import {
 } from "./tokens.js";
 import {
   loginSchema,
+  logoutSchema,
   registerSchema,
   refreshSchema,
   verifyEmailSchema,
@@ -74,7 +75,18 @@ const genericPasswordRecoveryResponse = {
   message: "Si tu correo está registrado, recibirás un enlace para restablecer tu contraseña."
 } as const;
 
-function getCookieOptions() {
+function getRefreshCookie(clientType: "native" | "web" | "app-web" | undefined) {
+  if (clientType === "app-web") return "appRefreshToken";
+  if (clientType === "web") return "refreshToken";
+  return undefined;
+}
+
+function isTrustedWebOrigin(request: FastifyRequest, cookieName: keyof typeof webAuthOrigins): boolean {
+  const origin = request.headers.origin;
+  return typeof origin === "string" && webAuthOrigins[cookieName].includes(origin);
+}
+
+function getCookieOptions(cookieName: "refreshToken" | "appRefreshToken") {
   const isProductionOrStaging = env.NODE_ENV === "production" || env.NODE_ENV === "staging";
   const maxAgeSeconds = env.REFRESH_TOKEN_DAYS * 24 * 60 * 60;
   const expiresDate = new Date(Date.now() + maxAgeSeconds * 1000);
@@ -88,7 +100,7 @@ function getCookieOptions() {
     expires: Date;
     domain?: string;
   } = {
-    path: "/",
+    path: cookieName === "appRefreshToken" ? "/auth" : "/",
     httpOnly: true,
     secure: isProductionOrStaging,
     sameSite: isProductionOrStaging ? "none" : "lax",
@@ -96,7 +108,7 @@ function getCookieOptions() {
     expires: expiresDate
   };
 
-  if (env.COOKIE_DOMAIN) {
+  if (cookieName === "refreshToken" && env.COOKIE_DOMAIN) {
     options.domain = env.COOKIE_DOMAIN;
   }
 
@@ -219,6 +231,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const { email, password, clientType, captchaToken } = parsedBody.data;
+      const cookieName = getRefreshCookie(clientType);
+      if (cookieName && !isTrustedWebOrigin(request, cookieName)) {
+        return reply.status(403).send({ message: "El origen no está autorizado." });
+      }
       const isCaptchaValid = await verifyCaptcha(captchaToken, getClientIp(request), "login");
       if (!isCaptchaValid) {
         return reply.status(400).send({ message: "No pudimos validar la verificación de seguridad. Inténtalo de nuevo." });
@@ -244,6 +260,16 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
       try {
         return await withUserTransaction(user.id, async (client) => {
+          const loginAccount = await client.query(`
+            SELECT id FROM app_auth.users
+            WHERE id = $1 AND password_hash = $2
+              AND email_confirmed_at IS NOT NULL AND deleted_at IS NULL
+            FOR UPDATE
+          `, [user.id, user.password_hash]);
+          if (!loginAccount.rows[0]) {
+            return reply.status(401).send({ message: "Correo o contraseña incorrectos." });
+          }
+
           const profile = await loadOwnProfile(client);
           if (!profile) {
             return reply.status(404).send({
@@ -267,9 +293,9 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
           await updateUserSignIn(client, user.id);
 
-          if (clientType === "web") {
+          if (cookieName) {
             const { refreshToken, ...restTokens } = tokens;
-            reply.setCookie("refreshToken", refreshToken, getCookieOptions());
+            reply.setCookie(cookieName, refreshToken, getCookieOptions(cookieName));
             return {
               ...restTokens,
               user: toPublicUserProfile(profile, status),
@@ -310,13 +336,12 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
-      const { refreshToken, clientType } = parsedBody.data;
-      let tokenValue = refreshToken;
-      const isWeb = clientType === "web" || !!request.cookies.refreshToken;
-
-      if (!tokenValue && isWeb) {
-        tokenValue = request.cookies.refreshToken;
+      const { refreshToken, clientType, sessionId } = parsedBody.data;
+      const cookieName = getRefreshCookie(clientType);
+      if (cookieName && !isTrustedWebOrigin(request, cookieName)) {
+        return reply.status(403).send({ message: "El origen no está autorizado." });
       }
+      const tokenValue = cookieName ? request.cookies[cookieName] : refreshToken;
 
       if (!tokenValue) {
         return reply.status(401).send({
@@ -330,7 +355,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         await client.query("BEGIN");
 
         const session = await findSessionByRefreshTokenHash(client, refreshTokenHash);
-        if (!session) {
+        if (!session || (sessionId && session.session_id !== sessionId)) {
           await client.query("ROLLBACK");
           return reply.status(401).send({
             message: "La sesión expiró o fue cerrada."
@@ -351,10 +376,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         }
 
         const status = getUserStatus(profile);
-        if (status === "suspended" || status === "deactivated") {
+        if (status !== "active" && status !== "pending_approval") {
           await revokeAllUserSessions(client, session.user_id);
           await client.query("COMMIT");
-          reply.clearCookie("refreshToken", getCookieOptions());
+          if (cookieName) reply.clearCookie(cookieName, getCookieOptions(cookieName));
           return reply.status(403).send({
             message: "Esta cuenta está suspendida o desactivada."
           });
@@ -379,8 +404,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
         await client.query("COMMIT");
 
-        if (isWeb) {
-          reply.setCookie("refreshToken", newRefreshToken, getCookieOptions());
+        if (cookieName) {
+          reply.setCookie(cookieName, newRefreshToken, getCookieOptions(cookieName));
           return {
             accessToken,
             expiresIn: env.ACCESS_TOKEN_MINUTES * 60,
@@ -423,9 +448,17 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
+      const parsedBody = logoutSchema.safeParse(request.body ?? {});
+      if (!parsedBody.success) {
+        return reply.status(400).send({ message: "Los datos de la sesión no son válidos." });
+      }
+
+      const cookieName = getRefreshCookie(parsedBody.data.clientType ?? "web");
       await revokeSession(authenticatedUser.sessionId, authenticatedUser.id);
 
-      reply.clearCookie("refreshToken", getCookieOptions());
+      if (cookieName && isTrustedWebOrigin(request, cookieName)) {
+        reply.clearCookie(cookieName, getCookieOptions(cookieName));
+      }
 
       return {
         success: true

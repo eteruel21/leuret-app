@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { buildApp } from "../../app.js";
+import { pool } from "../../db/pool.js";
 import { adminPool } from "../../db/test-db.js";
 import type { FastifyInstance } from "fastify";
 import { installTurnstileTestMock } from "./turnstile-test-helper.js";
@@ -136,6 +137,9 @@ describe("T-054: Suite de Pruebas de Autorización y RLS", () => {
   });
 
   it("3. Aislamiento RLS entre Compañías (Cross-tenant isolation)", async () => {
+    const databaseRole = await pool.query<{ role: string }>("SELECT current_user AS role");
+    expect(databaseRole.rows[0]?.role).toBe("contractor_api");
+
     // Owner A creates Company A
     const compARes = await app.inject({
       method: "POST",

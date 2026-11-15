@@ -18,6 +18,7 @@ const storageCleanupMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../auth/authenticate.js", () => ({
+  companyRoles: ["owner", "admin", "estimator", "sales", "supervisor", "member"],
   authenticateRequest: async (request: any, reply: any) => {
     if (
       !accountMocks.authenticated ||
@@ -31,7 +32,8 @@ vi.mock("../auth/authenticate.js", () => ({
 
     request.authenticatedUser = {
       id: USER_ID,
-      sessionId: SESSION_ID
+      sessionId: SESSION_ID,
+      status: "active"
     };
   },
   requireActiveUser: async () => undefined,

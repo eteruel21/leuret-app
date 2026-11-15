@@ -254,7 +254,7 @@ export async function registerStorageRoutes(app: FastifyInstance): Promise<void>
       const photosWithSignedUrls = await Promise.all(
         photos.map(async (photo) => ({
           ...photo,
-          signedUrl: await getStorageSignedUrl(photo.id, photo.storage_path, 60)
+          signedUrl: await getStorageSignedUrl(photo.id, photo.storage_path)
         }))
       );
 
@@ -322,7 +322,7 @@ export async function registerStorageRoutes(app: FastifyInstance): Promise<void>
         throw error;
       }
 
-      const signedUrl = await getStorageSignedUrl(photoRecord.id, photoRecord.storage_path, 60);
+      const signedUrl = await getStorageSignedUrl(photoRecord.id, photoRecord.storage_path);
       return reply.status(201).send({ photo: { ...photoRecord, signedUrl } });
     }
   );
@@ -356,7 +356,7 @@ export async function registerStorageRoutes(app: FastifyInstance): Promise<void>
         return reply.status(404).send({ message: "Foto no encontrada." });
       }
 
-      const signedUrl = await getStorageSignedUrl(photo.id, photo.storage_path, 60);
+      const signedUrl = await getStorageSignedUrl(photo.id, photo.storage_path);
       return { photo: { ...photo, signedUrl } };
     }
   );
@@ -431,7 +431,7 @@ export async function registerStorageRoutes(app: FastifyInstance): Promise<void>
       const { buffer, mimeType } = await downloadStorageFile(storagePath);
       return reply
         .header("Content-Type", mimeType || "image/jpeg")
-        .header("Cache-Control", "private, max-age=3600")
+        .header("Cache-Control", "private, no-store")
         .send(buffer);
     } catch {
       return reply.status(404).send({ message: "Archivo no disponible en el almacenamiento físico o R2/S3." });

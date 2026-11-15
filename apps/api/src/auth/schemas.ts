@@ -1,6 +1,9 @@
 import { z } from "zod";
 
 const uuidSchema = z.string().uuid();
+const clientTypeSchema = z.enum(["native", "web", "app-web"]).optional();
+const newPasswordSchema = z.string().min(8).max(72)
+  .refine((password) => new TextEncoder().encode(password).length <= 72, "La contraseña admite hasta 72 bytes.");
 
 export const loginSchema = z.object({
   email: z
@@ -11,7 +14,7 @@ export const loginSchema = z.object({
 
   password: z.string().min(1).max(128),
   captchaToken: z.string().trim().min(1).max(2048),
-  clientType: z.string().optional()
+  clientType: clientTypeSchema
 });
 
 export const registerSchema = z.object({
@@ -35,7 +38,7 @@ export const registerSchema = z.object({
     .email()
     .transform((value) => value.toLowerCase()),
 
-  password: z.string().min(8).max(72),
+  password: newPasswordSchema,
 
   role: z
     .enum(["contractor", "client"])
@@ -67,8 +70,11 @@ export const registerSchema = z.object({
 
 export const refreshSchema = z.object({
   refreshToken: z.string().min(40).max(500).optional(),
-  clientType: z.string().optional()
+  clientType: clientTypeSchema,
+  sessionId: uuidSchema.optional()
 });
+
+export const logoutSchema = z.object({ clientType: clientTypeSchema });
 
 export const verifyEmailSchema = z.object({
   token: z.string().trim().length(64)
@@ -94,7 +100,7 @@ export const recoverPasswordSchema = z.object({
 
 export const resetPasswordSchema = z.object({
   token: z.string().trim().length(64),
-  newPassword: z.string().min(8).max(72)
+  newPassword: newPasswordSchema
 });
 
 export const revokeSessionSchema = z.object({

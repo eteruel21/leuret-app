@@ -6,6 +6,7 @@ import type {
 
 import {
   authenticateRequest,
+  companyRoles,
   requireActiveUser,
   requireCompanyRole
 } from "../auth/authenticate.js";
@@ -64,7 +65,7 @@ export async function registerProjectRoutes(
   app.get(
     "/projects",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -85,7 +86,7 @@ export async function registerProjectRoutes(
   app.post(
     "/projects",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "supervisor", "sales"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "supervisor", "sales"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -116,7 +117,7 @@ export async function registerProjectRoutes(
     {
       // Todo el equipo puede abrir la obra; los montos solo los ven
       // owner, admin, supervisor y ventas (ver getProjectByIdService).
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "supervisor", "sales", "estimator", "member"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -146,7 +147,7 @@ export async function registerProjectRoutes(
   app.patch(
     "/projects/:projectId/status",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "supervisor", "sales"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -161,7 +162,10 @@ export async function registerProjectRoutes(
         });
       }
 
-      await updateProjectStatusService(userId, parsedParams.data.projectId, parsedBody.data.companyId, parsedBody.data.status);
+      const changed = await updateProjectStatusService(userId, parsedParams.data.projectId, parsedBody.data.companyId, parsedBody.data.status);
+      if (!changed) {
+        return reply.status(404).send({ message: "No se encontró el proyecto." });
+      }
       return { success: true };
     }
   );
@@ -169,7 +173,7 @@ export async function registerProjectRoutes(
   app.patch(
     "/projects/:projectId/progress",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);

@@ -282,6 +282,7 @@ export async function findJobRequestFeedRepo(userId: string, companyId: string, 
   return withUserTransaction(userId, async (client) => {
     const filters = `
       job.requester_id <> app.current_user_id()
+      AND private.can_manage_job_requests($1)
       AND ($2::text IS NULL OR job.title ILIKE '%' || $2 || '%' OR job.description ILIKE '%' || $2 || '%')
       AND ($3::text IS NULL OR private.normalize_match_text(job.category) = private.normalize_match_text($3))
       AND ($4::text IS NULL OR private.normalize_match_text(job.province) = private.normalize_match_text($4))
@@ -378,12 +379,22 @@ export async function getContractorJobRequestRepo(userId: string, companyId: str
           detail.reference
         FROM public.job_requests AS job
         CROSS JOIN me
-        -- Además de RLS: la dirección solo sale si la empresa ya envió su presupuesto.
+        LEFT JOIN public.job_request_quotes AS company_quote
+          ON company_quote.request_id = job.id AND company_quote.company_id = $2
         LEFT JOIN public.job_request_details AS detail
           ON detail.request_id = job.id
-         AND private.job_request_contact_revealed(job.id)
+         AND company_quote.sent_at IS NOT NULL
         WHERE job.id = $1
           AND job.requester_id <> app.current_user_id()
+          AND private.can_manage_job_requests($2)
+          AND (
+            ${acceptingSql}
+            OR company_quote.id IS NOT NULL
+            OR EXISTS (
+              SELECT 1 FROM public.job_request_threads AS thread
+              WHERE thread.request_id = job.id AND thread.company_id = $2
+            )
+          )
         LIMIT 1
       `,
       [requestId, companyId]
@@ -468,6 +479,14 @@ export async function getConversationRepo(userId: string, requestId: string, com
         LEFT JOIN public.job_request_threads AS thread
           ON thread.request_id = job.id AND thread.company_id = $2
         WHERE job.id = $1
+          AND (
+            (job.requester_id = app.current_user_id() AND thread.id IS NOT NULL)
+            OR (
+              job.requester_id <> app.current_user_id()
+              AND private.can_manage_job_requests($2)
+              AND (thread.id IS NOT NULL OR ${acceptingSql})
+            )
+          )
         LIMIT 1
       `,
       [requestId, companyId]
@@ -475,13 +494,6 @@ export async function getConversationRepo(userId: string, requestId: string, com
 
     const row = header.rows[0];
     if (!row) return null;
-    // El cliente solo abre conversaciones que existen; la empresa, la suya.
-    if (row.is_requester && !row.thread_id) return null;
-    if (!row.is_requester) {
-      const member = await client.query("SELECT public.is_company_member($1) AS ok", [companyId]);
-      if (member.rows[0]?.ok !== true) return null;
-    }
-
     let messages: JobRequestMessageRow[] = [];
     if (row.thread_id) {
       const result = await client.query<JobRequestMessageRow>(

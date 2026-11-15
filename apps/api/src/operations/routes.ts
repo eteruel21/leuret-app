@@ -6,6 +6,7 @@ import type {
 
 import {
   authenticateRequest,
+  companyRoles,
   requireActiveUser,
   requireCompanyRole
 } from "../auth/authenticate.js";
@@ -73,7 +74,7 @@ export async function registerOperationRoutes(
   app.get(
     "/admin/catalog/items",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -94,7 +95,7 @@ export async function registerOperationRoutes(
   app.get(
     "/admin/catalog/items/:itemId",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -117,7 +118,7 @@ export async function registerOperationRoutes(
   app.patch(
     "/admin/catalog/items/:itemId",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -140,7 +141,7 @@ export async function registerOperationRoutes(
   app.patch(
     "/admin/catalog/items/:itemId/active",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -163,7 +164,7 @@ export async function registerOperationRoutes(
   app.get(
     "/admin/catalog/categories",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -184,7 +185,7 @@ export async function registerOperationRoutes(
   app.patch(
     "/admin/catalog/categories/:categoryId",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -207,7 +208,7 @@ export async function registerOperationRoutes(
   app.patch(
     "/admin/catalog/categories/:categoryId/active",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -242,7 +243,7 @@ export async function registerOperationRoutes(
   app.get(
     "/admin/formulas",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -263,7 +264,7 @@ export async function registerOperationRoutes(
   app.get(
     "/admin/formulas/items",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -284,7 +285,7 @@ export async function registerOperationRoutes(
   app.get(
     "/admin/formulas/units",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -305,7 +306,7 @@ export async function registerOperationRoutes(
   app.post(
     "/admin/formulas",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -326,7 +327,7 @@ export async function registerOperationRoutes(
   app.patch(
     "/admin/formulas/:formulaId",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -349,7 +350,7 @@ export async function registerOperationRoutes(
   app.patch(
     "/admin/formulas/:formulaId/active",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -372,7 +373,7 @@ export async function registerOperationRoutes(
   app.get(
     "/formulas/runtime",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -400,7 +401,7 @@ export async function registerOperationRoutes(
   app.get(
     "/measurements/units",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -421,7 +422,7 @@ export async function registerOperationRoutes(
   app.post(
     "/measurements/units",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -442,7 +443,7 @@ export async function registerOperationRoutes(
   app.patch(
     "/measurements/units/:unitId",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -465,7 +466,7 @@ export async function registerOperationRoutes(
   app.patch(
     "/measurements/units/:unitId/active",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -488,7 +489,7 @@ export async function registerOperationRoutes(
   app.get(
     "/pricing/items",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -509,7 +510,7 @@ export async function registerOperationRoutes(
   app.patch(
     "/pricing/items/:itemId",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -532,7 +533,7 @@ export async function registerOperationRoutes(
   app.post(
     "/pricing/adjust",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -553,7 +554,7 @@ export async function registerOperationRoutes(
   app.get(
     "/pricing/history",
     {
-      preHandler: [authenticateRequest, requireActiveUser]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);

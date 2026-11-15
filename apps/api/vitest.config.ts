@@ -17,7 +17,7 @@ if (existsSync(databaseEnvironmentPath)) {
   });
 }
 
-const databaseEnvironment = process.env.TEST_DATABASE_URL
+const isolatedDatabase = process.env.TEST_DATABASE_URL
   ? deriveTestDatabaseEnvironment(
       process.env.TEST_DATABASE_URL,
       process.env.NODE_ENV ?? "test"
@@ -27,7 +27,9 @@ const databaseEnvironment = process.env.TEST_DATABASE_URL
 const testEnvironment = {
   NODE_ENV: "test",
   DATABASE_MODE: process.env.DATABASE_MODE ?? (process.env.TEST_DATABASE_URL ? "postgres" : "hyperdrive"),
-  ...databaseEnvironment
+  ...isolatedDatabase,
+  ...(process.env.PGUSER ? { PGUSER: process.env.PGUSER } : {}),
+  ...(process.env.PGPASSWORD ? { PGPASSWORD: process.env.PGPASSWORD } : {})
 } satisfies Record<string, string>;
 
 export default defineConfig({

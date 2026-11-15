@@ -1,41 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 
 import type { AccountDeletionPreview, RetainedCategory } from "@/utils/account-deletion";
 
-let inMemoryAccessToken: string | null = null;
+const isWeb = Platform.OS === "web";
+const refreshTokenKey = "contractor_refresh_token";
+const legacyRefreshTokenKey = `fallback_${refreshTokenKey}`;
 
-async function setSecureItem(key: string, value: string): Promise<void> {
-  try {
-    const isAvailable = await SecureStore.isAvailableAsync();
-    if (isAvailable) {
-      await SecureStore.setItemAsync(key, value);
-      return;
-    }
-  } catch {}
-  await AsyncStorage.setItem(`fallback_${key}`, value);
-}
-
-async function getSecureItem(key: string): Promise<string | null> {
-  try {
-    const isAvailable = await SecureStore.isAvailableAsync();
-    if (isAvailable) {
-      return await SecureStore.getItemAsync(key);
-    }
-  } catch {}
-  return await AsyncStorage.getItem(`fallback_${key}`);
-}
-
-async function deleteSecureItem(key: string): Promise<void> {
-  try {
-    const isAvailable = await SecureStore.isAvailableAsync();
-    if (isAvailable) {
-      await SecureStore.deleteItemAsync(key);
-      return;
-    }
-  } catch {}
-  await AsyncStorage.removeItem(`fallback_${key}`);
-}
 
 function getMobileApiUrl(): string {
   const rawUrl = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, "");
@@ -149,9 +121,8 @@ export class ApiError extends Error {
   }
 }
 
-let refreshPromise:
-  | Promise<StoredSession>
-  | null = null;
+let inMemorySession: StoredSession | null = null;
+let refreshInProgress: { sessionId: string; promise: Promise<StoredSession> } | null = null;
 
 async function readResponse<T>(
   response: Response
@@ -182,6 +153,7 @@ export async function publicRequest<T>(
     `${API_URL}${path}`,
     {
       ...init,
+      ...(isWeb ? { credentials: "include" as const } : {}),
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
@@ -211,23 +183,15 @@ function toStoredSession(
 export async function storeSession(
   session: StoredSession
 ): Promise<void> {
-  inMemoryAccessToken = session.accessToken;
-  if (session.refreshToken) {
-    await setSecureItem("contractor_refresh_token", session.refreshToken);
-  } else {
-    await deleteSecureItem("contractor_refresh_token");
+  if (!isWeb && await SecureStore.isAvailableAsync()) {
+    await SecureStore.setItemAsync(refreshTokenKey, session.refreshToken);
   }
-
-  const sessionToStore = {
-    ...session,
-    accessToken: "",
-    refreshToken: ""
-  };
-
+  await AsyncStorage.removeItem(legacyRefreshTokenKey);
   await AsyncStorage.setItem(
     SESSION_STORAGE_KEY,
-    JSON.stringify(sessionToStore)
+    JSON.stringify({ sessionId: session.sessionId })
   );
+  inMemorySession = session;
 }
 
 export async function loadStoredSession():
@@ -236,16 +200,34 @@ Promise<StoredSession | null> {
     SESSION_STORAGE_KEY
   );
 
-  if (!stored) return null;
+  if (!stored) {
+    await AsyncStorage.removeItem(legacyRefreshTokenKey);
+    return null;
+  }
 
   try {
-    const session = JSON.parse(stored) as StoredSession;
-    const refreshToken = await getSecureItem("contractor_refresh_token");
+    const { sessionId } = JSON.parse(stored) as Partial<StoredSession>;
+    if (typeof sessionId !== "string" || !sessionId) {
+      await clearStoredSession();
+      return null;
+    }
+    if (inMemorySession?.sessionId === sessionId) return inMemorySession;
 
+    const marker = JSON.stringify({ sessionId });
+    if (stored !== marker) {
+      await AsyncStorage.removeItem(legacyRefreshTokenKey);
+      await AsyncStorage.setItem(SESSION_STORAGE_KEY, marker);
+    }
+    const refreshToken = !isWeb && await SecureStore.isAvailableAsync()
+      ? await SecureStore.getItemAsync(refreshTokenKey)
+      : null;
     return {
-      ...session,
-      accessToken: inMemoryAccessToken || "",
-      refreshToken: refreshToken || ""
+      sessionId,
+      accessToken: "",
+      refreshToken: refreshToken ?? "",
+      expiresAt: 0,
+      user: null,
+      requiresApproval: false
     };
   } catch {
     await clearStoredSession();
@@ -255,11 +237,11 @@ Promise<StoredSession | null> {
 
 export async function clearStoredSession():
 Promise<void> {
-  inMemoryAccessToken = null;
-  await deleteSecureItem("contractor_refresh_token");
-  await AsyncStorage.removeItem(
-    SESSION_STORAGE_KEY
-  );
+  inMemorySession = null;
+  await AsyncStorage.multiRemove([SESSION_STORAGE_KEY, legacyRefreshTokenKey]);
+  if (!isWeb && await SecureStore.isAvailableAsync()) {
+    await SecureStore.deleteItemAsync(refreshTokenKey);
+  }
 }
 
 export async function login(
@@ -275,7 +257,8 @@ export async function login(
         body: JSON.stringify({
           email,
           password,
-          captchaToken
+          captchaToken,
+          ...(isWeb ? { clientType: "app-web" } : {})
         })
       }
     );
@@ -324,52 +307,55 @@ export async function register(
   return session;
 }
 
-export async function refreshSession(
-  refreshToken?: string
-): Promise<StoredSession> {
-  if (refreshPromise) {
-    return refreshPromise;
+async function refreshSession(current: StoredSession): Promise<StoredSession> {
+  if (refreshInProgress?.sessionId === current.sessionId) {
+    return refreshInProgress.promise;
   }
 
-  refreshPromise = (async () => {
-    const current =
-      await loadStoredSession();
-
-    const token =
-      refreshToken ??
-      current?.refreshToken;
-
-    if (!token) {
-      throw new ApiError(
-        "No existe una sesión para renovar.",
-        401
-      );
+  const renew = async () => {
+    if ((await loadStoredSession())?.sessionId !== current.sessionId) {
+      throw new ApiError("La sesión cambió.", 401);
     }
-
+    if (!isWeb && !current.refreshToken) {
+      throw new ApiError("No existe una sesión para renovar.", 401);
+    }
     const response =
       await publicRequest<AuthResponse>(
         "/auth/refresh",
         {
           method: "POST",
           body: JSON.stringify({
-            refreshToken: token
+            sessionId: current.sessionId,
+            ...(isWeb ? { clientType: "app-web" } : { refreshToken: current.refreshToken })
           })
         }
       );
 
     const session = toStoredSession(response);
+    if (session.sessionId !== current.sessionId || (await loadStoredSession())?.sessionId !== current.sessionId) {
+      throw new ApiError("La sesión cambió.", 401);
+    }
     await storeSession(session);
 
     return session;
-  })();
+  };
+  const promise = isWeb && globalThis.navigator?.locks
+    ? Promise.resolve(navigator.locks.request(SESSION_STORAGE_KEY, renew))
+    : renew();
+  refreshInProgress = { sessionId: current.sessionId, promise };
 
   try {
-    return await refreshPromise;
+    return await promise;
   } catch (error) {
-    await clearStoredSession();
+    if (
+      error instanceof ApiError && (error.status === 401 || error.status === 403) &&
+      (await loadStoredSession())?.sessionId === current.sessionId
+    ) {
+      await clearStoredSession();
+    }
     throw error;
   } finally {
-    refreshPromise = null;
+    if (refreshInProgress?.promise === promise) refreshInProgress = null;
   }
 }
 
@@ -388,9 +374,7 @@ Promise<StoredSession> {
     session.expiresAt - 30_000;
 
   if (Date.now() >= refreshBefore) {
-    return refreshSession(
-      session.refreshToken
-    );
+    return refreshSession(session);
   }
 
   return session;
@@ -403,33 +387,29 @@ export async function authenticatedRequest<T>(
 ): Promise<T> {
   const session = await validSession();
 
-  const response = await fetch(
-    `${API_URL}${path}`,
-    {
+  const send = (accessToken: string) =>
+    fetch(`${API_URL}${path}`, {
       ...init,
+      ...(isWeb ? { credentials: "include" as const } : {}),
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
-        Authorization:
-          `Bearer ${session.accessToken}`,
-        ...init.headers
+        ...init.headers,
+        Authorization: `Bearer ${accessToken}`
       }
-    }
-  );
+    });
+  const response = await send(session.accessToken);
 
   if (
     response.status === 401 &&
     retry
   ) {
-    await refreshSession(
-      session.refreshToken
-    );
-
-    return authenticatedRequest<T>(
-      path,
-      init,
-      false
-    );
+    const current = await loadStoredSession();
+    if (current?.sessionId !== session.sessionId) {
+      throw new ApiError("La sesión cambió.", 401);
+    }
+    const refreshed = current.accessToken === session.accessToken ? await refreshSession(current) : current;
+    return readResponse<T>(await send(refreshed.accessToken));
   }
 
   return readResponse<T>(response);
@@ -451,7 +431,8 @@ Promise<void> {
     await authenticatedRequest(
       "/auth/logout",
       {
-        method: "POST"
+        method: "POST",
+        body: JSON.stringify({ clientType: isWeb ? "app-web" : "native" })
       }
     );
   } finally {

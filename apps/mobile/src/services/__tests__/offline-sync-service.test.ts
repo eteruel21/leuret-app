@@ -32,6 +32,8 @@ vi.mock("expo-secure-store", () => ({
   deleteItemAsync: vi.fn()
 }));
 
+vi.mock("react-native", () => ({ Platform: { OS: "ios" } }));
+
 const fetchMock = vi.fn();
 
 function successfulResponse(body: object = { success: true }): Response {

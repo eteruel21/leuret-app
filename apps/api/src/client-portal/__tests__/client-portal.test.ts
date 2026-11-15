@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { FastifyInstance } from "fastify";
 
+import { buildApp } from "../../app.js";
+import { createSession } from "../../auth/repository.js";
 import { adminPool } from "../../db/test-db.js";
 import {
   approveBudgetRepo,
@@ -41,6 +44,8 @@ async function createActiveUser(email: string, role: "contractor" | "client") {
 
 describe("Portal del cliente: visibilidad y aislamiento", () => {
   const suffix = Math.floor(Math.random() * 1_000_000);
+  let app: FastifyInstance;
+  const accessTokens = new Map<string, string>();
   let ownerId: string;
   let clientUserId: string;
   let outsiderId: string;
@@ -57,6 +62,17 @@ describe("Portal del cliente: visibilidad y aislamiento", () => {
     ownerId = await createActiveUser(`portal_owner_${suffix}@example.com`, "contractor");
     clientUserId = await createActiveUser(`portal_client_${suffix}@example.com`, "client");
     outsiderId = await createActiveUser(`portal_outsider_${suffix}@example.com`, "client");
+    app = await buildApp();
+    await app.ready();
+    const sessionClient = await adminPool.connect();
+    try {
+      for (const userId of [ownerId, clientUserId, outsiderId]) {
+        const session = await createSession(sessionClient, userId, "127.0.0.1", "Prueba del portal");
+        accessTokens.set(userId, session.accessToken);
+      }
+    } finally {
+      sessionClient.release();
+    }
 
     companyId = (
       await adminPool.query<{ id: string }>(
@@ -106,6 +122,7 @@ describe("Portal del cliente: visibilidad y aislamiento", () => {
         [companyId, projectId]
       )
     ).rows[0]!.id;
+    await adminPool.query("UPDATE public.budgets SET notes = 'Nota interna de ejemplo' WHERE id = $1", [budgetId]);
 
     for (const id of [budgetId, draftBudgetId]) {
       await adminPool.query(
@@ -175,6 +192,7 @@ describe("Portal del cliente: visibilidad y aislamiento", () => {
       throw error;
     } finally {
       connection.release();
+      await app.close();
     }
   });
 
@@ -192,12 +210,17 @@ describe("Portal del cliente: visibilidad y aislamiento", () => {
 
     const budgets = await findClientBudgets(clientUserId);
     expect(budgets.map((budget) => budget.id)).toEqual([budgetId]);
+    expect(budgets[0]).not.toHaveProperty("notes");
     expect(await findClientBudgets(outsiderId)).toHaveLength(0);
 
     const summary = await getClientSummaryRepo(clientUserId);
     expect(summary.pending_budgets).toBe(1);
     expect(summary.active_projects).toBe(1);
   });
+
+  function getAs(userId: string, url: string) {
+    return app.inject({ method: "GET", url, headers: { authorization: `Bearer ${accessTokens.get(userId)}` } });
+  }
 
   it("solo expone fotos compartidas y actividades no canceladas del proyecto", async () => {
     let detail = await getClientProjectDetailRepo(clientUserId, projectId);
@@ -266,6 +289,7 @@ describe("Portal del cliente: visibilidad y aislamiento", () => {
     const companyProcesses = await findContractorClientProcesses(ownerId, companyId, clientId);
     expect(companyProcesses).toContainEqual(expect.objectContaining({ kind: "budget", id: draftBudgetId }));
   });
+
   it("el cliente pide la factura de la obra terminada y la empresa la genera", async () => {
     await adminPool.query("SELECT set_config('app.user_id', $1, false)", [ownerId]);
     const extraBudgetId = (
@@ -318,5 +342,36 @@ describe("Portal del cliente: visibilidad y aislamiento", () => {
 
     // Ya no quedan presupuestos aprobados sin factura.
     await expect(requestProjectInvoiceRepo(clientUserId, projectId, null)).rejects.toMatchObject({ code: "23505" });
+  });
+
+  it("mantiene las facturas y el historial interno en su espacio autorizado", async () => {
+    const internalInvoice = `/invoices/${invoiceId}?companyId=${companyId}`;
+    const clientInvoice = `/client/invoices/${invoiceId}`;
+    const history = `/budgets/${budgetId}/history?companyId=${companyId}`;
+    const invoiceRequests = `/companies/${companyId}/invoice-requests?status=all`;
+
+    expect((await getAs(ownerId, internalInvoice)).statusCode).toBe(200);
+    expect((await getAs(clientUserId, internalInvoice)).statusCode).toBe(403);
+    expect((await getAs(clientUserId, clientInvoice)).statusCode).toBe(200);
+    expect((await getAs(outsiderId, clientInvoice)).statusCode).toBe(404);
+    expect((await getAs(ownerId, invoiceRequests)).statusCode).toBe(200);
+    expect((await getAs(clientUserId, invoiceRequests)).statusCode).toBe(403);
+    expect((await getAs(ownerId, history)).json().history.length).toBeGreaterThan(0);
+    expect((await getAs(clientUserId, history)).json().history).toEqual([]);
+
+    const projects = await getAs(clientUserId, "/projects/client");
+    expect(projects.statusCode).toBe(200);
+    expect(projects.json().projects[0]).not.toHaveProperty("budget_estimate");
+  });
+
+  it("bloquea el acceso operativo cuando la empresa queda suspendida", async () => {
+    await adminPool.query("UPDATE public.companies SET active = false WHERE id = $1", [companyId]);
+    try {
+      expect((await getAs(ownerId, `/projects?companyId=${companyId}`)).statusCode).toBe(403);
+      expect((await getAs(clientUserId, `/client/invoices/${invoiceId}`)).statusCode).toBe(404);
+      expect((await getAs(clientUserId, "/projects/client")).json().projects).toEqual([]);
+    } finally {
+      await adminPool.query("UPDATE public.companies SET active = true WHERE id = $1", [companyId]);
+    }
   });
 });

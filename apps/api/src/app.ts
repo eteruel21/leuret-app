@@ -123,6 +123,7 @@ export async function buildApp() {
   });
 
   app.addHook("onRequest", async (request, reply) => {
+    reply.header("Cache-Control", "no-store");
     reply.header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; sandbox;");
     reply.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
     reply.header("X-Content-Type-Options", "nosniff");

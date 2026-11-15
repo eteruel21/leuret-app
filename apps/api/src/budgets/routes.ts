@@ -110,7 +110,7 @@ export async function registerBudgetRoutes(
   app.get(
     "/budgets",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"], "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -132,7 +132,7 @@ export async function registerBudgetRoutes(
   app.post(
     "/budgets/from-project",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -161,7 +161,7 @@ export async function registerBudgetRoutes(
   app.get(
     "/budgets/:budgetId",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"], "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -191,7 +191,7 @@ export async function registerBudgetRoutes(
   app.post(
     "/budgets/:budgetId/items",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -226,7 +226,7 @@ export async function registerBudgetRoutes(
   app.delete(
     "/budgets/:budgetId/items/:itemId",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"], "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -290,7 +290,7 @@ export async function registerBudgetRoutes(
   app.post(
     "/budgets/:budgetId/send",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator", "sales"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator", "sales"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -329,7 +329,7 @@ export async function registerBudgetRoutes(
   app.post(
     "/budgets/:budgetId/reopen",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -405,13 +405,13 @@ export async function registerBudgetRoutes(
       if (!userId) return;
 
       const parsedParams = budgetParamsSchema.safeParse(request.params);
-      const parsedQuery = companyQuerySchema.safeParse(request.query || {});
+      const parsedQuery = companyQuerySchema.partial().safeParse(request.query || {});
 
-      if (!parsedParams.success) {
-        return reply.status(400).send({ message: "Identificador de presupuesto no válido." });
+      if (!parsedParams.success || !parsedQuery.success) {
+        return reply.status(400).send({ message: "Identificador de presupuesto o empresa no válido." });
       }
 
-      const history = await getBudgetHistoryService(userId, parsedParams.data.budgetId, parsedQuery.data?.companyId);
+      const history = await getBudgetHistoryService(userId, parsedParams.data.budgetId, parsedQuery.data.companyId);
       return { history };
     }
   );
@@ -419,7 +419,7 @@ export async function registerBudgetRoutes(
   app.post(
     "/budgets/:budgetId/items/from-calculation",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -503,7 +503,7 @@ export async function registerBudgetRoutes(
   app.get(
     "/budgets/:budgetId/price-updates",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"], "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -533,7 +533,7 @@ export async function registerBudgetRoutes(
   app.post(
     "/budgets/:budgetId/price-updates",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);

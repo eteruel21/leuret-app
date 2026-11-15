@@ -39,7 +39,6 @@ import {
 } from "./schemas.js";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const SIGNED_URL_MINUTES = 60;
 
 function authenticatedUserId(request: FastifyRequest, reply: FastifyReply): string | null {
   const userId = request.authenticatedUser?.id;
@@ -87,7 +86,7 @@ async function signPhotos(photos: JobRequestPhotoRow[]) {
   return Promise.all(
     photos.map(async ({ storage_path, ...photo }) => ({
       ...photo,
-      signedUrl: await getStorageSignedUrl(photo.id, storage_path, SIGNED_URL_MINUTES)
+      signedUrl: await getStorageSignedUrl(photo.id, storage_path)
     }))
   );
 }
@@ -95,7 +94,7 @@ async function signPhotos(photos: JobRequestPhotoRow[]) {
 async function signCover<T extends { cover_photo?: unknown }>(row: T) {
   const cover = row.cover_photo as { id?: string; storage_path?: string } | null | undefined;
   const coverUrl = cover?.id && cover.storage_path
-    ? await getStorageSignedUrl(cover.id, cover.storage_path, SIGNED_URL_MINUTES)
+    ? await getStorageSignedUrl(cover.id, cover.storage_path)
     : null;
   const { cover_photo: _cover, ...rest } = row;
   return { ...rest, cover_photo_url: coverUrl };
@@ -106,7 +105,7 @@ async function signMessage(message: JobRequestMessageRow) {
   return {
     ...rest,
     photoUrl: photo_storage_path
-      ? await getStorageSignedUrl(message.id, photo_storage_path, SIGNED_URL_MINUTES)
+      ? await getStorageSignedUrl(message.id, photo_storage_path)
       : null
   };
 }

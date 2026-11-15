@@ -250,7 +250,7 @@ export async function deleteStorageFile(
 export async function getStorageSignedUrl(
   photoId: string,
   storagePath: string,
-  expiresInMinutes: number = 60
+  expiresInMinutes: number = 15
 ): Promise<string> {
   normalizeStorageKey(storagePath);
 
