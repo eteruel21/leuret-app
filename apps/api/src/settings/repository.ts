@@ -36,7 +36,9 @@ export async function upsertUserSettingRepo(userId: string, key: string, value: 
       `,
       [key, JSON.stringify(value)]
     );
-    return result.rows[0];
+    const row = result.rows[0];
+    if (!row) throw new Error("No se pudo guardar el ajuste.");
+    return row;
   });
 }
 

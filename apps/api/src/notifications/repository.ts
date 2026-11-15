@@ -170,7 +170,9 @@ export async function recordUserNotificationRepo(
       `,
       [input.companyId, input.title, input.body, input.type, input.space, JSON.stringify(input.data)]
     );
-    return result.rows[0].id;
+    const row = result.rows[0];
+    if (!row) throw new Error("No se pudo guardar el aviso.");
+    return row.id;
   });
 }
 
