@@ -266,8 +266,46 @@ export async function getClientProjectDetailRepo(userId: string, projectId: stri
         [project.id, project.company_id]
     );
 
+    // Solicitud de factura: la más reciente y si se puede pedir ahora.
+    const invoiceRequest = await client.query<{
+      latest: { id: string; status: string; created_at: string; invoice_id: string | null } | null;
+      can_request: boolean;
+    }>(
+      `
+        SELECT
+          (
+            SELECT jsonb_build_object(
+              'id', request.id,
+              'status', request.status,
+              'created_at', request.created_at,
+              'invoice_id', request.invoice_id
+            )
+            FROM public.invoice_requests AS request
+            WHERE request.project_id = $1 AND request.company_id = $2
+            ORDER BY request.created_at DESC
+            LIMIT 1
+          ) AS latest,
+          (
+            $3::text = 'completed'
+            AND EXISTS (
+              SELECT 1
+              FROM public.budgets AS budget
+              WHERE budget.project_id = $1
+                AND budget.company_id = $2
+                AND budget.status = 'approved'
+                AND NOT EXISTS (SELECT 1 FROM public.invoice_requests AS pending
+                                WHERE pending.budget_id = budget.id AND pending.status = 'pending')
+                AND NOT EXISTS (SELECT 1 FROM public.invoices AS invoice WHERE invoice.budget_id = budget.id)
+            )
+          ) AS can_request
+      `,
+      [project.id, project.company_id, project.status]
+    );
+
     return {
       ...project,
+      invoice_request: invoiceRequest.rows[0]?.latest ?? null,
+      can_request_invoice: invoiceRequest.rows[0]?.can_request === true,
       progress_history: progress.rows,
       photos: photos.rows,
       activities: activities.rows,
@@ -381,5 +419,40 @@ export async function getClientSummaryRepo(userId: string) {
       active_projects: projects.rows[0]?.active_count ?? 0,
       open_invoices: invoices.rows
     };
+  });
+}
+
+/** El cliente pide la factura de una obra terminada (migración 044). */
+export async function requestProjectInvoiceRepo(userId: string, projectId: string, note: string | null) {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query<{
+      request_id: string;
+      company_id: string;
+      budget_id: string;
+      already_requested: boolean;
+      recipient_ids: string[];
+    }>(
+      "SELECT request_id, company_id, budget_id, already_requested, recipient_ids FROM public.request_project_invoice($1, $2)",
+      [projectId, note]
+    );
+    const row = result.rows[0]!;
+    const details = await client.query<{ project_name: string; client_name: string; budget_number: string }>(
+      `
+        SELECT
+          project.name AS project_name,
+          COALESCE(
+            NULLIF(customer.business_name, ''),
+            NULLIF(btrim(concat_ws(' ', customer.first_name, customer.last_name)), ''),
+            'El cliente'
+          ) AS client_name,
+          budget.budget_number
+        FROM public.projects AS project
+        JOIN public.clients AS customer ON customer.id = project.client_id
+        JOIN public.budgets AS budget ON budget.id = $2
+        WHERE project.id = $1
+      `,
+      [projectId, row.budget_id]
+    );
+    return { ...row, ...(details.rows[0] ?? { project_name: "", client_name: "El cliente", budget_number: "" }) };
   });
 }

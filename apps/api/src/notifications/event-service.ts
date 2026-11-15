@@ -238,3 +238,28 @@ export async function notifyJobRequestMessage(
     }
   );
 }
+
+export async function notifyInvoiceRequested(
+  recipientIds: string[],
+  request: {
+    requestId: string;
+    companyId: string;
+    budgetId: string;
+    projectId: string;
+    clientName: string;
+    projectName: string;
+  }
+): Promise<void> {
+  await dispatchEventPushToMany(
+    recipientIds,
+    "Solicitud de factura",
+    `${request.clientName.slice(0, 60)} pidió la factura de «${request.projectName.slice(0, 60)}».`,
+    {
+      type: "invoice.requested",
+      requestId: request.requestId,
+      companyId: request.companyId,
+      budgetId: request.budgetId,
+      projectId: request.projectId
+    }
+  );
+}

@@ -91,3 +91,7 @@ export const invoiceStatusSchema = z.object({
   status: z.literal("overdue"),
   reason: z.string().trim().min(3).max(1000).nullable().optional()
 });
+
+export const invoiceRequestsQuerySchema = z.object({
+  status: z.enum(["pending", "all"]).default("pending")
+});

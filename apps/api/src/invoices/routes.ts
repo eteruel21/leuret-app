@@ -21,6 +21,7 @@ import {
   invoiceActionSchema,
   invoiceCreditNoteParamsSchema,
   invoiceParamsSchema,
+  invoiceRequestsQuerySchema,
   invoicePaymentParamsSchema,
   invoiceStatusSchema,
   reverseInvoicePaymentSchema
@@ -29,11 +30,13 @@ import {
 import {
   cancelInvoiceCreditNoteService,
   cancelInvoiceService,
+  createAndIssueInvoiceService,
   createInvoiceService,
   getInvoiceByBudgetService,
   getInvoiceByIdService,
   getInvoiceCreditNotesService,
   getInvoiceHistoryService,
+  getInvoiceRequestsService,
   getInvoicePaymentsService,
   getInvoicesService,
   issueInvoiceCreditNoteService,
@@ -59,9 +62,75 @@ function authenticatedUserId(
   return userId;
 }
 
+/**
+ * Las funciones de facturación lanzan mensajes en español (RAISE EXCEPTION).
+ * Se devuelven al usuario con un código 4xx en lugar de un 500 genérico.
+ */
+function sendInvoiceDatabaseError(error: unknown, reply: FastifyReply): boolean {
+  if (typeof error !== "object" || error === null || !("code" in error)) return false;
+  const code = String((error as { code?: unknown }).code ?? "");
+  const message = error instanceof Error && error.message ? error.message : "No se pudo completar la acción.";
+  const status =
+    code === "P0001" || code === "55000" || code === "23505" ? 409
+      : code === "22023" || code === "22P02" ? 400
+        : code === "42501" ? 403
+          : code === "P0002" ? 404
+            : null;
+  if (!status) return false;
+  reply.status(status).send({ message });
+  return true;
+}
+
 export async function registerInvoiceRoutes(
   app: FastifyInstance
 ): Promise<void> {
+  // Genera la factura de un presupuesto aprobado: crear y emitir en un solo paso.
+  app.post(
+    "/invoices/from-budget",
+    {
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "sales"])]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const body = createInvoiceSchema.safeParse(request.body);
+      if (!body.success) {
+        return reply.status(400).send({ message: "Los datos de la factura no son válidos." });
+      }
+
+      try {
+        const invoice = await createAndIssueInvoiceService(userId, body.data);
+        if (!invoice) return reply.status(500).send({ message: "No se pudo generar la factura." });
+        return reply.status(201).send({ invoice });
+      } catch (error) {
+        if (sendInvoiceDatabaseError(error, reply)) return;
+        throw error;
+      }
+    }
+  );
+
+  // Solicitudes de factura de los clientes (obras terminadas).
+  app.get(
+    "/companies/:companyId/invoice-requests",
+    {
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "sales"])]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const companyId = (request.params as { companyId?: string }).companyId ?? "";
+      const query = invoiceRequestsQuerySchema.safeParse(request.query ?? {});
+      if (!/^[0-9a-f-]{36}$/i.test(companyId) || !query.success) {
+        return reply.status(400).send({ message: "Parámetros no válidos." });
+      }
+
+      reply.header("Cache-Control", "private, no-store");
+      return { requests: await getInvoiceRequestsService(userId, companyId, query.data.status) };
+    }
+  );
+
   app.get(
     "/invoices",
     {

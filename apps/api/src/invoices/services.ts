@@ -1,7 +1,9 @@
 import {
   cancelInvoiceCreditNoteRepo,
   cancelInvoiceRepo,
+  createAndIssueInvoiceRepo,
   createInvoiceRepo,
+  findInvoiceRequestsRepo,
   findInvoiceByBudgetRepo,
   findInvoiceCreditNotesRepo,
   findInvoiceHistoryRepo,
@@ -144,4 +146,15 @@ export async function cancelInvoiceCreditNoteService(
     creditNoteId,
     input
   );
+}
+
+/** Crea y emite la factura de un presupuesto aprobado en un solo paso. */
+export async function createAndIssueInvoiceService(userId: string, input: CreateInvoiceInput) {
+  const invoice = await createAndIssueInvoiceRepo(userId, input);
+  if (invoice) await notifyInvoiceIssued(invoice);
+  return invoice;
+}
+
+export async function getInvoiceRequestsService(userId: string, companyId: string, status: "pending" | "all") {
+  return findInvoiceRequestsRepo(userId, companyId, status);
 }

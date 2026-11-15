@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { type Href, router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Pressable,
   RefreshControl,
@@ -18,7 +19,14 @@ import { LeuretLoading } from "@/components/LeuretLoading";
 import { MotionPressable } from "@/components/MotionPressable";
 import { colors, radius } from "@/constants/theme";
 import { useCompany } from "@/contexts/CompanyContext";
-import { listInvoices } from "@/services/invoice-service";
+import {
+  createInvoiceFromBudget,
+  listInvoiceRequests,
+  listInvoices,
+  type InvoiceRequest,
+} from "@/services/invoice-service";
+import { confirmAction } from "@/utils/alert";
+import { invoiceRequestsLabel } from "@/utils/invoice-requests";
 import type { InvoiceWithDetails } from "@/types/invoice";
 import { getInvoiceStatusLabel } from "@/types/invoice";
 import { formatMoney } from "@/types/budget";
@@ -34,6 +42,9 @@ export default function InvoicesListScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
+  const [requests, setRequests] = useState<InvoiceRequest[]>([]);
+  const [generating, setGenerating] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
 
   const loadInvoices = useCallback(
     async (showRefresh = false) => {
@@ -42,9 +53,11 @@ export default function InvoicesListScreen() {
       if (showRefresh) setRefreshing(true);
       else setLoading(true);
 
-      const { invoices: loadedInvoices, error } = await listInvoices(
-        activeCompany.id,
-      );
+      const [{ invoices: loadedInvoices, error }, pending] = await Promise.all([
+        listInvoices(activeCompany.id),
+        can("invoices.create") ? listInvoiceRequests(activeCompany.id) : Promise.resolve({ requests: [], error: null }),
+      ]);
+      setRequests(pending.requests);
 
       if (error) {
         console.error("Error cargando facturas", error);
@@ -55,8 +68,75 @@ export default function InvoicesListScreen() {
       setLoading(false);
       setRefreshing(false);
     },
-    [activeCompany],
+    [activeCompany, can],
   );
+
+  async function generateFromRequest(request: InvoiceRequest) {
+    if (!activeCompany || generating) return;
+    const confirmed = await confirmAction({
+      title: "Generar factura",
+      message: `Se emitirá la factura de ${request.budget_number} para ${request.client_name}.`,
+      confirmText: "Generar",
+    });
+    if (!confirmed) return;
+
+    setGenerating(request.id);
+    setRequestError(null);
+    const { invoice, error } = await createInvoiceFromBudget({
+      companyId: activeCompany.id,
+      budgetId: request.budget_id,
+      clientId: request.client_id,
+    });
+    setGenerating(null);
+
+    if (error || !invoice) {
+      setRequestError(error || "No se pudo generar la factura.");
+      return;
+    }
+    setRequests((current) => current.filter((item) => item.id !== request.id));
+    router.push({ pathname: "/facturas/[id]", params: { id: invoice.id } } as Href);
+  }
+
+  const requestsHeader = requests.length ? (
+    <View style={styles.requests}>
+      <View style={styles.requestsHeader}>
+        <Ionicons name="hand-left-outline" size={18} color={colors.accent} />
+        <Text style={styles.requestsTitle}>{invoiceRequestsLabel(requests.length)}</Text>
+      </View>
+      {requestError ? <Text style={styles.requestError}>{requestError}</Text> : null}
+      {requests.map((request) => (
+        <View key={request.id} style={styles.requestCard}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push({ pathname: "/presupuestos/[id]", params: { id: request.budget_id } } as Href)}
+            style={styles.requestInfo}
+          >
+            <Text style={styles.requestClient} numberOfLines={1}>{request.client_name}</Text>
+            <Text style={styles.requestMeta} numberOfLines={1}>
+              {request.project_name} · {request.budget_number} · {formatMoney(request.budget_total, request.currency_code)}
+            </Text>
+            <Text style={styles.requestMeta}>
+              Solicitada el {formatShortDate(request.created_at, activeCompany?.timezone)}
+              {request.note ? ` · «${request.note}»` : ""}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Generar factura de ${request.budget_number}`}
+            disabled={Boolean(generating)}
+            onPress={() => void generateFromRequest(request)}
+            style={({ pressed }) => [styles.requestButton, (pressed || generating === request.id) && styles.pressed]}
+          >
+            {generating === request.id ? (
+              <ActivityIndicator color={colors.textLight} />
+            ) : (
+              <Text style={styles.requestButtonText}>Generar factura</Text>
+            )}
+          </Pressable>
+        </View>
+      ))}
+    </View>
+  ) : null;
 
   useFocusEffect(
     useCallback(() => {
@@ -135,6 +215,7 @@ export default function InvoicesListScreen() {
         data={filteredInvoices}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
+        ListHeaderComponent={requestsHeader}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -225,6 +306,38 @@ export default function InvoicesListScreen() {
 }
 
 const styles = StyleSheet.create({
+  requests: {
+    gap: 10,
+    padding: 14,
+    marginBottom: 16,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+  },
+  requestsHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  requestsTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
+  requestError: { color: colors.danger, fontWeight: "700" },
+  requestCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  requestInfo: { flex: 1, minWidth: 0, gap: 2 },
+  requestClient: { color: colors.text, fontWeight: "900" },
+  requestMeta: { color: colors.textSecondary, fontSize: 12 },
+  requestButton: {
+    minHeight: 40,
+    paddingHorizontal: 12,
+    borderRadius: radius.md,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  requestButtonText: { color: colors.textLight, fontWeight: "900", fontSize: 13 },
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

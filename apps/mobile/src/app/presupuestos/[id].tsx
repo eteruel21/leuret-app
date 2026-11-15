@@ -54,7 +54,13 @@ import {
   PriceUpdatesBanner,
   PriceUpdatesModal,
 } from "@/components/PriceUpdatesModal";
-import { getInvoiceByBudgetId, createInvoiceFromBudget } from "@/services/invoice-service";
+import {
+  createInvoiceFromBudget,
+  getInvoiceByBudgetId,
+  listInvoiceRequests,
+  type InvoiceRequest,
+} from "@/services/invoice-service";
+import { pendingRequestForBudget } from "@/utils/invoice-requests";
 import type { Invoice } from "@/types/invoice";
 
 import type {
@@ -102,6 +108,8 @@ export default function BudgetDetailScreen() {
   const [calculatorPickerVisible, setCalculatorPickerVisible] =
     useState(false);
   const [reopening, setReopening] = useState(false);
+  const [invoiceRequest, setInvoiceRequest] = useState<InvoiceRequest | null>(null);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [shoppingListVisible, setShoppingListVisible] =
     useState(false);
   const [priceUpdates, setPriceUpdates] =
@@ -160,6 +168,12 @@ export default function BudgetDetailScreen() {
           setAssociatedInvoice(invoice);
         } catch {
           // Ignore
+        }
+        if (loadedBudget?.status === "approved") {
+          const { requests } = await listInvoiceRequests(activeCompany.id);
+          setInvoiceRequest(pendingRequestForBudget(requests, budgetId));
+        } else {
+          setInvoiceRequest(null);
         }
       }
 
@@ -317,7 +331,7 @@ export default function BudgetDetailScreen() {
   }
 
   async function handleCreateInvoice() {
-    if (!activeCompany || !budget) return;
+    if (!activeCompany || !budget || generatingInvoice) return;
 
     if (associatedInvoice) {
       router.push({
@@ -327,43 +341,39 @@ export default function BudgetDetailScreen() {
       return;
     }
 
-    Alert.alert(
-      "Facturar presupuesto",
-      `¿Deseas generar la factura para el presupuesto ${budget.budget_number}? Se asignará el correlativo automático.`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Generar",
-          onPress: async () => {
-            try {
-              setGeneratingInvoice(true);
-              const { invoice, error } = await createInvoiceFromBudget({
-                companyId: activeCompany.id,
-                budgetId: budget.id,
-                clientId: budget.client_id,
-              });
+    // `confirmAction` usa `window.confirm` en la web y `Alert` en el teléfono.
+    const confirmed = await confirmAction({
+      title: "Generar factura",
+      message: `Se emitirá la factura del presupuesto ${budget.budget_number} con el próximo número de factura.`,
+      confirmText: "Generar",
+    });
+    if (!confirmed) return;
 
-              if (error) {
-                Alert.alert("Error al generar factura", error);
-                return;
-              }
+    setInvoiceError(null);
+    setGeneratingInvoice(true);
+    try {
+      const { invoice, error } = await createInvoiceFromBudget({
+        companyId: activeCompany.id,
+        budgetId: budget.id,
+        clientId: budget.client_id,
+      });
 
-              if (invoice) {
-                setAssociatedInvoice(invoice);
-                router.push({
-                  pathname: "/facturas/[id]",
-                  params: { id: invoice.id },
-                } as Href);
-              }
-            } catch (err: unknown) {
-              Alert.alert("Error", err instanceof Error ? err.message : "Ocurrió un error");
-            } finally {
-              setGeneratingInvoice(false);
-            }
-          },
-        },
-      ],
-    );
+      if (error || !invoice) {
+        setInvoiceError(error || "No se pudo generar la factura.");
+        return;
+      }
+
+      setAssociatedInvoice(invoice);
+      setInvoiceRequest(null);
+      router.push({
+        pathname: "/facturas/[id]",
+        params: { id: invoice.id },
+      } as Href);
+    } catch (err: unknown) {
+      setInvoiceError(err instanceof Error ? err.message : "No se pudo generar la factura.");
+    } finally {
+      setGeneratingInvoice(false);
+    }
   }
 
   return (
@@ -491,6 +501,23 @@ export default function BudgetDetailScreen() {
               )}
             </Pressable>
           </View>
+        ) : null}
+
+        {invoiceRequest && !associatedInvoice ? (
+          <View style={styles.invoiceRequestBanner} accessibilityRole="alert">
+            <Ionicons name="receipt-outline" size={20} color={colors.accent} />
+            <View style={styles.invoiceRequestBody}>
+              <Text style={styles.invoiceRequestTitle}>El cliente pidió la factura</Text>
+              <Text style={styles.invoiceRequestText}>
+                {invoiceRequest.client_name} la solicitó al terminar la obra.
+                {invoiceRequest.note ? ` Nota: «${invoiceRequest.note}».` : ""}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
+        {invoiceError ? (
+          <Text style={styles.invoiceError} accessibilityRole="alert">{invoiceError}</Text>
         ) : null}
 
         <View style={styles.buttonRow}>
@@ -1373,6 +1400,20 @@ function AddCatalogItemModal({
 }
 
 const styles = StyleSheet.create({
+  invoiceRequestBanner: {
+    flexDirection: "row",
+    gap: 10,
+    padding: 14,
+    marginBottom: 12,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+  },
+  invoiceRequestBody: { flex: 1, minWidth: 0, gap: 2 },
+  invoiceRequestTitle: { color: colors.text, fontWeight: "900" },
+  invoiceRequestText: { color: colors.textSecondary, fontSize: 13, lineHeight: 18 },
+  invoiceError: { color: colors.danger, fontWeight: "700", marginBottom: 10 },
   flex: {
     flex: 1,
   },

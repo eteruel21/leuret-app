@@ -69,6 +69,13 @@ describe("notificationRoute", () => {
     expect(notificationRoute({ type: "budget.approved", budgetId: id }, false)?.pathname).toBe("/presupuestos/[id]");
     expect(notificationRoute({ type: "invoice.payment_registered", invoiceId: id }, false)?.pathname).toBe("/facturas/[id]");
   });
+  it("lleva al contratista al presupuesto cuando el cliente pide la factura", () => {
+    expect(notificationRoute({ type: "invoice.requested", budgetId: id }, false)).toEqual({
+      pathname: "/presupuestos/[id]",
+      params: { id },
+    });
+    expect(notificationRoute({ type: "invoice.requested", budgetId: id }, true)).toBeNull();
+  });
   it("abre las peticiones de trabajo y sus conversaciones", () => {
     expect(notificationRoute({ type: "job_request.created", requestId: id }, false)?.pathname).toBe("/peticiones/[id]");
     expect(notificationRoute({ type: "job_request.created", requestId: id }, true)).toBeNull();
