@@ -1,4 +1,9 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import {
+  hasCurrentLegalVersions,
+  recordLegalConfirmations,
+  staleLegalDocuments
+} from "../account/legal-acceptances.js";
 import { env, webAuthOrigins } from "../config/env.js";
 import { getClientIp } from "../security/client-ip.js";
 import { pool } from "../db/pool.js";
@@ -129,13 +134,23 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const parsedBody = registerSchema.safeParse(request.body);
       if (!parsedBody.success) {
+        const fields = parsedBody.error.flatten().fieldErrors;
+        if (fields.legalConfirmations) {
+          return reply.status(400).send({
+            code: "LEGAL_CONFIRMATIONS_REQUIRED",
+            message: "Para registrarte, acepta los Términos y confirma que leíste la Política de Privacidad. Si aparece una sola casilla, actualiza Leuret App."
+          });
+        }
         return reply.status(400).send({
           message: "Los datos del registro no son válidos.",
-          fields: parsedBody.error.flatten().fieldErrors
+          fields
         });
       }
 
       const input = parsedBody.data;
+      if (!hasCurrentLegalVersions(input.legalConfirmations)) {
+        return reply.status(409).send(staleLegalDocuments);
+      }
 
       // CAPTCHA check
       const isCaptchaValid = await verifyCaptcha(input.captchaToken, getClientIp(request), "register");
@@ -155,7 +170,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         province: input.province,
         district: input.district,
         corregimiento: input.corregimiento,
-        terms_accepted: input.termsAccepted,
+        terms_accepted: input.legalConfirmations.terms.accepted,
         notifications_opt_in: input.notificationsOptIn,
         registration_ip: request.ip,
         registration_device: input.registrationDevice
@@ -170,6 +185,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         const userId = await insertUser(client, input.email, passwordHash, metadata);
         await insertIdentity(client, userId, input.email);
 
+        await client.query("SELECT set_config('app.user_id', $1, true)", [userId]);
+        await recordLegalConfirmations(client, input.legalConfirmations, "registration");
         await insertToken(client, userId, "email_verification", verificationTokenHash, tokenExpiresAt);
 
         await client.query("COMMIT");

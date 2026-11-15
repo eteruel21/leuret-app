@@ -106,18 +106,22 @@ type AuthResponse = {
 
 type ApiErrorBody = {
   message?: string;
+  code?: string;
 };
 
 export class ApiError extends Error {
   readonly status: number;
+  readonly code?: string;
 
   constructor(
     message: string,
-    status: number
+    status: number,
+    code?: string
   ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -138,7 +142,8 @@ async function readResponse<T>(
     throw new ApiError(
       errorBody?.message ||
         "No fue posible completar la solicitud.",
-      response.status
+      response.status,
+      errorBody?.code
     );
   }
 
@@ -269,6 +274,49 @@ export async function login(
   return session;
 }
 
+export type LegalDocumentType = "terms" | "privacy";
+export type LegalDocumentSummary = {
+  title: string;
+  version: string;
+  updatedAt: string;
+};
+export type AccountLegalStatus = Record<
+  LegalDocumentType,
+  LegalDocumentSummary & { confirmedAt: string | null }
+>;
+export type LegalConfirmations = {
+  terms?: { accepted: true; version: string };
+  privacy?: { acknowledged: true; version: string };
+};
+
+export async function getRegistrationLegalDocuments(signal: AbortSignal) {
+  const [terms, privacy] = await Promise.all([
+    publicRequest<LegalDocumentSummary>("/legal/terms", { signal }),
+    publicRequest<LegalDocumentSummary>("/legal/privacy", { signal })
+  ]);
+  if (![terms, privacy].every((document) => document && /^[0-9a-f]{64}$/.test(document.version))) {
+    throw new Error("No se pudo identificar la versión de los documentos.");
+  }
+  return { terms, privacy };
+}
+
+export function getVersionedLegalUrl(type: LegalDocumentType, version: string): string {
+  return API_URL + "/legal/" + type + "/version/" + encodeURIComponent(version);
+}
+
+export async function getAccountLegalStatus(signal: AbortSignal): Promise<AccountLegalStatus> {
+  return authenticatedRequest<AccountLegalStatus>("/account/legal-acceptances", { signal });
+}
+
+export async function confirmAccountLegalDocuments(
+  confirmations: LegalConfirmations
+): Promise<AccountLegalStatus> {
+  return authenticatedRequest<AccountLegalStatus>("/account/legal-acceptances", {
+    method: "POST",
+    body: JSON.stringify(confirmations)
+  });
+}
+
 export type RegisterInput = {
   fullName: string;
   firstName: string;
@@ -281,7 +329,7 @@ export type RegisterInput = {
   province: string;
   district: string;
   corregimiento: string;
-  termsAccepted: boolean;
+  legalConfirmations: Required<LegalConfirmations>;
   notificationsOptIn: boolean;
   registrationDevice: string;
 };

@@ -1,10 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { type ComponentProps, useState } from "react";
+import { type ComponentProps, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -26,19 +25,10 @@ import {
   useAuth,
 } from "@/contexts/AuthContext";
 import TurnstileChallenge from "@/components/TurnstileChallenge";
+import { LegalConfirmationRow } from "@/components/LegalConfirmationRow";
+import { LeuretButton } from "@/components/LeuretButton";
+import { getRegistrationLegalDocuments } from "@/services/api";
 import { showAlert } from "@/utils/alert";
-
-const TERMS_URL = "https://admin.leurettech.com/legal/terms";
-const PRIVACY_URL = "https://admin.leurettech.com/legal/privacy";
-
-function openLegalUrl(url: string) {
-  void Linking.openURL(url).catch(() => {
-    showAlert(
-      "No se pudo abrir el documento",
-      "Verifica tu conexión e intenta nuevamente."
-    );
-  });
-}
 
 function getPasswordStrength(pass: string) {
   if (!pass) return { score: 0, label: "Falta contraseña", color: colors.textMuted };
@@ -96,6 +86,11 @@ export default function RegisterScreen() {
   const [corregimiento, setCorregimiento] = useState("");
   
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
+  const [legalDocuments, setLegalDocuments] =
+    useState<Awaited<ReturnType<typeof getRegistrationLegalDocuments>> | null>(null);
+  const [legalLoadError, setLegalLoadError] = useState(false);
+  const [legalLoadAttempt, setLegalLoadAttempt] = useState(0);
   const [notificationsOptIn, setNotificationsOptIn] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaResetKey, setCaptchaResetKey] = useState(0);
@@ -108,6 +103,27 @@ export default function RegisterScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [registerError, setRegisterError] =
     useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void getRegistrationLegalDocuments(controller.signal).then(
+      (documents) => {
+        if (!controller.signal.aborted) setLegalDocuments(documents);
+      },
+      () => {
+        if (!controller.signal.aborted) setLegalLoadError(true);
+      },
+    );
+    return () => controller.abort();
+  }, [legalLoadAttempt]);
+
+  function reloadLegalDocuments() {
+    setLegalDocuments(null);
+    setLegalLoadError(false);
+    setTermsAccepted(false);
+    setPrivacyAcknowledged(false);
+    setLegalLoadAttempt((attempt) => attempt + 1);
+  }
 
   const PROVINCES = [
     "Bocas del Toro",
@@ -231,10 +247,10 @@ export default function RegisterScreen() {
       return;
     }
 
-    if (!termsAccepted) {
+    if (!legalDocuments || !termsAccepted || !privacyAcknowledged) {
       presentRegisterError(
         "Aviso legal",
-        "Debes aceptar los términos y condiciones de servicio y la política de privacidad.",
+        "Acepta los Términos y confirma que leíste la Política de Privacidad.",
       );
       return;
     }
@@ -289,13 +305,17 @@ export default function RegisterScreen() {
         district: cleanDistrict,
         corregimiento:
           cleanCorregimiento,
-        termsAccepted,
+        legalConfirmations: {
+          terms: { accepted: true, version: legalDocuments.terms.version },
+          privacy: { acknowledged: true, version: legalDocuments.privacy.version },
+        },
         notificationsOptIn,
         registrationDevice:
           deviceDetail,
       });
 
       if (error) {
+        if (error.code === "LEGAL_DOCUMENTS_CHANGED") reloadLegalDocuments();
         presentRegisterError(
           "No fue posible crear la cuenta",
           translateRegisterError(
@@ -429,6 +449,38 @@ export default function RegisterScreen() {
               <Text style={styles.cardDescription}>
                 {invited ? "Confirma tu correo para abrir la invitación." : "Elige cómo utilizarás la plataforma."}
               </Text>
+            </View>
+
+            <View style={styles.legalOptions}>
+              {legalDocuments ? (
+                <>
+                  <LegalConfirmationRow
+                    type="terms"
+                    document={legalDocuments.terms}
+                    checked={termsAccepted}
+                    disabled={submitting}
+                    onChange={setTermsAccepted}
+                  />
+                  <LegalConfirmationRow
+                    type="privacy"
+                    document={legalDocuments.privacy}
+                    checked={privacyAcknowledged}
+                    disabled={submitting}
+                    onChange={setPrivacyAcknowledged}
+                  />
+                </>
+              ) : legalLoadError ? (
+                <>
+                  <Text accessibilityLiveRegion="polite" style={styles.checkboxLabel}>
+                    No se pudieron cargar los documentos legales.
+                  </Text>
+                  <LeuretButton label="Reintentar" variant="secondary" onPress={reloadLegalDocuments} />
+                </>
+              ) : (
+                <Text accessibilityLiveRegion="polite" style={styles.checkboxLabel}>
+                  Cargando documentos legales…
+                </Text>
+              )}
             </View>
 
             {!invited ? <View style={styles.roleSelector}>
@@ -582,34 +634,9 @@ export default function RegisterScreen() {
               onRightIconPress={() => setShowConfirmPassword((current) => !current)}
             />
 
-            {/* Aceptaciones y verificación de seguridad */}
-            <View style={styles.checkboxRow}>
-              <Pressable
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: termsAccepted }}
-                hitSlop={10}
-                onPress={() => setTermsAccepted(!termsAccepted)}
-              >
-                <Ionicons
-                  name={termsAccepted ? "checkbox" : "square-outline"}
-                  size={22}
-                  color={termsAccepted ? colors.primary : colors.textSecondary}
-                />
-              </Pressable>
-              <Text style={styles.checkboxLabel}>
-                Acepto los{" "}
-                <Text style={styles.legalLink} onPress={() => openLegalUrl(TERMS_URL)}>
-                  términos y condiciones de servicio
-                </Text>
-                {" "}y la{" "}
-                <Text style={styles.legalLink} onPress={() => openLegalUrl(PRIVACY_URL)}>
-                  política de privacidad
-                </Text>
-                .
-              </Text>
-            </View>
-
             <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: notificationsOptIn }}
               onPress={() => setNotificationsOptIn(!notificationsOptIn)}
               style={styles.checkboxRow}
             >
@@ -619,7 +646,7 @@ export default function RegisterScreen() {
                 color={notificationsOptIn ? colors.primary : colors.textSecondary}
               />
               <Text style={styles.checkboxLabel}>
-                Autorizo recibir avisos sobre solicitudes, presupuestos y facturas.
+                Quiero recibir avisos sobre solicitudes, presupuestos y facturas (opcional).
               </Text>
             </Pressable>
 
@@ -655,11 +682,12 @@ export default function RegisterScreen() {
             </View>
 
             <Pressable
+              accessibilityRole="button"
               onPress={handleRegisterClick}
-              disabled={submitting}
+              disabled={submitting || !legalDocuments}
               style={({ pressed }) => [
                 styles.primaryButton,
-                submitting && styles.primaryButtonDisabled,
+                (submitting || !legalDocuments) && styles.primaryButtonDisabled,
                 pressed && styles.pressed,
               ]}
             >
@@ -1165,10 +1193,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
 
-  legalLink: {
-    color: colors.primary,
-    fontWeight: "900",
-    textDecorationLine: "underline",
+  legalOptions: {
+    gap: 4,
+    marginBottom: 16,
   },
 
   registerErrorBox: {

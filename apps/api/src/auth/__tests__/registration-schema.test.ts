@@ -19,7 +19,10 @@ const VALID_REGISTRATION = {
   province: "Panamá",
   district: "Panamá",
   corregimiento: "Bella Vista",
-  termsAccepted: true as const,
+  legalConfirmations: {
+    terms: { accepted: true, version: "1".repeat(64) },
+    privacy: { acknowledged: true, version: "2".repeat(64) }
+  },
   notificationsOptIn: false,
   registrationDevice:
     "Navegador Web",
@@ -40,6 +43,22 @@ describe(
         ).toBe(true);
       },
     );
+
+    it("requiere una aceptación de Términos y una constancia separada de Privacidad", () => {
+      const { legalConfirmations, ...registration } = VALID_REGISTRATION;
+      expect(registerSchema.safeParse({ ...registration, termsAccepted: true }).success).toBe(false);
+      expect(registerSchema.safeParse({
+        ...registration, legalConfirmations: { terms: legalConfirmations.terms }
+      }).success).toBe(false);
+      expect(registerSchema.safeParse({
+        ...registration,
+        legalConfirmations: { ...legalConfirmations, privacy: { acknowledged: false, version: "2".repeat(64) } }
+      }).success).toBe(false);
+      expect(registerSchema.safeParse({
+        ...registration,
+        legalConfirmations: { ...legalConfirmations, terms: { accepted: false, version: "1".repeat(64) } }
+      }).success).toBe(false);
+    });
 
     it(
       "rechaza teléfono ausente",

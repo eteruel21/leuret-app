@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { registrationLegalConfirmations } from "../account/legal-acceptances.js";
+
 const uuidSchema = z.string().uuid();
 const clientTypeSchema = z.enum(["native", "web", "app-web"]).optional();
 const newPasswordSchema = z.string().min(8).max(72)
@@ -48,7 +50,7 @@ export const registerSchema = z.object({
   district: z.string().trim().min(1).max(100),
   corregimiento: z.string().trim().min(1).max(100),
 
-  termsAccepted: z.literal(true),
+  legalConfirmations: registrationLegalConfirmations,
 
   notificationsOptIn: z
     .boolean()

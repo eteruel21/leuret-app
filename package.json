@@ -24,6 +24,8 @@
     "test:database-tools": "node --env-file-if-exists=database/.env --env-file=database/test.env --test database/scripts/*.test.mjs",
     "test:database-unit": "node --test database/scripts/db-utils.test.mjs",
     "test:invoice-db": "node --env-file-if-exists=database/.env --env-file=database/test.env database/scripts/invoice-payments.integration.mjs",
+    "legal:generate": "node scripts/generate-legal-documents.mjs",
+    "legal:check": "node scripts/generate-legal-documents.mjs --check",
     "typecheck": "npm run typecheck -w apps/api && npm run typecheck -w apps/admin-web && npm run typecheck -w apps/mobile",
     "build:api": "npm run build -w apps/api",
     "build:admin": "npm run build -w apps/admin-web",

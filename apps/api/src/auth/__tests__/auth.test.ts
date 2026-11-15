@@ -6,6 +6,12 @@ import type { FastifyInstance } from "fastify";
 import { installTurnstileTestMock } from "./turnstile-test-helper.js";
 import { generateSecureToken, hashSecureToken } from "../tokens.js";
 import * as emailService from "../../services/email.js";
+import { LEGAL_DOCUMENTS } from "../../account/legal-content.js";
+
+const currentLegalConfirmations = {
+  terms: { accepted: true, version: LEGAL_DOCUMENTS.terms.document.version },
+  privacy: { acknowledged: true, version: LEGAL_DOCUMENTS.privacy.document.version }
+};
 
 describe("T-053: Suite de Pruebas de Autenticación (Auth)", () => {
   let app: FastifyInstance;
@@ -48,7 +54,7 @@ describe("T-053: Suite de Pruebas de Autenticación (Auth)", () => {
         province: "Panamá",
         district: "Panamá",
         corregimiento: "Bella Vista",
-        termsAccepted: true,
+        legalConfirmations: currentLegalConfirmations,
         captchaToken: "register-turnstile-token"
       }
     });
@@ -60,6 +66,44 @@ describe("T-053: Suite de Pruebas de Autenticación (Auth)", () => {
     const userRes = await adminPool.query("SELECT id FROM app_auth.users WHERE email = $1", [testEmail]);
     expect(userRes.rowCount).toBe(1);
     userId = userRes.rows[0].id;
+
+    const { rows } = await adminPool.query(
+      `SELECT document_type, document_version, document_updated_at::text AS publication_date,
+              confirmed_at, source
+       FROM app_auth.legal_acceptances WHERE user_id = $1 ORDER BY document_type`,
+      [userId]
+    );
+    expect(rows).toEqual(
+      (["privacy", "terms"] as const).map((type) => ({
+        document_type: type,
+        document_version: LEGAL_DOCUMENTS[type].document.version,
+        publication_date: LEGAL_DOCUMENTS[type].document.updatedAt,
+        confirmed_at: expect.any(Date),
+        source: "registration"
+      }))
+    );
+  });
+
+  it.each(["terms", "privacy"] as const)("rechaza una versión anterior de %s antes de crear una cuenta", async (type) => {
+    const email = "stale_" + type + "_" + testEmail;
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: {
+        fullName: "Usuario Prueba Auth", firstName: "Usuario", lastName: "Prueba",
+        phone: "60001111", email, password: testPassword, role: "client",
+        province: "Panamá", district: "Panamá", corregimiento: "Bella Vista",
+        legalConfirmations: {
+          ...currentLegalConfirmations,
+          [type]: { ...currentLegalConfirmations[type], version: "0".repeat(64) }
+        },
+        captchaToken: "register-turnstile-token"
+      }
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("LEGAL_DOCUMENTS_CHANGED");
+    expect((await adminPool.query("SELECT id FROM app_auth.users WHERE email = $1", [email])).rowCount).toBe(0);
   });
 
   it("2. Intentar Login sin confirmar correo debe fallar con 401", async () => {
@@ -123,6 +167,46 @@ describe("T-053: Suite de Pruebas de Autenticación (Auth)", () => {
     expect(body.refreshToken).toBeDefined();
     accessToken = body.accessToken;
     refreshToken = body.refreshToken;
+  });
+
+  it("permite confirmar versiones vigentes desde una cuenta anterior sin duplicar ni sustituir constancias", async () => {
+    await adminPool.query("DELETE FROM app_auth.legal_acceptances WHERE user_id = $1", [userId]);
+    await adminPool.query(
+      `INSERT INTO app_auth.legal_acceptances (user_id, document_type, document_version, document_updated_at, source)
+       VALUES ($1, 'terms', $2, '2026-11-10', 'account')`,
+      [userId, "1".repeat(64)]
+    );
+
+    const url = "/account/legal-acceptances";
+    const headers = { authorization: "Bearer " + accessToken };
+    const previous = await app.inject({ method: "GET", url, headers });
+    expect(previous.statusCode).toBe(200);
+    expect(previous.json().terms.confirmedAt).toBeNull();
+    expect(previous.json().privacy.confirmedAt).toBeNull();
+
+    const accepted = await app.inject({
+      method: "POST", url, headers, payload: { terms: currentLegalConfirmations.terms }
+    });
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json().terms.confirmedAt).toEqual(expect.any(String));
+    expect(accepted.json().privacy.confirmedAt).toBeNull();
+
+    const confirmation = { method: "POST", url, headers, payload: currentLegalConfirmations } as const;
+    const [first, retry] = await Promise.all([app.inject(confirmation), app.inject(confirmation)]);
+    expect(first.statusCode).toBe(200);
+    expect(retry.statusCode).toBe(200);
+    expect(retry.json()).toEqual(first.json());
+    expect(first.json().terms).toEqual(accepted.json().terms);
+
+    const { rows } = await adminPool.query(
+      "SELECT document_type, source FROM app_auth.legal_acceptances WHERE user_id = $1 ORDER BY document_type",
+      [userId]
+    );
+    expect(rows).toEqual([
+      { document_type: "privacy", source: "account" },
+      { document_type: "terms", source: "account" },
+      { document_type: "terms", source: "account" }
+    ]);
   });
 
   it("4. Renovación de Token / Refresh (POST /auth/refresh)", async () => {
@@ -327,7 +411,7 @@ it("invites a verified account into a team before approving its independent cont
       payload: {
         email, password, role, firstName: "Ana", lastName: "Leuret", fullName: "Ana Leuret",
         phone: "60001111", province: "Panamá", district: "Panamá", corregimiento: "Bella Vista",
-        termsAccepted: true, captchaToken: "register-turnstile-token"
+        legalConfirmations: currentLegalConfirmations, captchaToken: "register-turnstile-token"
       }
     });
     expect(response.statusCode).toBe(201);

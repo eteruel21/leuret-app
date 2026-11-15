@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BackButton } from "@/components/back-navigation";
+import { AccountLegalConfirmations } from "@/components/AccountLegalConfirmations";
 import { LeuretButton } from "@/components/LeuretButton";
 import { colors, layout, radius, shadows } from "@/constants/theme";
 import { ProfileOverview } from "@/components/ProfileOverview";
@@ -45,8 +46,6 @@ import {
   type UserProfileDetails
 } from "@/services/profile-details-service";
 
-const TERMS_URL = "https://admin.leurettech.com/legal/terms";
-const PRIVACY_URL = "https://admin.leurettech.com/legal/privacy";
 const DATA_RIGHTS_EMAIL = "privacidad@leurettech.com";
 
 export default function ProfileScreen() {
@@ -217,21 +216,6 @@ export default function ProfileScreen() {
     await loadDetails();
 
     Alert.alert("Perfil actualizado", "Tus datos se guardaron correctamente.");
-  };
-
-  const openLegalDocument = async (url: string, title: string) => {
-    try {
-      const supported = await Linking.canOpenURL(url);
-      if (!supported) {
-        throw new Error("El dispositivo no puede abrir este enlace.");
-      }
-      await Linking.openURL(url);
-    } catch (error) {
-      Alert.alert(
-        `No se pudo abrir ${title}`,
-        error instanceof Error ? error.message : "Intenta nuevamente."
-      );
-    }
   };
 
   const openDataRightsRequest = async () => {
@@ -531,25 +515,7 @@ export default function ProfileScreen() {
               <Text style={{ color: colors.text, fontSize: 14, fontWeight: "700" }}>Exportar mis datos, documentos y fotos</Text>
             </Pressable>
 
-            <Pressable
-              onPress={() => {
-                void openLegalDocument(TERMS_URL, "los Términos de Uso");
-              }}
-              style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.border }}
-            >
-              <Ionicons name="document-text-outline" size={20} color={colors.textSecondary} />
-              <Text style={{ color: colors.text, fontSize: 14, fontWeight: "700" }}>Términos y Condiciones</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => {
-                void openLegalDocument(PRIVACY_URL, "la Política de Privacidad");
-              }}
-              style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.border }}
-            >
-              <Ionicons name="shield-checkmark-outline" size={20} color={colors.textSecondary} />
-              <Text style={{ color: colors.text, fontSize: 14, fontWeight: "700" }}>Política de Privacidad</Text>
-            </Pressable>
+            <AccountLegalConfirmations key={user?.id} />
 
             <Pressable
               onPress={() => {

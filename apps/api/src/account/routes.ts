@@ -23,9 +23,14 @@ import {
 } from "./retention.js";
 import { processAccountDeletionStorageQueue } from "./storage-cleanup.js";
 import {
-  PRIVACY_POLICY_CONTENT,
-  TERMS_OF_SERVICE_CONTENT
-} from "./legal-content.js";
+  accountLegalConfirmations,
+  hasCurrentLegalVersions,
+  legalDocumentTypes,
+  loadCurrentLegalStatus,
+  recordLegalConfirmations,
+  staleLegalDocuments
+} from "./legal-acceptances.js";
+import { LEGAL_DOCUMENTS, LEGAL_STYLESHEET } from "./legal-content.js";
 
 const EXPORT_LINK_MINUTES = 10;
 
@@ -118,21 +123,69 @@ async function sendAccountExport(
 export async function registerAccountLegalRoutes(
   app: FastifyInstance
 ): Promise<void> {
-  // T-132: Public endpoint for Terms of Service.
-  // Legal content is bundled with the Worker so it is available at runtime.
-  app.get("/legal/terms", async () => ({
-    title: "Términos y Condiciones de Uso",
-    updatedAt: "2026-11-10",
-    content: TERMS_OF_SERVICE_CONTENT
-  }));
+  app.get("/legal/legal.css", async (_request, reply) =>
+    reply.type("text/css; charset=utf-8").send(LEGAL_STYLESHEET)
+  );
 
-  // T-133: Public endpoint for Privacy Policy.
-  // Legal content is bundled with the Worker so it is available at runtime.
-  app.get("/legal/privacy", async () => ({
-    title: "Política de Privacidad",
-    updatedAt: "2026-11-10",
-    content: PRIVACY_POLICY_CONTENT
-  }));
+  for (const type of legalDocumentTypes) {
+    const { document, html } = LEGAL_DOCUMENTS[type];
+    app.get(`/legal/${type}`, async () => document);
+
+    app.get<{ Params: { version: string } }>(
+      `/legal/${type}/version/:version`,
+      async (request, reply) => {
+        if (request.params.version !== document.version) {
+          return reply.status(409).type("text/plain; charset=utf-8").send(staleLegalDocuments.message);
+        }
+        return reply
+          .header(
+            "Content-Security-Policy",
+            "default-src 'none'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+          )
+          .type("text/html; charset=utf-8")
+          .send(html);
+      }
+    );
+  }
+
+  app.get("/account/legal-acceptances", { preHandler: authenticateRequest }, async (request, reply) => {
+    const userId = request.authenticatedUser?.id;
+    if (!userId) return reply.status(401).send({ message: "Se requiere autenticación." });
+    return withUserTransaction(userId, loadCurrentLegalStatus);
+  });
+
+  app.post("/account/legal-acceptances", { preHandler: authenticateRequest }, async (request, reply) => {
+    const userId = request.authenticatedUser?.id;
+    if (!userId) return reply.status(401).send({ message: "Se requiere autenticación." });
+
+    const parsed = accountLegalConfirmations.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ message: "Selecciona los documentos que quieres confirmar." });
+    }
+    if (!hasCurrentLegalVersions(parsed.data)) {
+      return reply.status(409).send(staleLegalDocuments);
+    }
+
+    const status = await withUserTransaction(userId, async (client) => {
+      const account = await client.query(
+        `SELECT id FROM app_auth.users
+         WHERE id = app.current_user_id() AND deleted_at IS NULL
+         FOR UPDATE`
+      );
+      if (!account.rows[0]) return null;
+
+      await recordLegalConfirmations(client, parsed.data, "account");
+      if (parsed.data.terms) {
+        await client.query(
+          `UPDATE public.profiles SET terms_accepted = true
+           WHERE id = app.current_user_id() AND terms_accepted IS DISTINCT FROM true`
+        );
+      }
+      return loadCurrentLegalStatus(client);
+    });
+
+    return status ?? reply.status(404).send({ message: "No se encontró la cuenta." });
+  });
 
   // Exportación de datos (acceso y portabilidad). Incluye un índice de los
   // documentos y fotos del usuario con enlaces firmados de 24 horas.
@@ -218,10 +271,16 @@ export async function registerAccountLegalRoutes(
 
       try {
         const scope = await withUserTransaction(userId, async (client) => {
-          const result = await client.query<{ scope: AccountDeletionScope }>(
-            `SELECT private.account_deletion_preview() AS scope`
+          const result = await client.query<{ scope: AccountDeletionScope; legalAcceptances: number }>(
+            `SELECT private.account_deletion_preview() AS scope,
+                    (SELECT count(*)::integer FROM app_auth.legal_acceptances
+                     WHERE user_id = app.current_user_id()) AS "legalAcceptances"`
           );
-          return result.rows[0]?.scope;
+          const row = result.rows[0];
+          if (row?.scope && row.legalAcceptances > 0) {
+            row.scope.toDelete.legalAcceptances = row.legalAcceptances;
+          }
+          return row?.scope;
         });
 
         if (!scope) {

@@ -115,6 +115,11 @@ describe("Eliminación de cuenta (migración 045)", () => {
     soloContractorId = await createActiveUser(`del_solo_${suffix}@example.com`, "contractor");
     blockedOwnerId = await createActiveUser(`del_blocked_${suffix}@example.com`, "contractor");
     const memberId = await createActiveUser(`del_member_${suffix}@example.com`, "contractor");
+    await adminPool.query(
+      `INSERT INTO app_auth.legal_acceptances (user_id, document_type, document_version, document_updated_at, source)
+       VALUES ($1, 'terms', $2, '2026-11-15', 'registration')`,
+      [clientId, "1".repeat(64)]
+    );
 
     teamCompanyId = await createCompany(`Equipo ${suffix}`, ownerId);
     await addMember(teamCompanyId, soloContractorId, "estimator");
@@ -261,6 +266,7 @@ describe("Eliminación de cuenta (migración 045)", () => {
          (SELECT row_to_json(u) FROM (SELECT email, password_hash, deleted_at FROM app_auth.users WHERE id = $1) u) AS account,
          (SELECT row_to_json(p) FROM (SELECT full_name, phone, active, registration_ip, doc_id_url FROM public.profiles WHERE id = $1) p) AS profile,
          (SELECT count(*)::int FROM public.job_requests WHERE id = $2) AS requests,
+         (SELECT count(*)::int FROM app_auth.legal_acceptances WHERE user_id = $1) AS legal_acceptances,
          (SELECT count(*)::int FROM public.job_request_details WHERE request_id = $2) AS addresses,
          (SELECT user_id FROM public.clients WHERE id = $3) AS client_link,
          (SELECT count(*)::int FROM public.invoices WHERE client_id = $3) AS invoices,
@@ -273,6 +279,7 @@ describe("Eliminación de cuenta (migración 045)", () => {
     expect(row.account.email).toBeNull();
     expect(row.account.password_hash).toBeNull();
     expect(row.account.deleted_at).not.toBeNull();
+    expect(row.legal_acceptances).toBe(0);
     expect(row.profile).toEqual({
       full_name: null,
       phone: null,

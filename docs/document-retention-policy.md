@@ -11,6 +11,7 @@ Los datos se conservarán únicamente durante el tiempo necesario para la finali
 | Categoría | Conservación | Acción posterior |
 |---|---|---|
 | Cuenta y perfil | Mientras la cuenta esté activa | Anonimización, desactivación o eliminación |
+| Constancias de Términos y lectura de Privacidad | Durante la vigencia de la cuenta | Eliminación junto con la cuenta |
 | Credenciales y sesiones | Mientras sean necesarias para autenticación y seguridad | Revocación e invalidación |
 | Documentos personales | Mientras sean necesarios para la finalidad informada | Eliminación segura mediante cola con reintentos |
 | Datos comerciales y de proyectos | Mientras exista la relación y durante el plazo justificable posterior | Restricción, anonimización o eliminación |
@@ -29,7 +30,7 @@ Cuando el usuario confirma **Eliminar mi cuenta** (`DELETE /account`), la funci�
 
 | Acción | Datos |
 |---|---|
-| **Se elimina** | Peticiones de trabajo publicadas (con dirección exacta, fotos y conversaciones); notificaciones; tokens push; precios personales y región de precios; aportes de precio pendientes; solicitudes de vinculación pendientes; invitaciones pendientes a su correo |
+| **Se elimina** | Constancias legales; peticiones de trabajo publicadas (con dirección exacta, fotos y conversaciones); notificaciones; tokens push; precios personales y región de precios; aportes de precio pendientes; solicitudes de vinculación pendientes; invitaciones pendientes a su correo |
 | **Se eliminan los archivos** (cola durable con reintentos) | Documentos personales (`profile-documents/`), foto de perfil y logo del perfil (`profile-media/`), fotos de peticiones y de mensajes; y, si la empresa se cierra, su logo y sus fotos de obra |
 | **Se anonimiza** | Perfil (nombre, teléfono, ubicación, cédula, RUC, IP de registro, datos profesionales), correo, contraseña, identidades, tokens y sesiones (sin IP ni dispositivo) |
 | **Se termina** | Membresías en empresas que siguen operando y vínculo de portal de cliente (`clients.user_id`) |
@@ -51,7 +52,7 @@ Cada eliminación deja una constancia sin datos personales en `private.account_d
 
 ## 3. Exportación y portabilidad
 
-El usuario puede descargar una copia JSON de sus datos en cualquier momento (`GET /account/export`; en el teléfono, `POST /account/export/link` abre una descarga de 10 minutos en el navegador). El archivo incluye cuenta, perfil, sesiones, empresas, datos comerciales, peticiones de trabajo y conversaciones, solicitudes de vinculación y de factura, aportes de precio y un índice `files` con enlaces firmados de 24 horas a sus documentos y fotos. No incluye contraseñas, tokens, códigos de confirmación ni rutas internas del almacenamiento.
+El usuario puede descargar una copia JSON de sus datos (`GET /account/export`; en el teléfono, `POST /account/export/link` abre una descarga de 10 minutos en el navegador). El archivo incluye cuenta, perfil, sesiones, constancias legales, empresas, datos comerciales, peticiones de trabajo y conversaciones, solicitudes de vinculación y de factura, aportes de precio y un índice `files` con enlaces firmados de 24 horas a sus documentos y fotos. No incluye contraseñas, tokens, códigos de confirmación ni rutas internas del almacenamiento.
 
 También puede presentar una solicitud formal de acceso o portabilidad a **privacidad@leurettech.com**.
 
@@ -76,5 +77,7 @@ El acceso a información retenida queda limitado a personal o procesos autorizad
 ## 6. Revisión
 
 Esta política se revisará cuando cambie la legislación, los proveedores, la arquitectura de almacenamiento, el proceso de eliminación o los plazos aplicables.
+
+Las fuentes de Términos y Privacidad son `docs/terms-of-service.md` y `docs/privacy-policy.md`. Al editar una fuente se actualiza su fecha y se ejecuta `npm run legal:generate`. La huella SHA-256 permite identificar en el historial del repositorio el texto de cada versión publicada.
 
 **Contacto de privacidad:** privacidad@leurettech.com

@@ -1,3 +1,6 @@
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
@@ -116,11 +119,12 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.title).toBe("Términos y Condiciones de Uso");
-    expect(body.updatedAt).toBe("2026-11-10");
+    expect(body.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(typeof body.content).toBe("string");
+    expect(body.version).toBe(createHash("sha256").update(body.content).digest("hex"));
     expect(body.content).toContain("LEURET TECH");
     expect(body.content).toContain("Leuret App");
-    expect(body.content).toContain("Decreto Ejecutivo 285 de 28 de mayo de 2021");
+    expect(body.content).toContain("Decreto Ejecutivo 285 de 18 de mayo de 2021");
     expect(body.content).not.toContain("Documentación en actualización.");
     await app.close();
   });
@@ -135,11 +139,38 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.title).toBe("Política de Privacidad");
-    expect(body.updatedAt).toBe("2026-11-10");
+    expect(body.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(typeof body.content).toBe("string");
+    expect(body.version).toBe(createHash("sha256").update(body.content).digest("hex"));
     expect(body.content).toContain("LEURET TECH");
     expect(body.content).toContain("Leuret App");
     expect(body.content).not.toContain("Documentación en actualización.");
+    await app.close();
+  });
+
+  test("the published HTML and API bundle match the legal source documents", () => {
+    const script = fileURLToPath(new URL("../../../../scripts/generate-legal-documents.mjs", import.meta.url));
+    expect(() => execFileSync(process.execPath, [script, "--check"])).not.toThrow();
+  });
+
+  test.each(["terms", "privacy"])("GET /legal/%s serves HTML for the exact version", async (type) => {
+    const app = await buildApp();
+    const { version } = (await app.inject("/legal/" + type)).json();
+    const response = await app.inject("/legal/" + type + "/version/" + version);
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/html");
+    expect(response.payload).toContain('name="legal-document-version" content="' + version + '"');
+    expect(response.payload).toContain("LEURET TECH");
+    const stale = await app.inject("/legal/" + type + "/version/" + "0".repeat(64));
+    expect(stale.statusCode).toBe(409);
+    await app.close();
+  });
+
+  test("legal confirmation status and changes require authentication", async () => {
+    const app = await buildApp();
+    expect((await app.inject("/account/legal-acceptances")).statusCode).toBe(401);
+    expect((await app.inject({ method: "POST", url: "/account/legal-acceptances" })).statusCode).toBe(401);
+    expect(accountMocks.transactionUserIds).toEqual([]);
     await app.close();
   });
 
@@ -186,6 +217,18 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
         };
       }
 
+      if (/FROM app_auth\.legal_acceptances/i.test(sql)) {
+        return {
+          rows: [{
+            documentType: "terms",
+            version: "1".repeat(64),
+            updatedAt: "2026-11-15",
+            confirmedAt: "2026-11-15T12:00:00.000Z",
+            source: "registration"
+          }]
+        };
+      }
+
       if (/FROM public\.projects AS project/i.test(sql)) {
         return {
           rows: [{ id: "project-1", created_by: USER_ID }]
@@ -218,6 +261,13 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
       email: "persona@example.com"
     });
     expect(body.profile.full_name).toBe("Persona Ejemplo");
+    expect(body.legalAcceptances).toEqual([{
+      documentType: "terms",
+      version: "1".repeat(64),
+      updatedAt: "2026-11-15",
+      confirmedAt: "2026-11-15T12:00:00.000Z",
+      source: "registration"
+    }]);
     expect(body.commercial.projects).toEqual([
       { id: "project-1", created_by: USER_ID }
     ]);
