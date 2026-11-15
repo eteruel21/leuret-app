@@ -11,7 +11,14 @@ import { LeuretLoading } from "@/components/LeuretLoading";
 import { MotionPressable } from "@/components/MotionPressable";
 import { colors, radius } from "@/constants/theme";
 import { API_URL } from "@/services/api";
-import { getClientProject, type ClientActivity, type ClientProjectDetail } from "@/services/client-portal-service";
+import {
+  getClientProject,
+  requestProjectInvoice,
+  type ClientActivity,
+  type ClientProjectDetail,
+} from "@/services/client-portal-service";
+import { confirmAction } from "@/utils/alert";
+import { clientInvoiceFooter } from "@/utils/invoice-requests";
 import { getProjectStatusLabel } from "@/types/project";
 import {
   clientBudgetState,
@@ -47,6 +54,8 @@ export default function ClientProjectDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("progress");
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [requesting, setRequesting] = useState(false);
+  const [requestMessage, setRequestMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
   const load = useCallback(
     async (showRefresh = false) => {
@@ -67,6 +76,32 @@ export default function ClientProjectDetailScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function requestInvoice() {
+    if (!project || requesting) return;
+    const confirmed = await confirmAction({
+      title: "Solicitar factura",
+      message: `Le pediremos a ${project.company.name} la factura de «${project.name}».`,
+      confirmText: "Solicitar",
+    });
+    if (!confirmed) return;
+
+    setRequesting(true);
+    setRequestMessage(null);
+    const result = await requestProjectInvoice(project.id);
+    setRequesting(false);
+    if (result.error) {
+      setRequestMessage({ tone: "error", text: result.error });
+      return;
+    }
+    setRequestMessage({
+      tone: "success",
+      text: result.alreadyRequested
+        ? "Ya habías solicitado la factura. Te avisaremos cuando esté lista."
+        : `Listo: ${project.company.name} recibió tu solicitud. Te avisaremos cuando la factura esté lista.`,
+    });
+    void load();
+  }
 
   if (loading) return <LeuretLoading message="Cargando proyecto…" fullScreen />;
 
@@ -90,6 +125,7 @@ export default function ClientProjectDetailScreen() {
   const past = project.activities.filter((activity) => !upcoming.includes(activity)).reverse();
   const endDate = project.actual_end_date ?? project.estimated_end_date;
   const viewerPhoto = viewerIndex !== null ? project.photos[viewerIndex] : null;
+  const footer = clientInvoiceFooter(project);
 
   const tabs: { value: Tab; label: string; count: number }[] = [
     { value: "progress", label: "Avance", count: project.progress_history.length },
@@ -295,6 +331,45 @@ export default function ClientProjectDetailScreen() {
         </View>
       </ScrollView>
 
+      {footer ? (
+        <View style={styles.footer}>
+          {requestMessage ? (
+            <Text style={[styles.footerMessage, requestMessage.tone === "error" && styles.footerError]}>
+              {requestMessage.text}
+            </Text>
+          ) : null}
+          {footer.kind === "request" ? (
+            <MotionPressable
+              accessibilityRole="button"
+              accessibilityLabel="Solicitar factura"
+              disabled={requesting}
+              onPress={() => void requestInvoice()}
+              style={[styles.footerButton, requesting && styles.footerButtonBusy]}
+            >
+              <Ionicons name="receipt-outline" size={20} color={colors.textInverse} />
+              <Text style={styles.footerButtonText}>{requesting ? "Enviando…" : "Solicitar factura"}</Text>
+            </MotionPressable>
+          ) : footer.kind === "pending" ? (
+            <View style={styles.footerPending} accessibilityRole="text">
+              <Ionicons name="time-outline" size={20} color={colors.primary} />
+              <View style={styles.flex}>
+                <Text style={styles.footerPendingTitle}>Factura solicitada</Text>
+                <Text style={styles.footerPendingText}>{project.company.name} la está preparando.</Text>
+              </View>
+            </View>
+          ) : (
+            <MotionPressable
+              accessibilityRole="button"
+              onPress={() => router.push({ pathname: "/cliente-facturas/[id]", params: { id: footer.invoiceId } } as Href)}
+              style={[styles.footerButton, styles.footerButtonSecondary]}
+            >
+              <Ionicons name="receipt-outline" size={20} color={colors.primary} />
+              <Text style={[styles.footerButtonText, styles.footerButtonTextSecondary]}>Ver factura</Text>
+            </MotionPressable>
+          )}
+        </View>
+      ) : null}
+
       <Modal
         visible={viewerPhoto !== null}
         transparent
@@ -441,4 +516,40 @@ const styles = StyleSheet.create({
   viewerButton: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.12)" },
   viewerCount: { color: colors.textInverse, fontSize: 13, fontWeight: "800" },
   disabled: { opacity: 0.3 },
+  flex: { flex: 1, minWidth: 0 },
+  footer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 12,
+    gap: 8,
+    borderTopWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  footerMessage: { color: colors.success, fontSize: 13, fontWeight: "700", textAlign: "center" },
+  footerError: { color: colors.danger },
+  footerButton: {
+    minHeight: 52,
+    borderRadius: radius.md,
+    backgroundColor: colors.accent,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  footerButtonBusy: { opacity: 0.7 },
+  footerButtonSecondary: { backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.primary },
+  footerButtonText: { color: colors.textInverse, fontSize: 16, fontWeight: "900" },
+  footerButtonTextSecondary: { color: colors.primary },
+  footerPending: {
+    minHeight: 52,
+    paddingHorizontal: 14,
+    borderRadius: radius.md,
+    backgroundColor: colors.steelSoft,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  footerPendingTitle: { color: colors.primary, fontWeight: "900" },
+  footerPendingText: { color: colors.textSecondary, fontSize: 12 },
 });

@@ -540,3 +540,99 @@ export async function cancelInvoiceCreditNoteRepo(
     };
   });
 }
+
+/**
+ * Crea la factura del presupuesto aprobado y la emite en una sola transacción:
+ * si algo falla no queda un borrador a medias. Si el cliente había pedido la
+ * factura, el disparador de la migración 044 marca la solicitud como atendida.
+ */
+export async function createAndIssueInvoiceRepo(userId: string, input: CreateInvoiceInput) {
+  return withUserTransaction(userId, async (client) => {
+    const created = await client.query<{ id: string | null }>(
+      `SELECT public.create_invoice($1, $2, $3, $4::date, $5) AS id`,
+      [input.companyId, input.clientId, input.budgetId, input.dueDate ?? null, input.notes ?? null]
+    );
+    const invoiceId = created.rows[0]?.id;
+    if (!invoiceId) return null;
+
+    const issued = await client.query<{ id: string | null }>(
+      `SELECT public.issue_invoice($1, $2) AS id`,
+      [invoiceId, input.companyId]
+    );
+    const issuedId = issued.rows[0]?.id;
+    if (!issuedId) return null;
+
+    const result = await client.query(
+      `
+        ${invoiceDetailsSql}
+        WHERE invoice.id = $1 AND invoice.company_id = $2
+        LIMIT 1
+      `,
+      [issuedId, input.companyId]
+    );
+    return result.rows[0] ?? null;
+  });
+}
+
+export type InvoiceRequestRow = {
+  id: string;
+  company_id: string;
+  project_id: string;
+  budget_id: string;
+  client_id: string;
+  status: "pending" | "fulfilled" | "cancelled";
+  note: string | null;
+  invoice_id: string | null;
+  created_at: string;
+  fulfilled_at: string | null;
+  client_name: string;
+  project_name: string;
+  budget_number: string;
+  budget_total: number;
+  currency_code: string;
+};
+
+/** Solicitudes de factura de la empresa (las pendientes primero). */
+export async function findInvoiceRequestsRepo(
+  userId: string,
+  companyId: string,
+  status: "pending" | "all"
+) {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query<InvoiceRequestRow>(
+      `
+        SELECT
+          request.id,
+          request.company_id,
+          request.project_id,
+          request.budget_id,
+          request.client_id,
+          request.status,
+          request.note,
+          request.invoice_id,
+          request.created_at,
+          request.fulfilled_at,
+          COALESCE(
+            NULLIF(customer.business_name, ''),
+            NULLIF(btrim(concat_ws(' ', customer.first_name, customer.last_name)), ''),
+            'Cliente'
+          ) AS client_name,
+          project.name AS project_name,
+          budget.budget_number,
+          budget.total::double precision AS budget_total,
+          budget.currency_code
+        FROM public.invoice_requests AS request
+        JOIN public.clients AS customer ON customer.id = request.client_id
+        JOIN public.projects AS project ON project.id = request.project_id
+        JOIN public.budgets AS budget ON budget.id = request.budget_id
+        WHERE request.company_id = $1
+          AND public.is_company_member($1)
+          AND ($2::text = 'all' OR request.status = 'pending')
+        ORDER BY (request.status = 'pending') DESC, request.created_at DESC
+        LIMIT 100
+      `,
+      [companyId, status]
+    );
+    return result.rows;
+  });
+}

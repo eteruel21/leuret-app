@@ -158,6 +158,10 @@ export function notificationRoute(
       const budgetId = id(data.budgetId);
       return budgetId && !isClient ? { pathname: "/presupuestos/[id]", params: { id: budgetId } } : null;
     }
+    case "invoice.requested": {
+      const budgetId = id(data.budgetId);
+      return budgetId && !isClient ? { pathname: "/presupuestos/[id]", params: { id: budgetId } } : null;
+    }
     case "invoice.issued":
     case "invoice.payment_registered":
     case "invoice.payment_reminder": {

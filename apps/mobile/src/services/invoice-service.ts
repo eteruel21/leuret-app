@@ -109,6 +109,10 @@ export async function getInvoiceByBudgetId(
   }
 }
 
+/**
+ * Genera la factura de un presupuesto aprobado: la API la crea y la emite en
+ * una sola transacción (no quedan borradores a medias si algo falla).
+ */
 export async function createInvoiceFromBudget(
   input: {
     companyId: string;
@@ -122,73 +126,56 @@ export async function createInvoiceFromBudget(
   error: string | null;
 }> {
   try {
-    const existing =
-      await getInvoiceByBudgetId(
-        input.companyId,
-        input.budgetId
-      );
+    const response = await authenticatedRequest<{ invoice: Invoice }>(
+      "/invoices/from-budget",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          companyId: input.companyId,
+          budgetId: input.budgetId,
+          clientId: input.clientId,
+          dueDate: input.dueDate ?? null,
+          notes: input.notes?.trim() || null
+        })
+      }
+    );
 
-    if (existing.error) {
-      return {
-        invoice: null,
-        error: existing.error
-      };
-    }
-
-    if (existing.invoice) {
-      return {
-        invoice: null,
-        error:
-          "Ya existe una factura para este presupuesto."
-      };
-    }
-
-    const draftResponse =
-      await authenticatedRequest<{
-        invoice: Invoice;
-      }>(
-        "/invoices",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            companyId:
-              input.companyId,
-            budgetId:
-              input.budgetId,
-            clientId:
-              input.clientId,
-            dueDate:
-              input.dueDate ?? null,
-            notes:
-              input.notes?.trim() ||
-              null
-          })
-        }
-      );
-
-    const issueResponse =
-      await authenticatedRequest<{
-        invoice: Invoice;
-      }>(
-        `/invoices/${draftResponse.invoice.id}/issue`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            companyId: input.companyId
-          })
-        }
-      );
-
-    return {
-      invoice:
-        issueResponse.invoice,
-      error: null
-    };
+    return { invoice: response.invoice, error: null };
   } catch (error) {
-    return {
-      invoice: null,
-      error: errorMessage(error)
-    };
+    return { invoice: null, error: errorMessage(error) };
+  }
+}
+
+export type InvoiceRequest = {
+  id: string;
+  company_id: string;
+  project_id: string;
+  budget_id: string;
+  client_id: string;
+  status: "pending" | "fulfilled" | "cancelled";
+  note: string | null;
+  invoice_id: string | null;
+  created_at: string;
+  fulfilled_at: string | null;
+  client_name: string;
+  project_name: string;
+  budget_number: string;
+  budget_total: number;
+  currency_code: string;
+};
+
+/** Solicitudes de factura de los clientes (pendientes por defecto). */
+export async function listInvoiceRequests(
+  companyId: string,
+  status: "pending" | "all" = "pending"
+): Promise<{ requests: InvoiceRequest[]; error: string | null }> {
+  try {
+    const response = await authenticatedRequest<{ requests: InvoiceRequest[] }>(
+      `/companies/${encodeURIComponent(companyId)}/invoice-requests?status=${status}`
+    );
+    return { requests: response.requests, error: null };
+  } catch (error) {
+    return { requests: [], error: errorMessage(error) };
   }
 }
 

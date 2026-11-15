@@ -114,6 +114,15 @@ export type ClientProjectDetail = {
   created_at: string;
   updated_at: string;
   company: ClientCompanyInfo;
+  /** Última solicitud de factura de la obra (migración 044). */
+  invoice_request?: {
+    id: string;
+    status: "pending" | "fulfilled" | "cancelled";
+    created_at: string;
+    invoice_id: string | null;
+  } | null;
+  /** La obra está terminada y tiene un presupuesto aprobado sin factura ni solicitud. */
+  can_request_invoice?: boolean;
   progress_history: {
     id: string;
     progress_percentage: number;
@@ -193,5 +202,25 @@ export async function getClientProject(
     return { project: response.project, error: null };
   } catch (error) {
     return { project: null, error: errorMessage(error) };
+  }
+}
+
+/** El cliente pide la factura de una obra terminada. */
+export async function requestProjectInvoice(
+  projectId: string,
+  note?: string | null,
+): Promise<{ alreadyRequested: boolean; error: string | null }> {
+  try {
+    const response = await authenticatedRequest<{ request: { already_requested: boolean } }>(
+      `/client/projects/${encodeURIComponent(projectId)}/invoice-request`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: note?.trim() || null }),
+      },
+    );
+    return { alreadyRequested: response.request.already_requested, error: null };
+  } catch (error) {
+    return { alreadyRequested: false, error: errorMessage(error) };
   }
 }

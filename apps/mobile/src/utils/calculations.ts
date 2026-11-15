@@ -981,6 +981,16 @@ export type ElectricalInput = {
   conduitPieceLength: number;
   lightingPointsPerCircuit: number;
   outletPointsPerCircuit: number;
+  /**
+   * Qué incluye el trabajo. Si no se indica, se incluye todo (instalación
+   * nueva). Un cambio de tomacorrientes, por ejemplo, va sin cableado, cajas
+   * ni breakers: solo las piezas y la mano de obra.
+   */
+  includeWiring?: boolean;
+  includeBoxes?: boolean;
+  includeBreakers?: boolean;
+  includeSupplies?: boolean;
+  includeLabor?: boolean;
 };
 
 export type ElectricalPrices = {
@@ -989,6 +999,8 @@ export type ElectricalPrices = {
   conduitPiece: number;
   boxUnit: number;
   outletUnit: number;
+  /** Tomacorriente de 240 V. Si falta, se usa el precio del tomacorriente estándar. */
+  dedicatedOutletUnit?: number;
   switchUnit: number;
   breakerUnit: number;
   supplies: number;
@@ -1022,6 +1034,8 @@ export type ElectricalResult = {
   conduitCost: number;
   boxCost: number;
   outletCost: number;
+  /** Parte de `outletCost` que corresponde a los tomacorrientes de 240 V. */
+  dedicatedOutletCost: number;
   switchCost: number;
   breakerCost: number;
   suppliesCost: number;
@@ -1059,6 +1073,7 @@ function emptyElectricalResult(): ElectricalResult {
     conduitCost: 0,
     boxCost: 0,
     outletCost: 0,
+    dedicatedOutletCost: 0,
     switchCost: 0,
     breakerCost: 0,
     suppliesCost: 0,
@@ -1074,34 +1089,27 @@ export function calculateElectrical(
   input: ElectricalInput,
   prices: ElectricalPrices,
 ): ElectricalResult {
-  const lightPoints = Math.round(
-    sanitizeNumber(input.lightPoints),
-  );
-  const switchPoints = Math.round(
-    sanitizeNumber(input.switchPoints),
-  );
-  const outletPoints = Math.round(
-    sanitizeNumber(input.outletPoints),
-  );
-  const dedicatedPoints = Math.round(
-    sanitizeNumber(input.dedicatedPoints),
-  );
+  const lightPoints = Math.round(sanitizeNumber(input.lightPoints));
+  const switchPoints = Math.round(sanitizeNumber(input.switchPoints));
+  const outletPoints = Math.round(sanitizeNumber(input.outletPoints));
+  const dedicatedPoints = Math.round(sanitizeNumber(input.dedicatedPoints));
 
-  const standardPoints =
-    lightPoints + switchPoints + outletPoints;
+  const includeWiring = input.includeWiring !== false;
+  const includeBoxes = input.includeBoxes !== false;
+  const includeBreakers = input.includeBreakers !== false;
+  const includeSupplies = input.includeSupplies !== false;
+  const includeLabor = input.includeLabor !== false;
+
+  const standardPoints = lightPoints + switchPoints + outletPoints;
   const totalPoints = standardPoints + dedicatedPoints;
-  const averageRouteLength =
-    sanitizeNumber(input.averageRouteLength);
-  const cableRollLength =
-    sanitizeNumber(input.cableRollLength);
-  const conduitPieceLength =
-    sanitizeNumber(input.conduitPieceLength);
+  const averageRouteLength = sanitizeNumber(input.averageRouteLength);
+  const cableRollLength = sanitizeNumber(input.cableRollLength);
+  const conduitPieceLength = sanitizeNumber(input.conduitPieceLength);
 
+  // Las longitudes solo hacen falta cuando el trabajo incluye cableado.
   if (
     !totalPoints ||
-    !averageRouteLength ||
-    !cableRollLength ||
-    !conduitPieceLength
+    (includeWiring && (!averageRouteLength || !cableRollLength || !conduitPieceLength))
   ) {
     return {
       ...emptyElectricalResult(),
@@ -1114,96 +1122,63 @@ export function calculateElectrical(
     };
   }
 
-  const wasteFactor =
-    1 + sanitizeNumber(input.wastePercentage) / 100;
-  const lightingConductors = Math.max(
-    Math.round(sanitizeNumber(input.lightingConductors)),
-    1,
-  );
-  const powerConductors = Math.max(
-    Math.round(sanitizeNumber(input.powerConductors)),
-    1,
-  );
+  const wasteFactor = 1 + sanitizeNumber(input.wastePercentage) / 100;
+  const lightingConductors = Math.max(Math.round(sanitizeNumber(input.lightingConductors)), 1);
+  const powerConductors = Math.max(Math.round(sanitizeNumber(input.powerConductors)), 1);
 
-  const routeMeters =
-    totalPoints * averageRouteLength;
-  const lightingRouteMeters =
-    (lightPoints + switchPoints) * averageRouteLength;
-  const powerRouteMeters =
-    (outletPoints + dedicatedPoints) *
-    averageRouteLength;
+  let routeMeters = 0;
+  let lightingCableMeters = 0;
+  let lightingCableRollsExact = 0;
+  let lightingCableRollsToBuy = 0;
+  let powerCableMeters = 0;
+  let powerCableRollsExact = 0;
+  let powerCableRollsToBuy = 0;
+  let conduitMeters = 0;
+  let conduitPieces = 0;
 
-  const lightingCableMeters =
-    lightingRouteMeters *
-    lightingConductors *
-    wasteFactor;
-  const lightingCableRollsExact =
-    lightingCableMeters / cableRollLength;
-  const lightingCableRollsToBuy =
-    Math.ceil(lightingCableRollsExact);
+  if (includeWiring) {
+    routeMeters = totalPoints * averageRouteLength;
+    const lightingRouteMeters = (lightPoints + switchPoints) * averageRouteLength;
+    const powerRouteMeters = (outletPoints + dedicatedPoints) * averageRouteLength;
 
-  const powerCableMeters =
-    powerRouteMeters *
-    powerConductors *
-    wasteFactor;
-  const powerCableRollsExact =
-    powerCableMeters / cableRollLength;
-  const powerCableRollsToBuy =
-    Math.ceil(powerCableRollsExact);
+    lightingCableMeters = lightingRouteMeters * lightingConductors * wasteFactor;
+    lightingCableRollsExact = lightingCableMeters / cableRollLength;
+    lightingCableRollsToBuy = Math.ceil(lightingCableRollsExact);
 
-  const conduitMeters = routeMeters * wasteFactor;
-  const conduitPieces = Math.ceil(
-    conduitMeters / conduitPieceLength,
-  );
-  const boxes = totalPoints;
+    powerCableMeters = powerRouteMeters * powerConductors * wasteFactor;
+    powerCableRollsExact = powerCableMeters / cableRollLength;
+    powerCableRollsToBuy = Math.ceil(powerCableRollsExact);
 
-  const lightingPointsPerCircuit = Math.max(
-    Math.round(
-      sanitizeNumber(input.lightingPointsPerCircuit),
-    ),
-    1,
-  );
-  const outletPointsPerCircuit = Math.max(
-    Math.round(
-      sanitizeNumber(input.outletPointsPerCircuit),
-    ),
-    1,
-  );
+    conduitMeters = routeMeters * wasteFactor;
+    conduitPieces = Math.ceil(conduitMeters / conduitPieceLength);
+  }
 
-  const lightingCircuits = lightPoints
+  const boxes = includeBoxes ? totalPoints : 0;
+
+  const lightingPointsPerCircuit = Math.max(Math.round(sanitizeNumber(input.lightingPointsPerCircuit)), 1);
+  const outletPointsPerCircuit = Math.max(Math.round(sanitizeNumber(input.outletPointsPerCircuit)), 1);
+
+  const lightingCircuits = includeBreakers && lightPoints
     ? Math.ceil(lightPoints / lightingPointsPerCircuit)
     : 0;
-  const outletCircuits = outletPoints
+  const outletCircuits = includeBreakers && outletPoints
     ? Math.ceil(outletPoints / outletPointsPerCircuit)
     : 0;
-  const dedicatedCircuits = dedicatedPoints;
-  const totalBreakers =
-    lightingCircuits +
-    outletCircuits +
-    dedicatedCircuits;
+  const dedicatedCircuits = includeBreakers ? dedicatedPoints : 0;
+  const totalBreakers = lightingCircuits + outletCircuits + dedicatedCircuits;
 
-  const lightingCableCost =
-    lightingCableRollsToBuy *
-    sanitizeNumber(prices.lightingCableRoll);
-  const powerCableCost =
-    powerCableRollsToBuy *
-    sanitizeNumber(prices.powerCableRoll);
-  const conduitCost =
-    conduitPieces *
-    sanitizeNumber(prices.conduitPiece);
-  const boxCost =
-    boxes * sanitizeNumber(prices.boxUnit);
-  const outletCost =
-    (outletPoints + dedicatedPoints) *
-    sanitizeNumber(prices.outletUnit);
-  const switchCost =
-    switchPoints *
-    sanitizeNumber(prices.switchUnit);
-  const breakerCost =
-    totalBreakers *
-    sanitizeNumber(prices.breakerUnit);
-  const suppliesCost =
-    sanitizeNumber(prices.supplies);
+  const outletPrice = sanitizeNumber(prices.outletUnit);
+  const dedicatedOutletPrice = sanitizeNumber(prices.dedicatedOutletUnit ?? 0) || outletPrice;
+
+  const lightingCableCost = lightingCableRollsToBuy * sanitizeNumber(prices.lightingCableRoll);
+  const powerCableCost = powerCableRollsToBuy * sanitizeNumber(prices.powerCableRoll);
+  const conduitCost = conduitPieces * sanitizeNumber(prices.conduitPiece);
+  const boxCost = boxes * sanitizeNumber(prices.boxUnit);
+  const dedicatedOutletCost = dedicatedPoints * dedicatedOutletPrice;
+  const outletCost = outletPoints * outletPrice + dedicatedOutletCost;
+  const switchCost = switchPoints * sanitizeNumber(prices.switchUnit);
+  const breakerCost = totalBreakers * sanitizeNumber(prices.breakerUnit);
+  const suppliesCost = includeSupplies ? sanitizeNumber(prices.supplies) : 0;
 
   const materialsCost =
     lightingCableCost +
@@ -1215,14 +1190,9 @@ export function calculateElectrical(
     breakerCost +
     suppliesCost;
 
-  const standardLaborCost =
-    standardPoints *
-    sanitizeNumber(prices.laborStandardPoint);
-  const dedicatedLaborCost =
-    dedicatedPoints *
-    sanitizeNumber(prices.laborDedicatedPoint);
-  const laborCost =
-    standardLaborCost + dedicatedLaborCost;
+  const standardLaborCost = includeLabor ? standardPoints * sanitizeNumber(prices.laborStandardPoint) : 0;
+  const dedicatedLaborCost = includeLabor ? dedicatedPoints * sanitizeNumber(prices.laborDedicatedPoint) : 0;
+  const laborCost = standardLaborCost + dedicatedLaborCost;
 
   return {
     lightPoints,
@@ -1250,6 +1220,7 @@ export function calculateElectrical(
     conduitCost,
     boxCost,
     outletCost,
+    dedicatedOutletCost,
     switchCost,
     breakerCost,
     suppliesCost,

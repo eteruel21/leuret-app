@@ -8,7 +8,13 @@ import {
   sendBudgetRepo,
   BudgetSendError
 } from "../../budgets/repository.js";
-import { createInvoiceRepo, issueInvoiceRepo, recordInvoicePaymentRepo } from "../../invoices/repository.js";
+import {
+  createAndIssueInvoiceRepo,
+  createInvoiceRepo,
+  findInvoiceRequestsRepo,
+  issueInvoiceRepo,
+  recordInvoicePaymentRepo
+} from "../../invoices/repository.js";
 import { updateProjectPhotoSharingRepo } from "../../storage/repository.js";
 import { findClientContractorProfile, findContractorClientProcesses } from "../../clients/processes.js";
 import {
@@ -16,7 +22,8 @@ import {
   findClientUpcomingActivitiesRepo,
   getClientInvoiceDetailRepo,
   getClientProjectDetailRepo,
-  getClientSummaryRepo
+  getClientSummaryRepo,
+  requestProjectInvoiceRepo
 } from "../repository.js";
 
 async function createActiveUser(email: string, role: "contractor" | "client") {
@@ -258,5 +265,58 @@ describe("Portal del cliente: visibilidad y aislamiento", () => {
     expect(contractorProfile?.processes.some((item) => item.id === draftBudgetId)).toBe(false);
     const companyProcesses = await findContractorClientProcesses(ownerId, companyId, clientId);
     expect(companyProcesses).toContainEqual(expect.objectContaining({ kind: "budget", id: draftBudgetId }));
+  });
+  it("el cliente pide la factura de la obra terminada y la empresa la genera", async () => {
+    await adminPool.query("SELECT set_config('app.user_id', $1, false)", [ownerId]);
+    const extraBudgetId = (
+      await adminPool.query<{ id: string }>(
+        `SELECT public.create_project_budget($1, $2, 'Pintura final') AS id`,
+        [companyId, projectId]
+      )
+    ).rows[0]!.id;
+    await adminPool.query(
+      `
+        INSERT INTO public.budget_items (company_id, budget_id, item_type, description, quantity, unit_cost, unit_price, discount_percentage, taxable)
+        VALUES ($1, $2, 'manual', 'Pintura', 1, 100, 150, 0, true)
+      `,
+      [companyId, extraBudgetId]
+    );
+    await sendBudgetRepo(ownerId, extraBudgetId, companyId, "2999-12-31");
+    await approveBudgetRepo(ownerId, extraBudgetId, companyId);
+
+    // Mientras la obra no termina, no se puede pedir.
+    await expect(requestProjectInvoiceRepo(clientUserId, projectId, null)).rejects.toMatchObject({ code: "55000" });
+    expect((await getClientProjectDetailRepo(clientUserId, projectId))?.can_request_invoice).toBe(false);
+
+    await adminPool.query("UPDATE public.projects SET status = 'completed' WHERE id = $1", [projectId]);
+    expect((await getClientProjectDetailRepo(clientUserId, projectId))?.can_request_invoice).toBe(true);
+
+    // Otro cliente no puede pedirla.
+    await expect(requestProjectInvoiceRepo(outsiderId, projectId, null)).rejects.toMatchObject({ code: "P0002" });
+
+    const requested = await requestProjectInvoiceRepo(clientUserId, projectId, "A nombre de Ana");
+    expect(requested).toMatchObject({ budget_id: extraBudgetId, company_id: companyId, already_requested: false });
+    expect(requested.recipient_ids).toEqual([ownerId]);
+    expect((await requestProjectInvoiceRepo(clientUserId, projectId, null)).already_requested).toBe(true);
+
+    const detail = await getClientProjectDetailRepo(clientUserId, projectId);
+    expect(detail?.can_request_invoice).toBe(false);
+    expect(detail?.invoice_request).toMatchObject({ id: requested.request_id, status: "pending" });
+
+    const pending = await findInvoiceRequestsRepo(ownerId, companyId, "pending");
+    expect(pending).toHaveLength(1);
+    expect(pending[0]).toMatchObject({ budget_id: extraBudgetId, note: "A nombre de Ana", client_name: "Ana Cliente" });
+    expect(await findInvoiceRequestsRepo(outsiderId, companyId, "pending")).toHaveLength(0);
+
+    // Generar la factura (crear y emitir) atiende la solicitud.
+    const invoice = await createAndIssueInvoiceRepo(ownerId, { companyId, clientId, budgetId: extraBudgetId });
+    expect(invoice?.status).toBe("issued");
+    expect(await findInvoiceRequestsRepo(ownerId, companyId, "pending")).toHaveLength(0);
+    const all = await findInvoiceRequestsRepo(ownerId, companyId, "all");
+    expect(all[0]).toMatchObject({ status: "fulfilled", invoice_id: invoice?.id });
+    expect((await getClientProjectDetailRepo(clientUserId, projectId))?.invoice_request).toMatchObject({ status: "fulfilled" });
+
+    // Ya no quedan presupuestos aprobados sin factura.
+    await expect(requestProjectInvoiceRepo(clientUserId, projectId, null)).rejects.toMatchObject({ code: "23505" });
   });
 });
