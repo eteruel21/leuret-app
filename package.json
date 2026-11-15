@@ -12,6 +12,8 @@
     "db:migrate:supabase": "node --env-file=database/.env.supabase database/scripts/migrate.mjs",
     "db:status:supabase": "node --env-file=database/.env.supabase database/scripts/migrate.mjs --status",
     "db:check:supabase": "node --env-file-if-exists=database/.env.supabase database/scripts/migrate.mjs --check",
+    "db:drift:supabase": "node --env-file=database/.env.supabase database/scripts/schema-drift.mjs",
+    "db:lint": "node --env-file-if-exists=database/.env database/scripts/schema-lint.mjs",
     "db:seed:supabase": "node --env-file=database/.env.supabase database/scripts/seed.mjs",
     "db:backup:local": "node --env-file=database/.env.supabase database/scripts/backup-supabase-to-local.mjs",
     "db:bootstrap": "node --env-file-if-exists=database/.env database/scripts/bootstrap.mjs",

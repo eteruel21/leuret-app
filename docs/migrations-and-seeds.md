@@ -81,6 +81,12 @@ database/
 
 ## 6. Reglas e Invariantes para Desarrolladores
 
+> [!NOTE]
+> El proceso completo (reglas de RLS e índices, cómo aplicar en producción,
+> verificación de deriva y reversión) está en
+> [`docs/database-change-process.md`](database-change-process.md). CI ejecuta
+> además `database/scripts/schema-lint.mjs` sobre cada PR.
+
 > [!IMPORTANT]
 > **REGLA DE INMUTABILIDAD**: NUNCA edites ni elimines un archivo `.sql` dentro de `database/migrations/` o `database/seeds/` que ya haya sido aplicado en algún entorno. 
 

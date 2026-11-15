@@ -13,6 +13,22 @@ jobs:
   deploy:
     name: Build & Deploy to Cloudflare
     runs-on: ubuntu-latest
+
+    # Base de referencia efímera (misma versión mayor que Supabase) para
+    # comparar el esquema de producción con lo que producen las migraciones.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
       VITE_API_URL: https://api.leurettech.com
       EXPO_PUBLIC_API_URL: https://api.leurettech.com
@@ -52,6 +68,24 @@ jobs:
         run: |
           test -n "$MIGRATOR_DATABASE_URL"
           npm run db:check:supabase
+
+      # Detecta cambios hechos a mano en producción (SQL Editor, panel de
+      # Supabase) que no están en ninguna migración: compara tablas, columnas,
+      # restricciones, índices, políticas RLS, funciones, disparadores y
+      # permisos de producción con una base construida desde cero con las
+      # migraciones de main. Solo lee el catálogo de producción.
+      - name: 5b. Block deployment when production schema drifts from migrations
+        env:
+          DATABASE_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          DATABASE_NAME: reference_leuret
+          CONTRACTOR_MIGRATOR_PASSWORD: reference_migrator_password
+          CONTRACTOR_API_PASSWORD: reference_api_password
+          PRODUCTION_MIGRATOR_DATABASE_URL: ${{ secrets.PRODUCTION_MIGRATOR_DATABASE_URL }}
+          REFERENCE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/reference_leuret
+        run: |
+          node database/scripts/bootstrap.mjs
+          MIGRATOR_DATABASE_URL="$REFERENCE_DATABASE_URL" node database/scripts/migrate.mjs > /dev/null
+          MIGRATOR_DATABASE_URL="$PRODUCTION_MIGRATOR_DATABASE_URL" node database/scripts/schema-drift.mjs
 
       - name: 6. Typecheck all workspaces
         run: npm run typecheck

@@ -460,3 +460,80 @@ export async function withAdvisoryLock(client, key, callback) {
     await client.query("SELECT pg_advisory_unlock(hashtext($1))", [key]);
   }
 }
+
+/**
+ * Compara dos huellas de esquema (filas { kind, name, hash } de
+ * schema-fingerprint.sql). `reference` es la base construida con las
+ * migraciones; `actual`, la base que se revisa (producción).
+ */
+export function diffSchemaFingerprints(reference, actual) {
+  const key = (row) => `${row.kind} ${row.name}`;
+  const referenceMap = new Map(reference.map((row) => [key(row), row]));
+  const actualMap = new Map(actual.map((row) => [key(row), row]));
+
+  const missing = [];
+  const unexpected = [];
+  const changed = [];
+
+  for (const [rowKey, row] of referenceMap) {
+    const other = actualMap.get(rowKey);
+
+    if (!other) {
+      missing.push(row);
+    } else if (other.hash !== row.hash) {
+      changed.push({ ...row, actualHash: other.hash, actualDefinition: other.definition });
+    }
+  }
+
+  for (const [rowKey, row] of actualMap) {
+    if (!referenceMap.has(rowKey)) {
+      unexpected.push(row);
+    }
+  }
+
+  const byKey = (a, b) => key(a).localeCompare(key(b));
+
+  return {
+    missing: missing.sort(byKey),
+    unexpected: unexpected.sort(byKey),
+    changed: changed.sort(byKey),
+    hasDrift: missing.length + unexpected.length + changed.length > 0,
+  };
+}
+
+export function formatSchemaDrift(drift, { limit = 50 } = {}) {
+  const lines = [];
+  const section = (title, rows, render) => {
+    if (rows.length === 0) {
+      return;
+    }
+
+    lines.push(`${title} (${rows.length}):`);
+
+    for (const row of rows.slice(0, limit)) {
+      lines.push(`  ${render(row)}`);
+    }
+
+    if (rows.length > limit) {
+      lines.push(`  … y ${rows.length - limit} más`);
+    }
+  };
+
+  section(
+    "Faltan en la base revisada (están en las migraciones)",
+    drift.missing,
+    (row) => `${row.kind} ${row.name}`,
+  );
+  section(
+    "Sobran en la base revisada (no están en las migraciones)",
+    drift.unexpected,
+    (row) => `${row.kind} ${row.name}`,
+  );
+  section(
+    "Definición distinta",
+    drift.changed,
+    (row) => `${row.kind} ${row.name}`,
+  );
+
+  return lines.join("\n");
+}

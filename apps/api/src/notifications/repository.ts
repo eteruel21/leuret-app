@@ -155,7 +155,8 @@ export type UserNotificationRow = {
 
 /**
  * Guarda un aviso en la bandeja del destinatario. Se ejecuta con la identidad
- * del destinatario (política notifications_insert_own, migración 047).
+ * del destinatario (política notifications_insert_access: antes
+ * notifications_insert_own de la migración 047, fusionada en la 048).
  */
 export async function recordUserNotificationRepo(
   recipientId: string,

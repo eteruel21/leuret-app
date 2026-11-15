@@ -1,0 +1,120 @@
+name: Aplicar migraciones a producción
+
+# Ejecución manual (GitHub → Actions → "Aplicar migraciones a producción" →
+# Run workflow), también desde la app de GitHub en el teléfono. Evita pegar
+# SQL largo en el SQL Editor o en el MCP de Supabase.
+#
+# Orden: prueba todas las migraciones en una base efímera + lint → muestra lo
+# pendiente en producción → (si modo = aplicar y la confirmación coincide)
+# aplica con migrate.mjs, que registra cada checksum → verifica que no queden
+# pendientes ni haya deriva de esquema. Ver docs/database-change-process.md.
+#
+# Para exigir aprobación de otra persona antes de aplicar, configurar
+# reviewers en Settings → Environments → production.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "status = solo mostrar lo pendiente; apply = aplicar"
+        type: choice
+        options:
+          - status
+          - apply
+        default: status
+      confirm:
+        description: "Para aplicar, escribe APLICAR"
+        type: string
+        default: ""
+
+concurrency:
+  group: production-database
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Migraciones de producción
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      REFERENCE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/reference_leuret
+
+    steps:
+      - name: 1. Checkout main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: 2. Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 3. Install dependencies
+        run: npm ci
+
+      - name: 4. Validar la confirmación
+        if: inputs.mode == 'apply'
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "APLICAR" ]; then
+            echo "Para aplicar hay que escribir APLICAR en la confirmación."
+            exit 1
+          fi
+
+      - name: 5. Probar todas las migraciones en una base efímera
+        env:
+          DATABASE_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          DATABASE_NAME: reference_leuret
+          CONTRACTOR_MIGRATOR_PASSWORD: reference_migrator_password
+          CONTRACTOR_API_PASSWORD: reference_api_password
+        run: |
+          node database/scripts/bootstrap.mjs
+          MIGRATOR_DATABASE_URL="$REFERENCE_DATABASE_URL" node database/scripts/migrate.mjs
+          MIGRATOR_DATABASE_URL="$REFERENCE_DATABASE_URL" node database/scripts/schema-lint.mjs
+
+      - name: 6. Configurar el certificado de la base de producción
+        env:
+          DATABASE_SSL_CA_PEM: ${{ secrets.PRODUCTION_DATABASE_SSL_CA }}
+        run: |
+          test -n "$DATABASE_SSL_CA_PEM"
+          install -d -m 700 "$RUNNER_TEMP/leuret-database"
+          printf '%s\n' "$DATABASE_SSL_CA_PEM" > "$RUNNER_TEMP/leuret-database/supabase-ca.crt"
+          chmod 600 "$RUNNER_TEMP/leuret-database/supabase-ca.crt"
+          echo "DATABASE_SSL_CA_FILE=$RUNNER_TEMP/leuret-database/supabase-ca.crt" >> "$GITHUB_ENV"
+
+      - name: 7. Estado de producción
+        env:
+          MIGRATOR_DATABASE_URL: ${{ secrets.PRODUCTION_MIGRATOR_DATABASE_URL }}
+        run: node database/scripts/migrate.mjs --status
+
+      - name: 8. Aplicar migraciones pendientes
+        if: inputs.mode == 'apply'
+        env:
+          MIGRATOR_DATABASE_URL: ${{ secrets.PRODUCTION_MIGRATOR_DATABASE_URL }}
+        run: node database/scripts/migrate.mjs
+
+      - name: 9. Verificar migraciones y deriva de esquema
+        if: inputs.mode == 'apply'
+        env:
+          MIGRATOR_DATABASE_URL: ${{ secrets.PRODUCTION_MIGRATOR_DATABASE_URL }}
+        run: |
+          node database/scripts/migrate.mjs --check
+          node database/scripts/schema-drift.mjs
