@@ -171,7 +171,7 @@ export async function registerClientPortalRoutes(app: FastifyInstance): Promise<
       (project.photos as { id: string; storage_path: string; caption: string | null; created_at: string }[]).map(
         async ({ storage_path, ...photo }) => ({
           ...photo,
-          signedUrl: await getStorageSignedUrl(photo.id, storage_path, 60)
+          signedUrl: await getStorageSignedUrl(photo.id, storage_path)
         })
       )
     );

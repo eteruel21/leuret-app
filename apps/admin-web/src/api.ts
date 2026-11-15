@@ -64,9 +64,8 @@ export class ApiError extends Error {
   }
 }
 
-let refreshPromise:
-  | Promise<AdminSession>
-  | null = null;
+let memorySession: AdminSession | null = null;
+let refreshInProgress: { sessionId: string; promise: Promise<AdminSession> } | null = null;
 
 async function readResponse<T>(
   response: Response
@@ -115,12 +114,12 @@ function saveSession(
 ): void {
   localStorage.setItem(
     SESSION_KEY,
-    JSON.stringify(session)
+    JSON.stringify({ sessionId: session.sessionId })
   );
+  memorySession = session;
 }
 
-function readStoredSession():
-  AdminSession | null {
+function readStoredSessionId(): string | null {
   const value =
     localStorage.getItem(
       SESSION_KEY
@@ -129,9 +128,15 @@ function readStoredSession():
   if (!value) return null;
 
   try {
-    return JSON.parse(
-      value
-    ) as AdminSession;
+    const { sessionId } = JSON.parse(value) as Partial<AdminSession>;
+    if (typeof sessionId !== "string" || !sessionId) {
+      clearSession();
+      return null;
+    }
+
+    const marker = JSON.stringify({ sessionId });
+    if (value !== marker) localStorage.setItem(SESSION_KEY, marker);
+    return sessionId;
   } catch {
     clearSession();
     return null;
@@ -139,6 +144,7 @@ function readStoredSession():
 }
 
 function clearSession(): void {
+  memorySession = null;
   localStorage.removeItem(
     SESSION_KEY
   );
@@ -160,58 +166,60 @@ function toSession(
   };
 }
 
-async function refreshSession():
-  Promise<AdminSession> {
-  if (refreshPromise) {
-    return refreshPromise;
+async function refreshSession(sessionId: string): Promise<AdminSession> {
+  if (refreshInProgress?.sessionId === sessionId) {
+    return refreshInProgress.promise;
   }
 
-  refreshPromise = (async () => {
-    const current =
-      readStoredSession();
-
-    if (!current) {
-      throw new ApiError(
-        "No existe una sesión activa.",
-        401
-      );
+  const renew = async () => {
+    if (readStoredSessionId() !== sessionId) {
+      throw new ApiError("La sesión cambió.", 401);
     }
-
     const response =
       await publicRequest<AuthResponse>(
         "/auth/refresh",
         {
           method: "POST",
           body: JSON.stringify({
-            clientType: "web"
+            clientType: "web",
+            sessionId
           })
         }
       );
 
-    const session =
-      toSession(response);
-
+    if (response.sessionId !== sessionId || readStoredSessionId() !== sessionId) {
+      throw new ApiError("La sesión cambió.", 401);
+    }
+    const session = ensureSuperAdmin(toSession(response));
     saveSession(session);
 
     return session;
-  })();
+  };
+  const promise = globalThis.navigator?.locks
+    ? Promise.resolve(navigator.locks.request(SESSION_KEY, renew))
+    : renew();
+  refreshInProgress = { sessionId, promise };
 
   try {
-    return await refreshPromise;
+    return await promise;
   } catch (error) {
-    clearSession();
+    if (
+      error instanceof ApiError && (error.status === 401 || error.status === 403) &&
+      readStoredSessionId() === sessionId
+    ) {
+      clearSession();
+    }
     throw error;
   } finally {
-    refreshPromise = null;
+    if (refreshInProgress?.promise === promise) refreshInProgress = null;
   }
 }
 
 async function validSession():
   Promise<AdminSession> {
-  const session =
-    readStoredSession();
+  const sessionId = readStoredSessionId();
 
-  if (!session) {
+  if (!sessionId) {
     throw new ApiError(
       "No hay una sesión activa.",
       401
@@ -219,13 +227,13 @@ async function validSession():
   }
 
   if (
-    Date.now() >=
-    session.expiresAt - 30000
+    memorySession?.sessionId !== sessionId ||
+    Date.now() >= memorySession.expiresAt - 30000
   ) {
-    return refreshSession();
+    return refreshSession(sessionId);
   }
 
-  return session;
+  return memorySession;
 }
 
 export async function authenticatedRequest<T>(
@@ -236,33 +244,32 @@ export async function authenticatedRequest<T>(
   const session =
     await validSession();
 
-  const response = await fetch(
-    `${API_URL}${path}`,
-    {
+  const send = (accessToken: string) =>
+    fetch(`${API_URL}${path}`, {
       ...init,
       credentials: "include",
       headers: {
         Accept: "application/json",
         "Content-Type":
           "application/json",
-        Authorization:
-          `Bearer ${session.accessToken}`,
-        ...init.headers
+        ...init.headers,
+        Authorization: `Bearer ${accessToken}`
       }
-    }
-  );
+    });
+  const response = await send(session.accessToken);
 
   if (
     response.status === 401 &&
     retry
   ) {
-    await refreshSession();
-
-    return authenticatedRequest<T>(
-      path,
-      init,
-      false
-    );
+    if (readStoredSessionId() !== session.sessionId) {
+      throw new ApiError("La sesión cambió.", 401);
+    }
+    const refreshed =
+      memorySession?.sessionId === session.sessionId && memorySession.accessToken !== session.accessToken
+        ? memorySession
+        : await refreshSession(session.sessionId);
+    return readResponse<T>(await send(refreshed.accessToken));
   }
 
   return readResponse<T>(response);
@@ -319,23 +326,22 @@ export async function loginAdmin(
 
 export async function restoreAdminSession():
   Promise<AdminSession | null> {
-  const stored =
-    readStoredSession();
+  const sessionId = readStoredSessionId();
 
-  if (!stored) return null;
+  if (!sessionId) return null;
 
   const current =
     await authenticatedRequest<{
       user: AdminUser;
     }>("/auth/me");
 
-  const refreshed =
-    readStoredSession() ??
-    stored;
+  if (readStoredSessionId() !== sessionId || memorySession?.sessionId !== sessionId) {
+    return null;
+  }
 
   const session =
     ensureSuperAdmin({
-      ...refreshed,
+      ...memorySession,
       user: current.user
     });
 

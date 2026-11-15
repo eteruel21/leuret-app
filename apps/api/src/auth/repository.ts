@@ -87,7 +87,7 @@ export function getUserStatus(user: {
 }): UserStatus {
   if (user.deleted_at) return "deactivated";
   if (!user.email_confirmed_at) return "email_pending";
-  if (user.active) return "active";
+  if (user.active && user.approved_at) return "active";
   if (user.approved_at) return "suspended";
   return "pending_approval";
 }

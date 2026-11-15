@@ -105,7 +105,7 @@ export async function findInvoicesRepo(userId: string, companyId: string) {
     const result = await client.query(
       `
         ${invoiceDetailsSql}
-        WHERE invoice.company_id = $1
+        WHERE invoice.company_id = $1 AND public.is_company_member($1)
         ORDER BY invoice.created_at DESC
       `,
       [companyId]
@@ -133,7 +133,7 @@ export async function getInvoiceByIdRepo(userId: string, invoiceId: string, comp
     const result = await client.query(
       `
         ${invoiceDetailsSql}
-        WHERE invoice.id = $1 AND invoice.company_id = $2
+        WHERE invoice.id = $1 AND invoice.company_id = $2 AND public.is_company_member($2)
         LIMIT 1
       `,
       [invoiceId, companyId]
@@ -154,6 +154,7 @@ export async function findInvoiceHistoryRepo(
         FROM public.invoice_history AS history
         WHERE history.invoice_id = $1
           AND history.company_id = $2
+          AND public.is_company_member($2)
         ORDER BY history.created_at ASC, history.id ASC
       `,
       [invoiceId, companyId]
@@ -174,6 +175,7 @@ export async function findInvoicePaymentsRepo(
         ${paymentDetailsSql}
         WHERE payment.invoice_id = $1
           AND payment.company_id = $2
+          AND public.is_company_member($2)
         ORDER BY payment.paid_at DESC, payment.created_at DESC, payment.id DESC
       `,
       [invoiceId, companyId]
@@ -194,6 +196,7 @@ export async function findInvoiceCreditNotesRepo(
         ${creditNoteDetailsSql}
         WHERE credit_note.invoice_id = $1
           AND credit_note.company_id = $2
+          AND public.is_company_member($2)
         ORDER BY credit_note.issued_at DESC,
           credit_note.created_at DESC,
           credit_note.id DESC
@@ -622,11 +625,14 @@ export async function findInvoiceRequestsRepo(
           budget.total::double precision AS budget_total,
           budget.currency_code
         FROM public.invoice_requests AS request
-        JOIN public.clients AS customer ON customer.id = request.client_id
-        JOIN public.projects AS project ON project.id = request.project_id
-        JOIN public.budgets AS budget ON budget.id = request.budget_id
+        JOIN public.clients AS customer
+          ON customer.id = request.client_id AND customer.company_id = request.company_id
+        JOIN public.projects AS project
+          ON project.id = request.project_id AND project.company_id = request.company_id
+        JOIN public.budgets AS budget
+          ON budget.id = request.budget_id AND budget.company_id = request.company_id
         WHERE request.company_id = $1
-          AND public.is_company_member($1)
+          AND public.has_company_role($1, ARRAY['owner', 'admin', 'sales']::public.company_role[])
           AND ($2::text = 'all' OR request.status = 'pending')
         ORDER BY (request.status = 'pending') DESC, request.created_at DESC
         LIMIT 100

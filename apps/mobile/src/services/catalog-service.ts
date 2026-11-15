@@ -201,7 +201,7 @@ export async function updateCatalogItemPricing(
 }> {
   try {
     await authenticatedRequest(
-      `/catalog/items/${input.itemId}/pricing`,
+      `/catalog/items/${input.itemId}/pricing?companyId=${encodeURIComponent(input.companyId)}`,
       {
         method: "PATCH",
         body: JSON.stringify({
@@ -233,6 +233,7 @@ export async function updateCatalogItemPricing(
 
 export async function resetCatalogItemPricing(
   input: {
+    companyId: string;
     itemId: string;
   }
 ): Promise<{
@@ -240,7 +241,7 @@ export async function resetCatalogItemPricing(
 }> {
   try {
     await authenticatedRequest(
-      `/catalog/items/${input.itemId}/pricing`,
+      `/catalog/items/${input.itemId}/pricing?companyId=${encodeURIComponent(input.companyId)}`,
       {
         method: "DELETE"
       }

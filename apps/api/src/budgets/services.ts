@@ -50,11 +50,12 @@ export async function deleteBudgetItemService(userId: string, budgetId: string, 
 export async function approveBudgetService(userId: string, budgetId: string, companyId?: string) {
   // El cliente responde con una función de base de datos que valida que el
   // presupuesto sea suyo, esté enviado y vigente; el equipo usa el flujo normal.
-  const budget = (await isLinkedClientForBudgetRepo(userId, budgetId))
+  const linkedClient = await isLinkedClientForBudgetRepo(userId, budgetId);
+  const budget = linkedClient
     ? await respondToBudgetAsClientRepo(userId, budgetId, "approved")
     : await approveBudgetRepo(userId, budgetId, companyId);
   await notifyBudgetDecision(budget, "approved");
-  return budget;
+  return linkedClient ? clientBudgetDecision(budget) : budget;
 }
 
 export async function sendBudgetService(
@@ -69,11 +70,23 @@ export async function sendBudgetService(
 }
 
 export async function rejectBudgetService(userId: string, budgetId: string, rejectionReason: string, companyId?: string) {
-  const budget = (await isLinkedClientForBudgetRepo(userId, budgetId))
+  const linkedClient = await isLinkedClientForBudgetRepo(userId, budgetId);
+  const budget = linkedClient
     ? await respondToBudgetAsClientRepo(userId, budgetId, "rejected", rejectionReason)
     : await rejectBudgetRepo(userId, budgetId, rejectionReason, companyId);
   await notifyBudgetDecision(budget, "rejected");
-  return budget;
+  return linkedClient ? clientBudgetDecision(budget) : budget;
+}
+
+function clientBudgetDecision(budget: Awaited<ReturnType<typeof respondToBudgetAsClientRepo>>) {
+  if (!budget) return null;
+  return {
+    id: budget.id,
+    status: budget.status,
+    approved_at: budget.approved_at,
+    rejection_reason: budget.rejection_reason,
+    updated_at: budget.updated_at
+  };
 }
 
 const CLIENT_RESPONSE_ERRORS: Record<string, { status: number; message: string }> = {

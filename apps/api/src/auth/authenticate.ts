@@ -2,19 +2,24 @@ import type {
   FastifyReply,
   FastifyRequest
 } from "fastify";
+import { z } from "zod";
 
-import { pool } from "../db/pool.js";
 import { withUserTransaction } from "../db/with-user-transaction.js";
 import { safeErrorDetails } from "../security/redaction.js";
-import {
-  verifyAccessToken
-} from "./tokens.js";
+import { getUserStatus } from "./repository.js";
+import { verifyAccessToken } from "./tokens.js";
+
+export const companyRoles = ["owner", "admin", "estimator", "sales", "supervisor", "member"] as const;
+type CompanyRole = (typeof companyRoles)[number];
+type CompanyIdSource = "params" | "query" | "body";
+const companyIdSchema = z.uuid();
 
 declare module "fastify" {
   interface FastifyRequest {
     authenticatedUser: {
       id: string;
       sessionId: string;
+      status: "active" | "pending_approval";
     } | null;
   }
 }
@@ -41,45 +46,46 @@ export async function authenticateRequest(
     "Bearer ".length
   );
 
+  const payload = await verifyAccessToken(token).catch(() => null);
+  if (!payload) {
+    reply.status(401).send({ message: "El token es inválido o ha expirado." });
+    return;
+  }
+
   try {
-    const payload = await verifyAccessToken(token);
+    const record = await withUserTransaction(payload.userId, async (client) => {
+      const result = await client.query<Parameters<typeof getUserStatus>[0]>(`
+        SELECT account.email_confirmed_at, account.deleted_at, profile.active, profile.approved_at
+        FROM app_auth.sessions AS session
+        JOIN app_auth.users AS account ON account.id = session.user_id
+        JOIN public.profiles AS profile ON profile.id = account.id
+        WHERE session.id = $1
+          AND session.user_id = app.current_user_id()
+          AND session.revoked_at IS NULL
+          AND session.expires_at > now()
+      `, [payload.sessionId]);
+      return result.rows[0];
+    });
 
-    const sessionResult = await pool.query<{
-      id: string;
-    }>(
-      `
-        SELECT id
-        FROM app_auth.sessions
-        WHERE id = $1
-          AND user_id = $2
-          AND revoked_at IS NULL
-          AND expires_at > now()
-        LIMIT 1
-      `,
-      [
-        payload.sessionId,
-        payload.userId
-      ]
-    );
+    if (!record || record.deleted_at) {
+      reply.status(401).send({ message: "La sesión expiró o fue cerrada." });
+      return;
+    }
 
-    if (!sessionResult.rows[0]) {
-      reply.status(401).send({
-        message:
-          "La sesión expiró o fue cerrada."
-      });
-
+    const status = getUserStatus(record);
+    if (status !== "active" && status !== "pending_approval") {
+      reply.status(403).send({ message: "Esta cuenta no está habilitada para acceder." });
       return;
     }
 
     request.authenticatedUser = {
       id: payload.userId,
-      sessionId: payload.sessionId
+      sessionId: payload.sessionId,
+      status
     };
-  } catch {
-    reply.status(401).send({
-      message:
-        "El token es inválido o ha expirado."
-    });
+  } catch (error) {
+    request.log.error(safeErrorDetails(error), "No se pudo comprobar la sesión.");
+    reply.status(503).send({ message: "No se pudo verificar la sesión. Inténtalo nuevamente." });
   }
 }
 
@@ -95,78 +101,17 @@ export async function requireActiveUser(
     return;
   }
 
-  try {
-    const record = await withUserTransaction(
-      user.id,
-      async (client) => {
-        const result = await client.query<{
-          email_confirmed_at: Date | null;
-          deleted_at: Date | null;
-          active: boolean;
-          approved_at: Date | null;
-        }>(
-          `
-            SELECT
-              u.email_confirmed_at,
-              u.deleted_at,
-              p.active,
-              p.approved_at
-            FROM app_auth.users u
-            LEFT JOIN public.profiles p ON p.id = u.id
-            WHERE u.id = $1
-            LIMIT 1
-          `,
-          [user.id]
-        );
-
-        return result.rows[0];
-      }
-    );
-    if (process.env.NODE_ENV !== "production") {
-    }
-    if (!record) {
-      reply.status(403).send({
-        message: "No se encontró el perfil del usuario."
-      });
-      return;
-    }
-
-    if (record.deleted_at) {
-      reply.status(403).send({
-        message: "Esta cuenta ha sido eliminada o desactivada."
-      });
-      return;
-    }
-
-    if (!record.email_confirmed_at) {
-      reply.status(403).send({
-        message: "Debes confirmar tu correo electrónico para acceder a esta ruta."
-      });
-      return;
-    }
-
-    if (!record.approved_at) {
-      reply.status(403).send({
-        message: "Tu cuenta está pendiente de aprobación por el administrador."
-      });
-      return;
-    }
-
-    if (!record.active) {
-      reply.status(403).send({
-        message: "Tu cuenta está suspendida o inactiva."
-      });
-      return;
-    }
-  } catch (error) {
-    request.log.error(safeErrorDetails(error), "Falló una comprobación de autorización.");
-    reply.status(500).send({
-      message: "Error interno al verificar el estado del usuario."
+  if (user.status !== "active") {
+    reply.status(403).send({
+      message: "Tu cuenta está pendiente de aprobación por el administrador."
     });
   }
 }
 
-export function requireCompanyRole(allowedRoles: ("owner" | "admin" | "estimator" | "sales" | "supervisor" | "member")[]) {
+export function requireCompanyRole(
+  allowedRoles: readonly CompanyRole[],
+  companyIdSource: CompanyIdSource = "params"
+) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const userId = request.authenticatedUser?.id;
     if (!userId) {
@@ -174,15 +119,10 @@ export function requireCompanyRole(allowedRoles: ("owner" | "admin" | "estimator
       return;
     }
 
-    let companyId: string | undefined = 
-      (request.params as any)?.companyId ||
-      ((request.url.startsWith("/companies") || request.url.includes("/companies/")) ? (request.params as any)?.id : undefined) ||
-      (request.query as any)?.companyId ||
-      (request.body as any)?.companyId ||
-      request.headers["x-company-id"] as string;
-
-    if (!companyId) {
-      reply.status(400).send({ message: "Identificador de empresa (companyId) es obligatorio." });
+    const source = request[companyIdSource] as { companyId?: unknown } | undefined;
+    const companyId = companyIdSchema.safeParse(source?.companyId);
+    if (!companyId.success) {
+      reply.status(400).send({ message: "El identificador de empresa (companyId) no es válido." });
       return;
     }
 
@@ -191,12 +131,11 @@ export function requireCompanyRole(allowedRoles: ("owner" | "admin" | "estimator
         userId,
         async (client) => {
           const result = await client.query<{
-            role: string;
-            active: boolean;
+            role: CompanyRole;
             company_active: boolean | null;
           }>(
             `
-              SELECT member.role, member.active, company.active AS company_active
+              SELECT member.role, company.active AS company_active
               FROM public.company_members AS member
               LEFT JOIN public.companies AS company ON company.id = member.company_id
               WHERE member.company_id = $1
@@ -204,7 +143,7 @@ export function requireCompanyRole(allowedRoles: ("owner" | "admin" | "estimator
                 AND member.active = true
               LIMIT 1
             `,
-            [companyId, userId]
+            [companyId.data, userId]
           );
 
           return result.rows[0];
@@ -216,12 +155,12 @@ export function requireCompanyRole(allowedRoles: ("owner" | "admin" | "estimator
       }
 
       // Una empresa suspendida desde el panel no puede operar.
-      if (membership.company_active === false) {
+      if (membership.company_active !== true) {
         reply.status(403).send({ message: "Esta empresa está suspendida. Contacta a soporte de Leuret." });
         return;
       }
 
-      if (!allowedRoles.includes(membership.role as any)) {
+      if (!allowedRoles.includes(membership.role)) {
         reply.status(403).send({ message: "No tienes permiso para realizar esta acción." });
         return;
       }

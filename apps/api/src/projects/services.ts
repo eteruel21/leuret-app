@@ -14,7 +14,11 @@ export async function getClientProjectsService(userId: string) {
 }
 
 export async function getCompanyProjectsService(userId: string, companyId: string, clientId?: string) {
-  return findCompanyProjectsRepo(userId, companyId, clientId);
+  const [projects, role] = await Promise.all([
+    findCompanyProjectsRepo(userId, companyId, clientId),
+    findCompanyRoleRepo(userId, companyId)
+  ]);
+  return projects.map((project) => redactProjectFinancials(project, role));
 }
 
 export async function createProjectService(userId: string, input: CreateProjectInput) {

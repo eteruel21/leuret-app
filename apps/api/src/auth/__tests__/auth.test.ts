@@ -143,6 +143,57 @@ describe("T-053: Suite de Pruebas de Autenticación (Auth)", () => {
     accessToken = body.accessToken;
   });
 
+  it("mantiene la renovación web en una cookie de la aplicación y conserva la sesión", async () => {
+    const origin = "https://app.leurettech.com";
+    const login = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      headers: { origin },
+      payload: {
+        email: testEmail,
+        password: testPassword,
+        captchaToken: "login-turnstile-token",
+        clientType: "app-web"
+      }
+    });
+    expect(login.statusCode).toBe(200);
+    expect(login.headers["cache-control"]).toBe("no-store");
+    expect(login.json()).not.toHaveProperty("refreshToken");
+    const cookie = login.cookies.find(({ name }) => name === "appRefreshToken");
+    expect(cookie).toMatchObject({ httpOnly: true, path: "/auth" });
+    expect(login.cookies.some(({ name }) => name === "refreshToken")).toBe(false);
+
+    const refreshed = await app.inject({
+      method: "POST",
+      url: "/auth/refresh",
+      headers: { origin },
+      cookies: { appRefreshToken: cookie!.value },
+      payload: { clientType: "app-web", sessionId: login.json().sessionId }
+    });
+    expect(refreshed.statusCode).toBe(200);
+    expect(refreshed.json()).toHaveProperty("sessionId", login.json().sessionId);
+    expect(refreshed.json()).not.toHaveProperty("refreshToken");
+
+    const signedOut = await app.inject({
+      method: "POST",
+      url: "/auth/logout",
+      headers: { origin, authorization: `Bearer ${refreshed.json().accessToken}` },
+      payload: { clientType: "app-web" }
+    });
+    expect(signedOut.statusCode).toBe(200);
+    expect(signedOut.cookies.find(({ name }) => name === "appRefreshToken")?.value).toBe("");
+  });
+
+  it("permite renovar cada cookie solo desde el origen web autorizado", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/auth/refresh",
+      headers: { origin: "https://app.leurettech.com" },
+      payload: { clientType: "web" }
+    });
+    expect(response.statusCode).toBe(403);
+  });
+
   it("5. Cierre de Sesión / Logout (POST /auth/logout)", async () => {
     const res = await app.inject({
       method: "POST",

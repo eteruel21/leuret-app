@@ -1,17 +1,24 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import {
+  login,
   register,
   resendVerificationEmail,
   requestPasswordReset,
   resetPasswordApi
 } from "../api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 vi.mock("@react-native-async-storage/async-storage", () => ({
   default: {
     getItem: vi.fn(),
     setItem: vi.fn(),
-    removeItem: vi.fn()
+    removeItem: vi.fn(),
+    multiRemove: vi.fn()
   }
+}));
+
+vi.mock("react-native", () => ({
+  Platform: { OS: "web" }
 }));
 
 vi.mock("expo-secure-store", () => ({
@@ -32,9 +39,28 @@ function successfulResponse(body: object = { message: "ok" }): Response {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   fetchMock.mockReset();
   fetchMock.mockResolvedValue(successfulResponse());
   vi.stubGlobal("fetch", fetchMock);
+});
+
+test("login web persiste el identificador de sesión sin guardar credenciales ni perfil", async () => {
+  fetchMock.mockResolvedValueOnce(successfulResponse({
+    accessToken: "access-token-for-test",
+    sessionId: "session-id-for-test",
+    expiresIn: 900,
+    user: { email: "user@example.test" }
+  }));
+
+  await login("user@example.test", "Password123!", "captcha-test");
+  const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+  expect(request.credentials).toBe("include");
+  expect(JSON.parse(request.body as string).clientType).toBe("app-web");
+  expect(AsyncStorage.setItem).toHaveBeenCalledOnce();
+  expect(vi.mocked(AsyncStorage.setItem).mock.calls[0]?.[1]).toBe(
+    JSON.stringify({ sessionId: "session-id-for-test" })
+  );
 });
 
 afterEach(() => {

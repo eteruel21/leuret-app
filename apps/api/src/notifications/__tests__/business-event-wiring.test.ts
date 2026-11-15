@@ -63,7 +63,7 @@ describe("conexión de push con eventos de negocio", () => {
   });
 
   it("el cliente vinculado responde por la función segura y también notifica", async () => {
-    const approvedBudget = { id: "budget-client", created_by: "contractor-1", status: "approved" };
+    const approvedBudget = { id: "budget-client", created_by: "contractor-1", status: "approved", notes: "Nota interna" };
     vi.spyOn(budgetRepository, "isLinkedClientForBudgetRepo")
       .mockResolvedValue(true);
     const clientResponse = vi.spyOn(budgetRepository, "respondToBudgetAsClientRepo")
@@ -72,7 +72,10 @@ describe("conexión de push con eventos de negocio", () => {
     const notifySpy = vi.spyOn(eventService, "notifyBudgetDecision")
       .mockResolvedValue(undefined);
 
-    await expect(approveBudgetService("client-1", "budget-client")).resolves.toBe(approvedBudget);
+    const response = await approveBudgetService("client-1", "budget-client");
+    expect(response).toMatchObject({ id: approvedBudget.id, status: "approved" });
+    expect(response).not.toHaveProperty("notes");
+    expect(response).not.toHaveProperty("created_by");
 
     expect(clientResponse).toHaveBeenCalledWith("client-1", "budget-client", "approved");
     expect(staffApprove).not.toHaveBeenCalled();

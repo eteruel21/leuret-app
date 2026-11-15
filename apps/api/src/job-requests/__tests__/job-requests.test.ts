@@ -78,7 +78,7 @@ async function addItem(companyId: string, budgetId: string) {
   );
 }
 
-/** Cuenta filas visibles con RLS real (los repositorios en CI usan superusuario). */
+/** Cuenta filas visibles desde una conexión de pruebas con el rol de la API. */
 async function visibleRowsAs(userId: string, table: string, requestId: string) {
   const client = await adminPool.connect();
   try {

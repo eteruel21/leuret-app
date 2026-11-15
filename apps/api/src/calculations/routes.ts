@@ -26,7 +26,7 @@ export async function registerCalculationRoutes(app: FastifyInstance): Promise<v
   app.get(
     "/calculations",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator", "member", "supervisor", "sales"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator", "member", "supervisor", "sales"], "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -47,7 +47,7 @@ export async function registerCalculationRoutes(app: FastifyInstance): Promise<v
   app.post(
     "/calculations",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator", "member", "supervisor", "sales"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator", "member", "supervisor", "sales"], "body")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -73,7 +73,7 @@ export async function registerCalculationRoutes(app: FastifyInstance): Promise<v
   app.get(
     "/calculations/:calculationId",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator", "member", "supervisor", "sales"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator", "member", "supervisor", "sales"], "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -98,7 +98,7 @@ export async function registerCalculationRoutes(app: FastifyInstance): Promise<v
   app.delete(
     "/calculations/:calculationId",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"])]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"], "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);

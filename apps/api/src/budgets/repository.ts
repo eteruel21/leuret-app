@@ -4,11 +4,19 @@ import type { createBudgetItemSchema } from "./schemas.js";
 
 export type CreateBudgetItemInput = z.infer<typeof createBudgetItemSchema>;
 
+const clientBudgetColumns = `
+  budget.id, budget.company_id, budget.client_id, budget.project_id, budget.budget_number,
+  budget.version, budget.title, budget.description, budget.status, budget.currency_code,
+  budget.subtotal, budget.discount_type, budget.discount_value, budget.discount_amount,
+  budget.tax_rate, budget.tax_amount, budget.total, budget.valid_until, budget.terms,
+  budget.approved_at, budget.rejection_reason, budget.created_at, budget.updated_at
+`;
+
 export async function findClientBudgets(userId: string) {
   return withUserTransaction(userId, async (client) => {
     const result = await client.query(`
       SELECT
-        budget.*,
+        ${clientBudgetColumns},
         CASE
           WHEN project.id IS NULL THEN NULL
           ELSE jsonb_build_object('name', project.name)
@@ -22,12 +30,12 @@ export async function findClientBudgets(userId: string) {
         ON customer.id = budget.client_id
        AND customer.company_id = budget.company_id
       LEFT JOIN public.projects AS project ON project.id = budget.project_id
-      LEFT JOIN public.companies AS company ON company.id = budget.company_id
+      JOIN public.companies AS company ON company.id = budget.company_id AND company.active
       WHERE customer.user_id = app.current_user_id()
         AND customer.active = true
         -- Defensa adicional a la RLS: el cliente nunca ve borradores ni anulados,
         -- aunque además sea miembro de la empresa.
-        AND budget.status NOT IN ('draft', 'cancelled')
+        AND budget.status IN ('sent', 'viewed', 'approved', 'rejected', 'expired')
       ORDER BY budget.created_at DESC
     `);
     return result.rows;
@@ -39,7 +47,7 @@ export async function getClientBudgetDetailRepo(userId: string, budgetId: string
     const budgetResult = await client.query(
       `
         SELECT
-          budget.*,
+          ${clientBudgetColumns},
           CASE
             WHEN project.id IS NULL THEN NULL
             ELSE jsonb_build_object('name', project.name, 'code', project.project_code)
@@ -73,11 +81,11 @@ export async function getClientBudgetDetailRepo(userId: string, budgetId: string
           ON customer.id = budget.client_id
          AND customer.company_id = budget.company_id
         LEFT JOIN public.projects AS project ON project.id = budget.project_id
-        LEFT JOIN public.companies AS company ON company.id = budget.company_id
+        JOIN public.companies AS company ON company.id = budget.company_id AND company.active
         WHERE budget.id = $1
           AND customer.user_id = app.current_user_id()
           AND customer.active = true
-          AND budget.status NOT IN ('draft', 'cancelled')
+          AND budget.status IN ('sent', 'viewed', 'approved', 'rejected', 'expired')
         LIMIT 1
       `,
       [budgetId]
@@ -135,12 +143,8 @@ export async function getClientBudgetDetailRepo(userId: string, budgetId: string
       [budget.id]
     );
 
-    // Las notas del presupuesto son internas del equipo; al cliente se le
-    // muestran la descripción y las condiciones.
-    const { notes: _internalNotes, ...clientBudget } = budget;
-
     return {
-      ...clientBudget,
+      ...budget,
       sections: sectionsResult.rows,
       items: itemsResult.rows
     };
@@ -579,6 +583,7 @@ export async function isLinkedClientForBudgetRepo(userId: string, budgetId: stri
           JOIN public.clients AS customer
             ON customer.id = budget.client_id
            AND customer.company_id = budget.company_id
+        JOIN public.companies AS company ON company.id = budget.company_id AND company.active
           WHERE budget.id = $1
             AND customer.user_id = app.current_user_id()
             AND customer.active = true

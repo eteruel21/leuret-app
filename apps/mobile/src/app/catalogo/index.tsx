@@ -604,7 +604,7 @@ function EditPersonalPriceModal({
     if (!item) return;
 
     setSaving(true);
-    const result = await resetCatalogItemPricing({ itemId: item.id });
+    const result = await resetCatalogItemPricing({ companyId, itemId: item.id });
     setSaving(false);
 
     if (result.error) {

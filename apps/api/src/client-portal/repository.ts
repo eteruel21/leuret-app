@@ -66,7 +66,7 @@ const clientInvoiceSql = `
     ) AS is_overdue
   FROM public.invoices AS invoice
   ${linkedCustomerJoin}
-  JOIN public.companies AS company ON company.id = invoice.company_id
+  JOIN public.companies AS company ON company.id = invoice.company_id AND company.active
   LEFT JOIN LATERAL (
     SELECT COALESCE(sum(payment.amount), 0) AS total_paid
     FROM public.invoice_payments AS payment
@@ -332,8 +332,8 @@ export async function findClientUpcomingActivitiesRepo(userId: string) {
           project.name AS project_name,
           jsonb_build_object('id', company.id, 'name', company.name, 'phone', company.phone) AS company
         FROM public.activities AS activity
-        JOIN public.companies AS company ON company.id = activity.company_id
-        LEFT JOIN public.projects AS project ON project.id = activity.project_id
+        JOIN public.companies AS company ON company.id = activity.company_id AND company.active
+        LEFT JOIN public.projects AS project ON project.id = activity.project_id AND project.company_id = activity.company_id
         WHERE activity.status <> 'cancelled'
           AND activity.date >= to_char(
             (now() AT TIME ZONE COALESCE(company.timezone, 'America/Panama'))::date,
@@ -354,6 +354,8 @@ export async function findClientUpcomingActivitiesRepo(userId: string) {
                 ON customer.id = linked_project.client_id
                AND customer.company_id = linked_project.company_id
               WHERE linked_project.id = activity.project_id
+                AND linked_project.company_id = activity.company_id
+                AND (activity.client_id IS NULL OR linked_project.client_id = activity.client_id)
                 AND customer.user_id = app.current_user_id()
                 AND customer.active = true
             )
@@ -378,6 +380,7 @@ export async function getClientSummaryRepo(userId: string) {
          AND customer.user_id = app.current_user_id()
          AND customer.active = true
         WHERE budget.status IN ('sent', 'viewed')
+          AND private.is_active_company(budget.company_id)
           AND (budget.valid_until IS NULL OR budget.valid_until >= CURRENT_DATE)
       `
     );
@@ -392,6 +395,7 @@ export async function getClientSummaryRepo(userId: string) {
          AND customer.user_id = app.current_user_id()
          AND customer.active = true
         WHERE project.status IN ('approved', 'in_progress', 'paused', 'inspection')
+          AND private.is_active_company(project.company_id)
       `
     );
 

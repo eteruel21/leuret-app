@@ -8,12 +8,14 @@ import {
   jwtVerify,
   SignJWT
 } from "jose";
+import { z } from "zod";
 
 import { env } from "../config/env.js";
 
 const jwtSecret = new TextEncoder().encode(
   env.JWT_SECRET
 );
+const uuidSchema = z.uuid();
 
 export type AccessTokenPayload = {
   userId: string;
@@ -52,21 +54,20 @@ export async function verifyAccessToken(
     {
       issuer: env.JWT_ISSUER,
       audience: env.JWT_AUDIENCE,
-      algorithms: ["HS256"]
+      algorithms: ["HS256"],
+      requiredClaims: ["exp", "iat", "sub", "sessionId"]
     }
   );
 
-  if (
-    payload.type !== "access" ||
-    typeof payload.sub !== "string" ||
-    typeof payload.sessionId !== "string"
-  ) {
+  const userId = uuidSchema.safeParse(payload.sub);
+  const sessionId = uuidSchema.safeParse(payload.sessionId);
+  if (payload.type !== "access" || !userId.success || !sessionId.success) {
     throw new Error("Token de acceso inválido.");
   }
 
   return {
-    userId: payload.sub,
-    sessionId: payload.sessionId
+    userId: userId.data,
+    sessionId: sessionId.data
   };
 }
 
