@@ -1,6 +1,6 @@
 # Política de Retención y Depuración de Datos — Leuret App
 
-**Fecha de vigencia:** 9 de noviembre de 2026
+**Fecha de vigencia:** 15 de noviembre de 2026
 
 Esta política establece los criterios de conservación, restricción, anonimización y eliminación de datos tratados por **Leuret App**, operada por **LEURET TECH** en la República de Panamá.
 
@@ -14,7 +14,7 @@ Los datos se conservarán únicamente durante el tiempo necesario para la finali
 | Credenciales y sesiones | Mientras sean necesarias para autenticación y seguridad | Revocación e invalidación |
 | Documentos personales | Mientras sean necesarios para la finalidad informada | Eliminación segura mediante cola con reintentos |
 | Datos comerciales y de proyectos | Mientras exista la relación y durante el plazo justificable posterior | Restricción, anonimización o eliminación |
-| Facturación y registros fiscales/contables | Durante el plazo exigido por la normativa aplicable | Eliminación o anonimización cuando cese la obligación |
+| Facturación y registros fiscales/contables | Mínimo 5 años contados desde el 31 de diciembre del año del último documento (ITBMS: Código Fiscal, art. 1057-V, parágrafo 18; registros contables y documentación de respaldo: Ley 52 de 2016, modificada por la Ley 254 de 2021) | Eliminación o anonimización cuando cese la obligación |
 | Auditoría, fraude y seguridad | Durante el periodo necesario para investigar incidentes y proteger el Servicio | Purgado o anonimización |
 | Solicitudes ARCO | Durante el tiempo necesario para acreditar recepción, respuesta y cumplimiento | Eliminación o anonimización del expediente |
 | Respaldos | Conforme al ciclo técnico documentado | Sustitución y expiración automática |
@@ -23,22 +23,37 @@ Los plazos concretos pueden variar según la naturaleza del registro y una oblig
 
 ## 2. Eliminación de cuenta
 
-Cuando un usuario confirma **Eliminar mi cuenta** mediante `DELETE /account`:
+Antes de confirmar, la app muestra la vista previa de `GET /account/deletion-preview`: qué se elimina, qué se conserva, por qué y hasta cuándo.
 
-1. se revocan sesiones y credenciales;
-2. se desactiva el perfil y se anonimiza información personal;
-3. se eliminan tokens de notificaciones;
-4. los documentos personales se registran en una cola durable de eliminación;
-5. el sistema intenta la eliminación inmediata y reintenta fallos temporales;
-6. la aplicación distingue entre anonimización completada y limpieza externa pendiente.
+Cuando el usuario confirma **Eliminar mi cuenta** (`DELETE /account`), la función `private.delete_own_account()` (migración 045) hace todo en una sola transacción:
 
-Los registros que deban conservarse por obligación legal o defensa de reclamaciones quedan restringidos y no pueden reutilizarse para fines incompatibles.
+| Acción | Datos |
+|---|---|
+| **Se elimina** | Peticiones de trabajo publicadas (con dirección exacta, fotos y conversaciones); notificaciones; tokens push; precios personales y región de precios; aportes de precio pendientes; solicitudes de vinculación pendientes; invitaciones pendientes a su correo |
+| **Se eliminan los archivos** (cola durable con reintentos) | Documentos personales (`profile-documents/`), foto de perfil y logo del perfil (`profile-media/`), fotos de peticiones y de mensajes; y, si la empresa se cierra, su logo y sus fotos de obra |
+| **Se anonimiza** | Perfil (nombre, teléfono, ubicación, cédula, RUC, IP de registro, datos profesionales), correo, contraseña, identidades, tokens y sesiones (sin IP ni dispositivo) |
+| **Se termina** | Membresías en empresas que siguen operando y vínculo de portal de cliente (`clients.user_id`) |
+| **Se cierra** | Empresas donde el usuario es el único miembro activo (empresa inactiva) |
+| **Se bloquea** | Si el usuario es el único propietario de una empresa con otros miembros activos, debe transferir la propiedad antes (respuesta 409) |
 
-Las fotografías compartidas en proyectos empresariales se conservan como recursos comunes cuando exista una finalidad vigente. Una solicitud específica será evaluada caso por caso.
+Se conserva, restringido y sin uso para otros fines:
+
+| Categoría | Plazo | Fundamento |
+|---|---|---|
+| Facturas, notas de crédito y pagos recibidos como cliente | 5 años desde el 31-dic del año de la última factura | Obligación fiscal y contable |
+| Facturas de las empresas que se cierran, con los presupuestos, obras y clientes que las respaldan | Igual | Obligación fiscal y contable |
+| Registros de empresas cerradas sin facturas | Mientras pueda haber una reclamación | Defensa de reclamaciones |
+| Ficha de cliente en otras empresas | La define cada empresa | La empresa es responsable de su registro comercial |
+| Fotos de obra, presupuestos y tareas hechos como miembro de un equipo que sigue activo | Mientras la empresa los necesite | Recursos de la empresa con finalidad vigente; la autoría queda anónima |
+| Bitácora de auditoría y sesiones anonimizadas | Mientras sea necesario para seguridad | Seguridad y prevención de fraude |
+
+Cada eliminación deja una constancia sin datos personales en `private.account_deletion_records` (conteos, categorías conservadas y `retention_until`). El superadministrador revisa una vez al año las constancias con `retention_until` vencido y elimina o anonimiza los registros correspondientes.
 
 ## 3. Exportación y portabilidad
 
-Antes de eliminar la cuenta, el usuario puede obtener una copia JSON mediante `GET /account/export`. También puede presentar una solicitud formal de acceso o portabilidad a **privacidad@leurettech.com**.
+El usuario puede descargar una copia JSON de sus datos en cualquier momento (`GET /account/export`; en el teléfono, `POST /account/export/link` abre una descarga de 10 minutos en el navegador). El archivo incluye cuenta, perfil, sesiones, empresas, datos comerciales, peticiones de trabajo y conversaciones, solicitudes de vinculación y de factura, aportes de precio y un índice `files` con enlaces firmados de 24 horas a sus documentos y fotos. No incluye contraseñas, tokens, códigos de confirmación ni rutas internas del almacenamiento.
+
+También puede presentar una solicitud formal de acceso o portabilidad a **privacidad@leurettech.com**.
 
 ## 4. Solicitudes de derechos
 

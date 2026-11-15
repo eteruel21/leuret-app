@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
+import type { AccountDeletionPreview, RetainedCategory } from "@/utils/account-deletion";
+
 const isWeb = Platform.OS === "web";
 const refreshTokenKey = "contractor_refresh_token";
 const legacyRefreshTokenKey = `fallback_${refreshTokenKey}`;
@@ -502,9 +504,13 @@ export async function requestPasswordReset(email: string, captchaToken: string):
 export type AccountDeletionResponse = {
   success: boolean;
   accountStatus: "deleted";
+  deletedAt?: string;
   authenticationDisabled: boolean;
   profilePersonalDataAnonymized: boolean;
   sessionsRevoked: boolean;
+  deleted?: Record<string, number>;
+  retained?: RetainedCategory[];
+  retentionUntil?: string | null;
   storageCleanup: {
     status: "completed" | "not_required" | "queued_for_retry";
     objectCount: number;
@@ -521,6 +527,22 @@ export async function exportAccountData(): Promise<Record<string, unknown>> {
   return authenticatedRequest<Record<string, unknown>>(
     "/account/export"
   );
+}
+
+/**
+ * Enlace de 10 minutos para descargar la exportación en el navegador del
+ * teléfono (iOS y Android no pueden guardar el JSON desde la app).
+ */
+export async function createAccountExportLink(): Promise<{ url: string; expiresAt: string }> {
+  const result = await authenticatedRequest<{ path: string; expiresAt: string }>(
+    "/account/export/link",
+    { method: "POST" }
+  );
+  return { url: `${API_URL}${result.path}`, expiresAt: result.expiresAt };
+}
+
+export async function getAccountDeletionPreview(): Promise<AccountDeletionPreview> {
+  return authenticatedRequest<AccountDeletionPreview>("/account/deletion-preview");
 }
 
 export async function deleteOwnAccount(): Promise<AccountDeletionResponse> {

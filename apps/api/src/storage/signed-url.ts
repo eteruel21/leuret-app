@@ -81,3 +81,38 @@ export async function verifyProfileDocumentToken(
     return false;
   }
 }
+
+/**
+ * Enlace breve para descargar la exportación de datos desde el navegador del
+ * teléfono (la app nativa no puede guardar el JSON como archivo). Solo
+ * identifica al usuario; la descarga vuelve a leer los datos con RLS.
+ */
+export async function generateAccountExportToken(
+  userId: string,
+  expiresInMinutes: number = 10
+): Promise<string> {
+  return new SignJWT({
+    kind: "account_export",
+    userId
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(`${expiresInMinutes}m`)
+    .sign(secret);
+}
+
+export async function verifyAccountExportToken(
+  token: string
+): Promise<string | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret);
+
+    return payload.kind === "account_export" &&
+      typeof payload.userId === "string" &&
+      /^[0-9a-f-]{36}$/i.test(payload.userId)
+      ? payload.userId
+      : null;
+  } catch {
+    return null;
+  }
+}
