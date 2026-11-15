@@ -20,7 +20,8 @@ import {
   acceptInvitationSchema,
   updateMemberStatusSchema,
   updateMemberRoleSchema,
-  auditLogQuerySchema
+  auditLogQuerySchema,
+  invitationIdParamsSchema
 } from "./schemas.js";
 
 import {
@@ -32,10 +33,11 @@ import {
   acceptCompanyInvitationService,
   revokeCompanyInvitationService,
   getCompanyMembersService,
-  updateCompanyMemberStatusService,
-  updateCompanyMemberRoleService,
-  deleteCompanyMemberService,
-  getAdminAuditLogsService
+  manageCompanyMemberService,
+  leaveCompanyService,
+  declineCompanyInvitationService,
+  getAdminAuditLogsService,
+  type MemberActionResult
 } from "./services.js";
 import { listReceivedCompanyInvitationsRepo } from "./repository.js";
 
@@ -161,20 +163,23 @@ export async function registerCompanyRoutes(
         });
       }
 
-      const invitation = await createCompanyInvitationService(
+      const result = await createCompanyInvitationService(
         userId,
         parsedParams.data.companyId,
         parsedBody.data.email,
         parsedBody.data.role
       );
 
-      if (!invitation) {
-        return reply.status(403).send({
-          message: "No se pudo crear la invitación con los permisos indicados."
-        });
+      if ("conflict" in result) {
+        const error = {
+          already_member: { status: 409, message: "Esa persona ya forma parte del equipo. Cambia su rol desde la lista de miembros." },
+          owner_required: { status: 403, message: "Solo un propietario puede invitar administradores." },
+          forbidden: { status: 403, message: "No se pudo crear la invitación con los permisos indicados." }
+        }[result.conflict];
+        return reply.status(error.status).send({ message: error.message });
       }
 
-      return reply.header("Cache-Control", "private, no-store").status(201).send({ invitation });
+      return reply.header("Cache-Control", "private, no-store").status(201).send({ invitation: result.invitation });
     }
   );
 
@@ -232,6 +237,29 @@ export async function registerCompanyRoutes(
     }
   );
 
+  app.post(
+    "/companies/invitations/:invitationId/decline",
+    {
+      preHandler: authenticateRequest,
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } }
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedParams = invitationIdParamsSchema.safeParse(request.params);
+      if (!parsedParams.success) {
+        return reply.status(400).send({ message: "La invitación no es válida." });
+      }
+
+      const companyId = await declineCompanyInvitationService(userId, parsedParams.data.invitationId);
+      if (!companyId) {
+        return reply.status(404).send({ message: "La invitación ya fue respondida, venció o no corresponde a tu correo." });
+      }
+      return { success: true };
+    }
+  );
+
   app.delete(
     "/companies/:companyId/invitations/:invitationId",
     {
@@ -281,6 +309,10 @@ export async function registerCompanyRoutes(
     }
   );
 
+  const sendMemberResult = (reply: FastifyReply, result: MemberActionResult) => result.success
+    ? reply.send({ success: true, changed: result.changed, member: result.member })
+    : reply.status(result.status).send({ message: result.error });
+
   app.patch(
     "/companies/:companyId/members/:memberId/status",
     {
@@ -297,18 +329,12 @@ export async function registerCompanyRoutes(
         return reply.status(400).send({ message: "Datos no válidos." });
       }
 
-      const result = await updateCompanyMemberStatusService(
+      return sendMemberResult(reply, await manageCompanyMemberService(
         userId,
         parsedParams.data.companyId,
         parsedParams.data.memberId,
-        parsedBody.data.active
-      );
-
-      if (!result.success) {
-        return reply.status(400).send({ message: result.error });
-      }
-
-      return { success: true, member: result.member };
+        parsedBody.data.active ? "activate" : "deactivate"
+      ));
     }
   );
 
@@ -328,18 +354,13 @@ export async function registerCompanyRoutes(
         return reply.status(400).send({ message: "Datos de rol no válidos." });
       }
 
-      const result = await updateCompanyMemberRoleService(
+      return sendMemberResult(reply, await manageCompanyMemberService(
         userId,
         parsedParams.data.companyId,
         parsedParams.data.memberId,
+        "set_role",
         parsedBody.data.role
-      );
-
-      if (!result.success) {
-        return reply.status(400).send({ message: result.error });
-      }
-
-      return { success: true, member: result.member };
+      ));
     }
   );
 
@@ -357,16 +378,39 @@ export async function registerCompanyRoutes(
         return reply.status(400).send({ message: "ID no válido." });
       }
 
-      const result = await deleteCompanyMemberService(
+      return sendMemberResult(reply, await manageCompanyMemberService(
         userId,
         parsedParams.data.companyId,
-        parsedParams.data.memberId
-      );
+        parsedParams.data.memberId,
+        "remove"
+      ));
+    }
+  );
 
-      if (!result.success) {
-        return reply.status(400).send({ message: result.error });
+  // Cualquier miembro puede salir de la empresa, salvo el último propietario.
+  app.post(
+    "/companies/:companyId/leave",
+    {
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator", "sales", "supervisor", "member"])]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedParams = companyParamsSchema.safeParse(request.params);
+      if (!parsedParams.success) {
+        return reply.status(400).send({ message: "ID de empresa no válido." });
       }
 
+      const outcome = await leaveCompanyService(userId, parsedParams.data.companyId);
+      if (outcome === "last_owner") {
+        return reply.status(409).send({
+          message: "Eres el único propietario. Haz propietario a otra persona del equipo antes de salir."
+        });
+      }
+      if (outcome === "not_member") {
+        return reply.status(404).send({ message: "Ya no formas parte de esta empresa." });
+      }
       return { success: true };
     }
   );

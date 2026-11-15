@@ -171,6 +171,36 @@ export async function acceptCompanyInvitation(
   }
 }
 
+/** Rechazar una invitación recibida. */
+export async function declineCompanyInvitation(
+  invitationId: string
+): Promise<{ success: boolean; error: string | null }> {
+  try {
+    await authenticatedRequest<{ success: boolean }>(
+      `/companies/invitations/${encodeURIComponent(invitationId)}/decline`,
+      { method: "POST" }
+    );
+    return { success: true, error: null };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
+  }
+}
+
+/** Salir de una empresa (no disponible para el único propietario). */
+export async function leaveCompany(
+  companyId: string
+): Promise<{ success: boolean; error: string | null }> {
+  try {
+    await authenticatedRequest<{ success: boolean }>(
+      `/companies/${companyId}/leave`,
+      { method: "POST" }
+    );
+    return { success: true, error: null };
+  } catch (error) {
+    return { success: false, error: errorMessage(error) };
+  }
+}
+
 /**
  * Revocar una invitación enviada antes de que sea aceptada.
  */

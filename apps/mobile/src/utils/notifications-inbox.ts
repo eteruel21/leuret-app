@@ -1,16 +1,30 @@
 import type { JobRequestInboxConversation } from "@/types/job-request";
 
 /** Avisos push que deben actualizar la campana en el momento. */
-export const BELL_REFRESH_PUSH_TYPES = ["client_connection.requested", "job_request.message"] as const;
+export const BELL_REFRESH_PUSH_TYPES = [
+  "client_connection.requested",
+  "company_invitation.received",
+  "job_request.message",
+] as const;
+
+/** Avisos push que cambian la membresía del usuario: hay que recargar sus empresas. */
+export const MEMBERSHIP_PUSH_TYPES = ["company_member.updated", "company_member.removed"] as const;
+
+export function changesMembership(type: unknown): boolean {
+  return typeof type === "string" && (MEMBERSHIP_PUSH_TYPES as readonly string[]).includes(type);
+}
 
 export function refreshesBell(type: unknown): boolean {
   return typeof type === "string" && (BELL_REFRESH_PUSH_TYPES as readonly string[]).includes(type);
 }
 
-/** Número del globo: solicitudes recibidas pendientes + mensajes sin leer. */
-export function bellCount(pendingConnections: number, unreadMessages: number): number {
+/**
+ * Número del globo: solicitudes de vinculación recibidas, mensajes sin leer e
+ * invitaciones de equipo pendientes.
+ */
+export function bellCount(...counts: number[]): number {
   const safe = (value: number) => (Number.isFinite(value) && value > 0 ? Math.floor(value) : 0);
-  return safe(pendingConnections) + safe(unreadMessages);
+  return counts.reduce((total, value) => total + safe(value), 0);
 }
 
 export function badgeLabel(count: number): string {

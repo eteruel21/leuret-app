@@ -8,11 +8,13 @@ import { colors, radius } from "@/constants/theme";
 import { useCompany } from "@/contexts/CompanyContext";
 import { listClientConnections } from "@/services/client-connections-service";
 import { getJobRequestInbox } from "@/services/job-request-service";
+import { listReceivedCompanyInvitations } from "@/services/users-service";
 import { badgeLabel, bellAccessibilityLabel, bellCount, refreshesBell } from "@/utils/notifications-inbox";
 
 /**
  * Campana del Inicio (cliente y contratista). El globo suma las solicitudes
- * de vinculación recibidas y los mensajes nuevos de las peticiones de trabajo.
+ * de vinculación recibidas, los mensajes nuevos de las peticiones de trabajo
+ * y las invitaciones de equipo pendientes.
  */
 export function NotificationsBell() {
   const { activeCompany } = useCompany();
@@ -20,13 +22,15 @@ export function NotificationsBell() {
   const space = activeCompany ? "company" : "client";
   const [connections, setConnections] = useState(0);
   const [messages, setMessages] = useState(0);
+  const [invitations, setInvitations] = useState(0);
 
   useFocusEffect(useCallback(() => {
     let active = true;
     async function refresh() {
-      const [connectionResult, inboxResult] = await Promise.allSettled([
+      const [connectionResult, inboxResult, invitationResult] = await Promise.allSettled([
         listClientConnections(true, space),
         getJobRequestInbox({ limit: 1, space }),
+        listReceivedCompanyInvitations(),
       ]);
       if (!active) return;
       // Si una consulta falla se conserva el último valor; la pantalla muestra el error.
@@ -34,6 +38,7 @@ export function NotificationsBell() {
         setConnections(connectionResult.value.requests.filter((item) => item.incoming).length);
       }
       if (inboxResult.status === "fulfilled") setMessages(inboxResult.value.unreadMessages);
+      if (invitationResult.status === "fulfilled") setInvitations(invitationResult.value.invitations.length);
     }
 
     void refresh();
@@ -53,7 +58,7 @@ export function NotificationsBell() {
     };
   }, [space]));
 
-  const count = bellCount(connections, messages);
+  const count = bellCount(connections, messages, invitations);
 
   return (
     <Pressable

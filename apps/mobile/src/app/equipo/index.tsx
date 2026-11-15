@@ -26,6 +26,7 @@ import { ROLE_LABELS } from "@/permissions/permissions";
 import {
   createCompanyInvitation,
   deleteCompanyMember,
+  leaveCompany,
   listCompanyInvitations,
   listCompanyMembers,
   revokeCompanyInvitation,
@@ -37,8 +38,9 @@ import { showAlert } from "@/utils/alert";
 import { shareText } from "@/utils/share-text";
 import { formatShortDate } from "@/utils/format";
 import {
-  INVITABLE_ROLES,
   ROLE_DESCRIPTIONS,
+  canLeaveCompany,
+  invitableRolesFor,
   invitationMessage,
   memberActions,
   normalizeMember,
@@ -61,7 +63,7 @@ function confirmAction(title: string, message: string, confirmLabel: string, onC
 
 export default function TeamScreen() {
   const { user } = useAuth();
-  const { activeCompany } = useCompany();
+  const { activeCompany, refreshCompanies } = useCompany();
   const { role: myRole, can } = usePermissions();
   const canManage = can("company.manage");
   const companyId = activeCompany?.id;
@@ -114,7 +116,11 @@ export default function TeamScreen() {
     ? memberActions({ callerRole: myRole, callerUserId: user?.id ?? null, target: selected, activeOwnerCount })
     : null;
 
-  const runMemberAction = async (action: () => Promise<{ error: string | null }>, success: string) => {
+  const runMemberAction = async (
+    action: () => Promise<{ error: string | null }>,
+    success: string,
+    affectsMe = false
+  ) => {
     setBusy(true);
     const { error } = await action();
     setBusy(false);
@@ -123,15 +129,42 @@ export default function TeamScreen() {
       return;
     }
     setSelected(null);
+    // Si cambió mi propio rol, los permisos de toda la app cambian con él.
+    if (affectsMe) await refreshCompanies(companyId);
     await load();
     showAlert("Listo", success);
+  };
+
+  const canLeave = canLeaveCompany({ role: myRole, activeOwnerCount });
+
+  const handleLeave = () => {
+    if (!companyId) return;
+    confirmAction(
+      "Salir de la empresa",
+      `Perderás el acceso a ${activeCompany?.name}. Tu trabajo registrado se conserva. Para volver, necesitarás una invitación nueva.`,
+      "Salir",
+      () => {
+        void (async () => {
+          setBusy(true);
+          const { error } = await leaveCompany(companyId);
+          setBusy(false);
+          if (error) {
+            showAlert("No se pudo salir", error);
+            return;
+          }
+          await refreshCompanies();
+          router.replace("/");
+        })();
+      }
+    );
   };
 
   const handleRoleChange = (member: TeamMember, role: CompanyRole) => {
     if (!companyId) return;
     void runMemberAction(
       () => updateCompanyMemberRole(companyId, member.id, role),
-      `${member.name} ahora es ${ROLE_LABELS[role]}.`
+      member.userId === user?.id ? `Ahora tu rol es ${ROLE_LABELS[role]}.` : `${member.name} ahora es ${ROLE_LABELS[role]}.`,
+      member.userId === user?.id
     );
   };
 
@@ -287,6 +320,21 @@ export default function TeamScreen() {
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </Pressable>
         ) : null}
+
+        {canLeave ? (
+          <LeuretButton
+            label="Salir de la empresa"
+            icon="exit-outline"
+            variant="ghost"
+            fullWidth
+            disabled={busy}
+            onPress={handleLeave}
+          />
+        ) : myRole === "owner" ? (
+          <Text style={styles.leaveHint}>
+            Eres el único propietario. Para salir de la empresa, primero haz propietaria a otra persona del equipo.
+          </Text>
+        ) : null}
       </ScrollView>
 
       <MemberSheet
@@ -303,6 +351,7 @@ export default function TeamScreen() {
         visible={inviteVisible}
         companyId={companyId}
         companyName={activeCompany?.name ?? "la empresa"}
+        roles={invitableRolesFor(myRole)}
         onClose={() => setInviteVisible(false)}
         onCreated={(invitation) => setInvitations((current) => [invitation, ...current])}
       />
@@ -401,12 +450,14 @@ function InviteSheet({
   visible,
   companyId,
   companyName,
+  roles,
   onClose,
   onCreated,
 }: {
   visible: boolean;
   companyId: string;
   companyName: string;
+  roles: InvitableCompanyRole[];
   onClose: () => void;
   onCreated: (invitation: CompanyInvitation) => void;
 }) {
@@ -534,7 +585,7 @@ function InviteSheet({
                 />
 
                 <Text style={[styles.inputLabel, styles.sheetSpacing]}>Rol</Text>
-                {INVITABLE_ROLES.map((option) => {
+                {roles.map((option) => {
                   const isSelected = option === role;
                   return (
                     <Pressable
@@ -656,6 +707,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   linkText: { flex: 1, color: colors.primary, fontSize: 14, fontWeight: "800" },
+  leaveHint: { color: colors.textSecondary, fontSize: 12, lineHeight: 18, textAlign: "center" },
   pressed: { opacity: 0.7 },
   sheet: { flex: 1, backgroundColor: colors.background },
   sheetHeader: {

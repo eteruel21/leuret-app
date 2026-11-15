@@ -37,6 +37,10 @@ export const companyInvitationParamsSchema = z.object({
   invitationId: uuidSchema
 });
 
+export const invitationIdParamsSchema = z.object({
+  invitationId: uuidSchema
+});
+
 export const companyRoleSchema = z.enum([
   "owner",
   "admin",

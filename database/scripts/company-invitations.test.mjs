@@ -223,56 +223,33 @@ test("las invitaciones protegen token, correo, rol y concurrencia", async () => 
     );
     assert.deepEqual(membership.rows[0], { role: "admin", active: true });
 
-    await setRole(client, "contractor_api", inviteeId);
-    const adminCannotDeactivateOwner = await client.query(
+    // Los miembros se gestionan solo con private.manage_company_member.
+    const manage = (memberUserId, action, role = null) => client.query(
       `
-        UPDATE public.company_members
-        SET active = false
-        WHERE company_id = $1 AND user_id = $2
-        RETURNING id
+        SELECT result.outcome
+        FROM private.manage_company_member(
+          $1,
+          (SELECT id FROM public.company_members WHERE company_id = $1 AND user_id = $2),
+          $3,
+          $4::public.company_role
+        ) AS result
       `,
-      [companyId, inviterId],
-    );
-    assert.equal(adminCannotDeactivateOwner.rowCount, 0);
+      [companyId, memberUserId, action, role],
+    ).then((result) => result.rows[0].outcome);
+
+    await setRole(client, "contractor_api", inviteeId);
+    assert.equal(await manage(inviterId, "deactivate"), "owner_required");
+    await expectDatabaseError(client, "direct_member_update_is_denied", async () => {
+      await client.query(
+        "UPDATE public.company_members SET active = false WHERE company_id = $1 AND user_id = $2",
+        [companyId, inviterId],
+      );
+    });
 
     await setRole(client, "contractor_api", inviterId);
-    await expectDatabaseError(
-      client,
-      "last_owner_is_required",
-      async () => {
-        await client.query(
-          `
-            UPDATE public.company_members
-            SET role = 'member'::public.company_role
-            WHERE company_id = $1 AND user_id = $2
-          `,
-          [companyId, inviterId],
-        );
-      },
-      "23514",
-    );
-
-    const promotedOwner = await client.query(
-      `
-        UPDATE public.company_members
-        SET role = 'owner'::public.company_role
-        WHERE company_id = $1 AND user_id = $2
-        RETURNING id
-      `,
-      [companyId, inviteeId],
-    );
-    assert.equal(promotedOwner.rowCount, 1);
-
-    const transferredOwnership = await client.query(
-      `
-        UPDATE public.company_members
-        SET role = 'member'::public.company_role
-        WHERE company_id = $1 AND user_id = $2
-        RETURNING id
-      `,
-      [companyId, inviterId],
-    );
-    assert.equal(transferredOwnership.rowCount, 1);
+    assert.equal(await manage(inviterId, "set_role", "member"), "last_owner");
+    assert.equal(await manage(inviteeId, "set_role", "owner"), "ok");
+    assert.equal(await manage(inviterId, "set_role", "member"), "ok");
 
     const activeOwners = await client.query(
       `

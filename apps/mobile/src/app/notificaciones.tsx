@@ -11,6 +11,8 @@ import { colors, radius } from "@/constants/theme";
 import { useCompany } from "@/contexts/CompanyContext";
 import { listClientConnections } from "@/services/client-connections-service";
 import { getJobRequestInbox } from "@/services/job-request-service";
+import { listReceivedCompanyInvitations, type ReceivedCompanyInvitation } from "@/services/users-service";
+import { ROLE_LABELS } from "@/permissions/permissions";
 import type { JobRequestInbox, JobRequestInboxConversation } from "@/types/job-request";
 import { timeAgo } from "@/utils/job-requests";
 import { badgeLabel, inboxConversationRoute, inboxPreview, refreshesBell } from "@/utils/notifications-inbox";
@@ -24,6 +26,7 @@ export default function NotificationsScreen() {
   const space = activeCompany ? "company" : "client";
   const [inbox, setInbox] = useState<JobRequestInbox | null>(null);
   const [pendingConnections, setPendingConnections] = useState(0);
+  const [invitations, setInvitations] = useState<ReceivedCompanyInvitation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -33,9 +36,10 @@ export default function NotificationsScreen() {
   const load = useCallback(async (showRefresh = false) => {
     const number = ++requestNumber.current;
     if (showRefresh) setRefreshing(true);
-    const [inboxResult, connectionResult] = await Promise.allSettled([
+    const [inboxResult, connectionResult, invitationResult] = await Promise.allSettled([
       getJobRequestInbox({ limit: 30, space }),
       listClientConnections(true, space),
+      listReceivedCompanyInvitations(),
     ]);
     if (number !== requestNumber.current) return;
     if (inboxResult.status === "fulfilled") {
@@ -47,6 +51,7 @@ export default function NotificationsScreen() {
     if (connectionResult.status === "fulfilled") {
       setPendingConnections(connectionResult.value.requests.filter((item) => item.incoming).length);
     }
+    if (invitationResult.status === "fulfilled") setInvitations(invitationResult.value.invitations);
     setRefreshing(false);
   }, [space]);
 
@@ -112,6 +117,23 @@ export default function NotificationsScreen() {
         {pendingConnections > 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{badgeLabel(pendingConnections)}</Text></View> : null}
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </Pressable>
+
+      {invitations.map((invitation) => (
+        <Pressable
+          key={invitation.id}
+          accessibilityRole="button"
+          accessibilityLabel={`Invitación de ${invitation.company_name} como ${ROLE_LABELS[invitation.role]}`}
+          style={({ pressed }) => [styles.card, styles.row, styles.unreadCard, pressed && styles.pressed]}
+          onPress={() => router.push({ pathname: "/invitacion", params: { id: invitation.id } } as Href)}
+        >
+          <View style={[styles.icon, styles.iconUnread]}><Ionicons name="people" size={20} color={colors.accent} /></View>
+          <View style={styles.body}>
+            <Text style={styles.title} numberOfLines={1}>Invitación de {invitation.company_name}</Text>
+            <Text style={styles.text}>Como {ROLE_LABELS[invitation.role]}. Ábrela para unirte o rechazarla.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </Pressable>
+      ))}
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Mensajes</Text>

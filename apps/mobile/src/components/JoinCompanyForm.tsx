@@ -10,9 +10,11 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { ROLE_LABELS } from "@/permissions/permissions";
 import {
   acceptCompanyInvitation,
+  declineCompanyInvitation,
   listReceivedCompanyInvitations,
   type ReceivedCompanyInvitation,
 } from "@/services/users-service";
+import { confirmAction } from "@/utils/alert";
 import { clearPendingInvitation, readPendingInvitation } from "@/utils/pending-invitation";
 import { extractInvitationCode, isValidInvitationCode } from "@/utils/team";
 
@@ -89,6 +91,26 @@ export function JoinCompanyForm({ invitationId, initialCode }: { invitationId?: 
     }
   };
 
+  const decline = async (invitation: ReceivedCompanyInvitation) => {
+    if (submitting) return;
+    const confirmed = await confirmAction({
+      title: "Rechazar invitación",
+      message: `No te unirás a ${invitation.company_name}. Si cambias de opinión, pide que te inviten de nuevo.`,
+      confirmText: "Rechazar",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setSubmitting(`decline:${invitation.id}`);
+    setError(null);
+    const result = await declineCompanyInvitation(invitation.id);
+    setSubmitting(null);
+    if (!result.success) {
+      setError(result.error ?? "No pudimos rechazar la invitación.");
+      return;
+    }
+    setInvitations((current) => current.filter((item) => item.id !== invitation.id));
+  };
+
   const received = invitationId
     ? [...invitations].sort((left, right) => Number(right.id === invitationId) - Number(left.id === invitationId))
     : invitations;
@@ -112,6 +134,17 @@ export function JoinCompanyForm({ invitationId, initialCode }: { invitationId?: 
                 loading={submitting === invitation.id}
                 onPress={() => void submit(invitation.id)}
                 style={styles.button}
+              />
+              <LeuretButton
+                label="Rechazar"
+                variant="ghost"
+                fullWidth
+                accessibilityRole="button"
+                accessibilityLabel={`Rechazar la invitación de ${invitation.company_name}`}
+                disabled={Boolean(submitting)}
+                loading={submitting === `decline:${invitation.id}`}
+                onPress={() => void decline(invitation)}
+                style={styles.discard}
               />
             </View>
           ))}

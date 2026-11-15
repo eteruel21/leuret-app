@@ -259,88 +259,76 @@ export async function findCompanyMembersRepo(userId: string, companyId: string) 
   });
 }
 
-export async function findCompanyMemberByIdRepo(userId: string, companyId: string, memberId: string) {
+export type MemberAction = "set_role" | "deactivate" | "activate" | "remove";
+export type MemberActionOutcome = "ok" | "unchanged" | "forbidden" | "not_found" | "self" | "last_owner"
+  | "owner_required" | "inactive" | "unavailable";
+
+/**
+ * Cambios de miembros con las reglas de private.manage_company_member
+ * (migración 046): solo un propietario gestiona propietarios y
+ * administradores, nadie se desactiva o quita a sí mismo y la empresa
+ * conserva al menos un propietario activo. El registro de auditoría se
+ * escribe en la misma transacción.
+ */
+export async function manageCompanyMemberRepo(
+  userId: string,
+  companyId: string,
+  memberId: string,
+  action: MemberAction,
+  role: string | null = null
+) {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query<{
+      outcome: MemberActionOutcome;
+      target_user_id: string | null;
+      previous_role: string | null;
+      assigned_role: string | null;
+    }>(
+      `SELECT * FROM private.manage_company_member($1, $2, $3, $4::public.company_role)`,
+      [companyId, memberId, action, role]
+    );
+    return result.rows[0]!;
+  });
+}
+
+export async function findCompanyMemberRepo(userId: string, companyId: string, memberId: string) {
   return withUserTransaction(userId, async (client) => {
     const result = await client.query(
-      `
-        SELECT m.*, u.email
-        FROM public.company_members AS m
-        JOIN app_auth.users AS u ON u.id = m.user_id
-        WHERE m.id = $1 AND m.company_id = $2
-      `,
+      `SELECT m.id, m.company_id, m.user_id, m.role, m.active, m.created_at, m.updated_at
+       FROM public.company_members AS m WHERE m.id = $1 AND m.company_id = $2`,
       [memberId, companyId]
     );
     return result.rows[0] ?? null;
   });
 }
 
-export async function countActiveCompanyOwnersRepo(userId: string, companyId: string) {
+export async function leaveCompanyRepo(userId: string, companyId: string) {
   return withUserTransaction(userId, async (client) => {
-    const result = await client.query<{ count: string }>(
-      `
-        SELECT COUNT(*)::text AS count
-        FROM public.company_members
-        WHERE company_id = $1
-          AND role = 'owner'
-          AND active = true
-      `,
+    const result = await client.query<{ outcome: "ok" | "not_member" | "last_owner" }>(
+      "SELECT private.leave_company($1) AS outcome",
       [companyId]
     );
-    return parseInt(result.rows[0]?.count ?? "0", 10);
+    return result.rows[0]!.outcome;
   });
 }
 
-export async function updateCompanyMemberStatusRepo(
-  userId: string,
-  companyId: string,
-  memberId: string,
-  active: boolean
-) {
+export async function declineCompanyInvitationRepo(userId: string, invitationId: string) {
   return withUserTransaction(userId, async (client) => {
-    const result = await client.query(
-      `
-        UPDATE public.company_members
-        SET active = $1, updated_at = now()
-        WHERE id = $2 AND company_id = $3
-        RETURNING *
-      `,
-      [active, memberId, companyId]
+    const result = await client.query<{ company_id: string | null }>(
+      "SELECT private.decline_company_invitation($1) AS company_id",
+      [invitationId]
     );
-    return result.rows[0] ?? null;
+    return result.rows[0]?.company_id ?? null;
   });
 }
 
-export async function updateCompanyMemberRoleRepo(
-  userId: string,
-  companyId: string,
-  memberId: string,
-  role: string
-) {
+export async function findCompanyInvitationConflictRepo(userId: string, companyId: string, email: string, role: string) {
   return withUserTransaction(userId, async (client) => {
-    const result = await client.query(
-      `
-        UPDATE public.company_members
-        SET role = $1::public.company_role, updated_at = now()
-        WHERE id = $2 AND company_id = $3
-        RETURNING *
-      `,
-      [role, memberId, companyId]
+    const result = await client.query<{ conflict: "forbidden" | "owner_required" | "already_member" | null }>(
+      "SELECT private.company_invitation_conflict($1, $2, $3::public.company_role) AS conflict",
+      [companyId, email, role]
     );
-    return result.rows[0] ?? null;
-  });
-}
-
-export async function deleteCompanyMemberRepo(userId: string, companyId: string, memberId: string) {
-  return withUserTransaction(userId, async (client) => {
-    const result = await client.query(
-      `
-        DELETE FROM public.company_members
-        WHERE id = $1 AND company_id = $2
-        RETURNING *
-      `,
-      [memberId, companyId]
-    );
-    return result.rows[0] ?? null;
+    return result.rows[0]?.conflict ?? null;
   });
 }
 

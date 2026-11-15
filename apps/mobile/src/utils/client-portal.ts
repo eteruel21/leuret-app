@@ -145,10 +145,13 @@ export function notificationRoute(
       const invitationId = id(data.invitationId);
       return invitationId ? { pathname: "/invitacion", params: { id: invitationId } } : null;
     }
-    case "client_connection.requested": {
+    case "client_connection.requested":
+    case "client_connection.accepted": {
       const requestId = id(data.requestId);
       return requestId ? { pathname: "/solicitudes", params: { id: requestId } } : null;
     }
+    case "client_connection.ended":
+      return { pathname: "/solicitudes", params: {} };
     case "budget.sent": {
       const budgetId = id(data.budgetId);
       return budgetId && isClient ? { pathname: "/cliente-presupuestos/[id]", params: { id: budgetId } } : null;

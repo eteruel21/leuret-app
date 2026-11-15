@@ -26,7 +26,7 @@ type ClientConnectionRow = {
   client_id: string | null;
   name: string;
   incoming: boolean;
-  status: "pending" | "accepted" | "rejected" | "cancelled";
+  status: "pending" | "accepted" | "rejected" | "cancelled" | "ended";
   requires_phone_code: boolean;
   phone_code: string | null;
   phone_to_confirm: string | null;
@@ -62,5 +62,29 @@ export async function respondToClientConnection(userId: string, id: string, acti
       [id, action, phoneCode ?? null]
     );
     return result.rows[0]!.outcome;
+  });
+}
+
+export type EndConnectionOutcome = "ended" | "not_linked" | "forbidden";
+
+/** Termina la vinculación: desde el cliente (sin clientId) o desde la empresa (con la ficha). */
+export async function endClientConnection(userId: string, companyId: string, clientId: string | null) {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query<{ outcome: EndConnectionOutcome; notify_user_ids: string[] | null }>(
+      "SELECT * FROM private.end_client_connection($1, $2)",
+      [companyId, clientId]
+    );
+    return result.rows[0]!;
+  });
+}
+
+/** Quien envió la solicitud que el usuario acaba de aceptar. */
+export async function findClientConnectionRequester(userId: string, requestId: string) {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query<{ requester: string | null }>(
+      "SELECT private.client_connection_requester($1) AS requester",
+      [requestId]
+    );
+    return result.rows[0]?.requester ?? null;
   });
 }
