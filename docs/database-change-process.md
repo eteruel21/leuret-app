@@ -12,7 +12,7 @@ esquema** (CI) y la **detección de deriva** (despliegue).
 | 1. Migración nueva, numerada, en una transacción | PR | Historial inmutable, todo o nada |
 | 2. CI: migraciones desde cero + lint + pruebas RLS | `validate.yml` pasos 8, 8b, 10 | Que la migración aplica, cumple las reglas y no rompe permisos |
 | 3. Respaldo antes de aplicar | `npm run db:backup:local` | Poder volver atrás con datos |
-| 4. Aplicar en producción **antes** del merge | `npm run db:migrate:supabase` | Que el deploy no se bloquee |
+| 4. Aplicar en producción | GitHub Actions *Aplicar migraciones a producción* o `npm run db:migrate:supabase` | Aplicar lo probado, con checksum, sin pegar SQL a mano |
 | 5. Verificar | `db:check:supabase`, `db:drift:supabase`, asesores | Que producción quedó igual que el repositorio |
 | 6. Merge → deploy | `deploy.yml` pasos 5 y 5b | Bloquea el deploy si falta una migración o si alguien cambió algo a mano |
 
@@ -118,16 +118,32 @@ npm run db:backup:local      # copia lógica en tu equipo (docs/backup-restore-v
 Y anotar la hora: si el plan de Supabase tiene PITR, sirve para restaurar a
 ese punto.
 
-## 4. Aplicar en producción (antes del merge)
+## 4. Aplicar en producción
 
-**Opción recomendada** (desde una computadora con `database/.env.supabase`):
+**Desde el teléfono o sin computadora: GitHub Actions** →
+*Aplicar migraciones a producción* (`.github/workflows/db-migrate.yml`) →
+*Run workflow*:
+
+1. Primero con `mode = status`: muestra qué está pendiente en producción, sin
+   cambiar nada.
+2. Luego con `mode = apply` y `confirm = APLICAR`. El flujo prueba todas las
+   migraciones en una base efímera y pasa el lint. Recién después aplica en
+   producción con `migrate.mjs`, que registra cada checksum, y al final
+   verifica que no queden migraciones pendientes ni deriva de esquema.
+
+El flujo usa las migraciones de `main`. Por eso, con este camino el orden es
+**merge → el deploy se detiene en el paso 5** (sin desplegar nada) → correr
+el flujo → *Re-run* del deploy. Para pedir la aprobación de otra persona antes
+de aplicar, se agregan reviewers en Settings → Environments → production.
+
+**Desde una computadora con `database/.env.supabase`** (antes del merge):
 
 ```bash
 npm run db:status:supabase   # ver qué está pendiente
 npm run db:migrate:supabase  # aplica y registra el checksum
 ```
 
-**Si solo hay acceso desde el teléfono** (SQL Editor o MCP de Supabase):
+**Último recurso: SQL Editor o MCP de Supabase.** Para migraciones cortas:
 
 1. Pegar el archivo completo tal como está.
    - El MCP pide confirmación para SQL con `DROP …`; desde el móvil ese aviso
@@ -143,9 +159,11 @@ npm run db:migrate:supabase  # aplica y registra el checksum
 
    (`sha256sum database/migrations/NNN_descripcion.sql`).
 
-**Por qué antes del merge:** el deploy (`deploy.yml`, paso 5) se bloquea si hay
-migraciones en el repositorio que producción no tiene. Si se fusiona primero,
-todos los deploys fallan hasta aplicarla (pasó con la 040 y la 045).
+**Por qué importa el orden:** el deploy (`deploy.yml`, paso 5) se bloquea si
+hay migraciones en el repositorio que producción no tiene. El bloqueo ocurre
+antes de desplegar nada, así que es seguro, pero todos los deploys fallan
+hasta aplicarla (pasó con la 040 y la 045). Con el flujo de GitHub Actions
+se resuelve en minutos.
 
 ## 5. Verificar
 
@@ -192,6 +210,7 @@ Si el paso 5b falla:
 
 | Archivo | Uso |
 |---|---|
+| `.github/workflows/db-migrate.yml` | Aplicar migraciones a producción desde GitHub (manual, con confirmación) |
 | `database/scripts/migrate.mjs` | Aplica migraciones con checksum y bloqueo (`--status`, `--check`) |
 | `database/scripts/schema-lint.sql` / `.mjs` | Reglas de esquema (CI paso 8b, `npm run db:lint`) |
 | `database/scripts/schema-fingerprint.sql` | Huella normalizada del esquema |
