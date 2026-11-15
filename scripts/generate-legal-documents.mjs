@@ -26,11 +26,16 @@ function escapeHtml(value) {
 
 function renderInline(value) {
   return escapeHtml(value)
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\b[\w.]+@leurettech\.com\b/g, '<a href="mailto:$&">$&</a>');
+    .replace(
+      /\[([^\[\]<>]+)\]\((https:\/\/[^\s()*<>]+)\)|\b[\w.]+@leurettech\.com\b/g,
+      (match, label, url) => url
+        ? '<a href="' + url + '">' + label + "</a>"
+        : '<a href="mailto:' + match + '">' + match + "</a>"
+    )
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }
 
-// The legal sources use headings, paragraphs, emphasis and flat lists.
+// The legal sources use headings, paragraphs, emphasis, links and flat lists.
 function renderBlocks(markdown) {
   const html = [];
   let paragraph = [];

@@ -72,13 +72,11 @@ No debe cargar documentos de identidad, información sensible o datos de tercero
 
 No vendemos ni alquilamos datos personales.
 
-Podemos utilizar proveedores que procesan información únicamente para prestar servicios a LEURET TECH, entre ellos:
-
-- **Cloudflare:** distribución web, seguridad y verificación antifraude (como Turnstile), así como ejecución o almacenamiento cuando esas funciones estén configuradas;
-- **Supabase:** alojamiento de la base de datos PostgreSQL en Estados Unidos (región us-east-1);
-- **Resend:** entrega de correos transaccionales;
-- **Expo y proveedores de plataforma móvil:** compilación, distribución y notificaciones cuando esas funciones estén habilitadas;
-- **Apple o Google:** distribución y servicios del sistema operativo cuando corresponda.
+- **Cloudflare** distribuye las páginas web, ejecuta la API, aloja archivos y presta servicios de protección contra abusos. Turnstile procesa señales técnicas como la dirección IP y datos del navegador para verificar el acceso. [Aviso de Privacidad de Turnstile](https://www.cloudflare.com/turnstile-privacy-policy/).
+- **Supabase** aloja la base de datos principal de PostgreSQL en Estados Unidos, en la región us-east-1.
+- **Resend** entrega correos de servicio y gestiona los buzones de privacidad y asuntos legales. Trata las direcciones de correo, los mensajes y los adjuntos recibidos por esos buzones. El proveedor almacena datos de correo en Estados Unidos.
+- **Expo** permite compilar y distribuir la app móvil. Cuando habilitas los avisos en el dispositivo, su servicio de notificaciones recibe el identificador de entrega, el texto del aviso y los datos necesarios para abrirlo.
+- **Apple o Google** distribuyen aplicaciones y entregan avisos al dispositivo, según el sistema operativo.
 
 Las personas autorizadas de una empresa pueden acceder a la información de sus espacios de trabajo según su rol. Al publicar una petición de trabajo, su descripción, zona y fotos de publicación se comparten con los contratistas habilitados para verla. El acceso a datos de contacto, dirección exacta y conversaciones depende de la relación y los permisos aplicables.
 
@@ -88,7 +86,7 @@ Los proveedores pueden cambiar. LEURET TECH evaluará su necesidad, acceso y obl
 
 ## 7. Transferencias internacionales
 
-La infraestructura, el alojamiento y la entrega de comunicaciones pueden implicar tratamiento fuera de Panamá por los proveedores indicados. Toda transferencia requiere una condición aplicable del artículo 33 de la Ley 81. El canal de privacidad atiende consultas sobre los destinatarios, sus ubicaciones y el fundamento aplicable a la transferencia.
+El alojamiento principal de la base de datos y el tratamiento de correo indicados en la sección anterior implican tratamiento en Estados Unidos. Los servicios de distribución web, seguridad y avisos en el dispositivo pueden tratar datos en otras ubicaciones conforme a su configuración. A las transferencias les corresponden las condiciones del artículo 33 de la Ley 81 y de los artículos 51 a 53 del Decreto Ejecutivo 285. Puedes solicitar información sobre los destinatarios, los países y el fundamento aplicable a través del correo de privacidad.
 
 ## 8. Seguridad
 

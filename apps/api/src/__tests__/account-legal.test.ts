@@ -161,6 +161,9 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
     expect(response.headers["content-type"]).toContain("text/html");
     expect(response.payload).toContain('name="legal-document-version" content="' + version + '"');
     expect(response.payload).toContain("LEURET TECH");
+    if (type === "privacy") {
+      expect(response.payload).toContain('href="https://www.cloudflare.com/turnstile-privacy-policy/"');
+    }
     const stale = await app.inject("/legal/" + type + "/version/" + "0".repeat(64));
     expect(stale.statusCode).toBe(409);
     await app.close();
