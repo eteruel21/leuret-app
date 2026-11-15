@@ -1,5 +1,6 @@
+import { Link, type Href } from "expo-router";
 import { useEffect, useState } from "react";
-import { Linking, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { LegalConfirmationRow } from "@/components/LegalConfirmationRow";
 import { LeuretButton } from "@/components/LeuretButton";
@@ -11,7 +12,6 @@ import {
   getAccountLegalStatus,
   type LegalConfirmations,
 } from "@/services/api";
-import { showAlert } from "@/utils/alert";
 
 const publicDocuments = [
   { title: "Términos y Condiciones de Uso", url: "https://admin.leurettech.com/legal/terms" },
@@ -110,18 +110,15 @@ export function AccountLegalConfirmations() {
       ) : loadingError ? (
         <>
           {publicDocuments.map(({ title, url }) => (
-            <Text
+            <Link
               key={url}
-              accessibilityRole="link"
+              href={url as Href}
+              target="_blank"
+              rel="noopener noreferrer"
               style={styles.link}
-              onPress={() => {
-                void Linking.openURL(url).catch(() => {
-                  showAlert("No se pudo abrir el documento", "Verifica tu conexión e intenta nuevamente.");
-                });
-              }}
             >
               {title}
-            </Text>
+            </Link>
           ))}
           <Text accessibilityLiveRegion="polite" style={styles.status}>
             No se pudieron consultar tus confirmaciones.

@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Link, type Href } from "expo-router";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors } from "@/constants/theme";
 import {
@@ -7,7 +8,6 @@ import {
   type LegalDocumentSummary,
   type LegalDocumentType,
 } from "@/services/api";
-import { showAlert } from "@/utils/alert";
 
 const confirmationLabels = {
   terms: "Acepto los",
@@ -33,12 +33,6 @@ export function LegalConfirmationRow({
 }: Props) {
   const confirmation = confirmationLabels[type];
 
-  function openDocument() {
-    void Linking.openURL(getVersionedLegalUrl(type, document.version)).catch(() => {
-      showAlert("No se pudo abrir el documento", "Verifica tu conexión e intenta nuevamente.");
-    });
-  }
-
   return (
     <View style={styles.row}>
       {confirmedAt ? (
@@ -47,7 +41,8 @@ export function LegalConfirmationRow({
         <Pressable
           accessibilityRole="checkbox"
           accessibilityLabel={confirmation + " " + document.title}
-          accessibilityState={{ checked, disabled }}
+          aria-checked={checked}
+          aria-disabled={disabled}
           disabled={disabled}
           onPress={() => onChange(!checked)}
           style={styles.checkbox}
@@ -60,13 +55,14 @@ export function LegalConfirmationRow({
           <Text style={styles.label}>{confirmation}</Text>
         </Pressable>
       )}
-      <Text
-        accessibilityRole="link"
-        onPress={openDocument}
+      <Link
+        href={getVersionedLegalUrl(type, document.version) as Href}
+        target="_blank"
+        rel="noopener noreferrer"
         style={styles.link}
       >
         {document.title}
-      </Text>
+      </Link>
       {confirmedAt ? <Text style={styles.label}>Confirmado</Text> : null}
     </View>
   );

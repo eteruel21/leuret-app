@@ -636,7 +636,7 @@ export default function RegisterScreen() {
 
             <Pressable
               accessibilityRole="checkbox"
-              accessibilityState={{ checked: notificationsOptIn }}
+              aria-checked={notificationsOptIn}
               onPress={() => setNotificationsOptIn(!notificationsOptIn)}
               style={styles.checkboxRow}
             >
