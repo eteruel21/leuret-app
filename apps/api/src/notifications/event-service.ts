@@ -1,6 +1,6 @@
 import { safeErrorDetails } from "../security/redaction.js";
 import { sendPushNotificationToUser } from "./push-service.js";
-import { findCompanyManagerIdsRepo } from "./repository.js";
+import { findCompanyManagerIdsRepo, recordUserNotificationRepo, type InboxSpace } from "./repository.js";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -17,19 +17,51 @@ function textField(record: UnknownRecord | null, field: string): string | null {
     : null;
 }
 
+/**
+ * Dónde se guarda el aviso en la bandeja (public.notifications). Los avisos
+ * que ya viven en su propia tabla y se muestran en la campana (solicitudes de
+ * vinculación, invitaciones, mensajes de peticiones) no se duplican: null.
+ */
+export type InboxTarget = {
+  space: InboxSpace | null;
+  companyId: string | null;
+};
+
 async function dispatchEventPush(
   recipientUserId: string | null,
   title: string,
   body: string,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  inbox: InboxTarget | null = null
 ): Promise<void> {
   if (!recipientUserId) return;
+
+  let payloadData = data;
+  if (inbox) {
+    try {
+      const notificationId = await recordUserNotificationRepo(recipientUserId, {
+        companyId: inbox.companyId,
+        space: inbox.space,
+        title,
+        body,
+        type: typeof data.type === "string" ? data.type : "info",
+        data
+      });
+      // Con el id, tocar el push marca el aviso como leído.
+      payloadData = { ...data, notificationId };
+    } catch (error) {
+      console.error(
+        "No se pudo guardar el aviso en la bandeja:",
+        safeErrorDetails(error)
+      );
+    }
+  }
 
   try {
     await sendPushNotificationToUser(recipientUserId, {
       title,
       body,
-      data
+      data: payloadData
     });
   } catch (error) {
     // El evento de negocio ya fue confirmado. Push es un efecto secundario
@@ -96,7 +128,7 @@ export async function notifyCompanyMemberChange(
   await dispatchEventPush(recipientId, title, body, {
     type: action === "set_role" || action === "activate" ? "company_member.updated" : "company_member.removed",
     companyId
-  });
+  }, { space: null, companyId: null });
 }
 
 export async function notifyClientConnectionAccepted(requesterId: string | null, requestId: string) {
@@ -104,7 +136,8 @@ export async function notifyClientConnectionAccepted(requesterId: string | null,
     requesterId,
     "Solicitud aceptada",
     "La vinculación en Leuret quedó activa.",
-    { type: "client_connection.accepted", requestId }
+    { type: "client_connection.accepted", requestId },
+    { space: null, companyId: null }
   );
 }
 
@@ -116,7 +149,8 @@ export async function notifyClientConnectionEnded(recipientIds: string[] | null,
     byClient
       ? "Un cliente terminó su vinculación con la empresa en Leuret."
       : "Una empresa terminó su vinculación contigo en Leuret.",
-    { type: "client_connection.ended", companyId }
+    { type: "client_connection.ended", companyId },
+    { space: byClient ? "company" : "client", companyId }
   )));
 }
 
@@ -160,7 +194,7 @@ export async function notifyBudgetDecision(
   };
 
   for (const recipientId of budgetDecisionRecipients(creatorId, managerIds)) {
-    await dispatchEventPush(recipientId, title, body, data);
+    await dispatchEventPush(recipientId, title, body, data, { space: "company", companyId });
   }
 }
 
@@ -170,6 +204,7 @@ export async function notifyBudgetSent(
 ): Promise<void> {
   const budget = asRecord(budgetValue);
   const budgetId = textField(budget, "id");
+  const companyId = textField(budget, "company_id");
   const budgetNumber = textField(budget, "budget_number");
   const displayNumber = budgetNumber ? ` ${budgetNumber}` : "";
   const amount = formatAmount(budget?.total, textField(budget, "currency_code"));
@@ -181,7 +216,8 @@ export async function notifyBudgetSent(
     {
       type: "budget.sent",
       ...(budgetId ? { budgetId } : {})
-    }
+    },
+    { space: "client", companyId }
   );
 }
 
@@ -202,7 +238,8 @@ export async function notifyInvoiceIssued(invoiceValue: unknown): Promise<void> 
       type: "invoice.issued",
       ...(invoiceId ? { invoiceId } : {}),
       ...(companyId ? { companyId } : {})
-    }
+    },
+    { space: "client", companyId }
   );
 }
 
@@ -229,7 +266,8 @@ export async function notifyInvoicePaymentRegistered(
       ...(invoiceId ? { invoiceId } : {}),
       ...(paymentId ? { paymentId } : {}),
       ...(companyId ? { companyId } : {})
-    }
+    },
+    { space: "client", companyId }
   );
 }
 
@@ -238,12 +276,13 @@ async function dispatchEventPushToMany(
   recipientIds: string[],
   title: string,
   body: string,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  inbox: InboxTarget | null = null
 ): Promise<void> {
   const unique = [...new Set(recipientIds.filter(Boolean))];
   for (let index = 0; index < unique.length; index += 10) {
     await Promise.allSettled(
-      unique.slice(index, index + 10).map((recipientId) => dispatchEventPush(recipientId, title, body, data))
+      unique.slice(index, index + 10).map((recipientId) => dispatchEventPush(recipientId, title, body, data, inbox))
     );
   }
 }
@@ -256,7 +295,8 @@ export async function notifyJobRequestCreated(
     recipientIds,
     "Nueva petición de trabajo",
     `${request.category} en ${request.province}: ${request.title.slice(0, 90)}`,
-    { type: "job_request.created", requestId: request.id }
+    { type: "job_request.created", requestId: request.id },
+    { space: "company", companyId: null }
   );
 }
 
@@ -309,6 +349,7 @@ export async function notifyInvoiceRequested(
       companyId: request.companyId,
       budgetId: request.budgetId,
       projectId: request.projectId
-    }
+    },
+    { space: "company", companyId: request.companyId }
   );
 }

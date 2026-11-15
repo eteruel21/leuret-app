@@ -43,10 +43,7 @@ import {
   type AggregatePriceMode,
   type ConcreteResult,
 } from "../../services/calculators/concreto";
-import {
-  loadLocalData,
-  saveLocalData,
-} from "../../utils/local-storage";
+import { loadSyncedSetting, saveSyncedSetting } from "@/services/user-settings-service";
 import {
   getFormulaNumber,
 } from "../../utils/formula-parameters";
@@ -385,7 +382,7 @@ function ConcreteCalculatorForm({
   useEffect(() => {
     async function loadSavedSettings() {
       const saved =
-        await loadLocalData<ConcreteSavedSettings>(
+        await loadSyncedSetting<ConcreteSavedSettings>(
           CONCRETE_SETTINGS_KEY,
         );
 
@@ -467,7 +464,7 @@ function ConcreteCalculatorForm({
       gravelPriceMode,
     };
 
-    void saveLocalData(
+    void saveSyncedSetting(
       CONCRETE_SETTINGS_KEY,
       settings,
     );

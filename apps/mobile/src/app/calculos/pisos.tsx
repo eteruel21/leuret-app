@@ -31,7 +31,7 @@ import {
   type FlooringResult,
 } from "../../services/calculators/pisos";
 import { formatDecimal, formatMoney } from "../../utils/format";
-import { loadLocalData, saveLocalData } from "../../utils/local-storage";
+import { loadSyncedSetting, saveSyncedSetting } from "@/services/user-settings-service";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
 import { useSavedCalculation } from "@/components/SaveCalculation";
 import type { BudgetLineDraft } from "@/services/budget-service";
@@ -127,7 +127,7 @@ export default function FlooringScreen() {
 
   useEffect(() => {
     async function restore() {
-      const saved = await loadLocalData<Saved>(KEY);
+      const saved = await loadSyncedSetting<Saved>(KEY);
       if (saved) {
         const { floorType: savedFloorType, ...settings } = saved;
         setForm((current) => ({ ...current, ...settings }));
@@ -150,7 +150,7 @@ export default function FlooringScreen() {
       ...settings
     } = form;
 
-    void saveLocalData<Saved>(KEY, {
+    void saveSyncedSetting<Saved>(KEY, {
       ...settings,
       floorType,
     });

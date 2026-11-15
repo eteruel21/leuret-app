@@ -10,9 +10,27 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { listBudgetsByCompany } from "@/services/budget-service";
 import { listClients } from "@/services/client-service";
 import { listCompanyInvitations, listCompanyMembers } from "@/services/users-service";
+import { loadSyncedSetting, saveSyncedSetting } from "@/services/user-settings-service";
 import { hasBillingDetails, onboardingProgress, onboardingSteps, type OnboardingStep } from "@/utils/onboarding";
 
-const dismissKey = (companyId: string) => `@contractor-pro:onboarding-dismissed:${companyId}`;
+/** Antes solo se guardaba en el teléfono; ahora en la cuenta (migración 047). */
+const legacyDismissKey = (companyId: string) => `@contractor-pro:onboarding-dismissed:${companyId}`;
+const dismissSettingKey = (companyId: string) => `onboarding.checklist.${companyId.toLowerCase()}`;
+
+async function wasChecklistDismissed(companyId: string): Promise<boolean> {
+  const saved = await loadSyncedSetting<{ dismissed?: boolean }>(dismissSettingKey(companyId));
+  if (saved?.dismissed) return true;
+  try {
+    if ((await AsyncStorage.getItem(legacyDismissKey(companyId))) === "1") {
+      await saveSyncedSetting(dismissSettingKey(companyId), { dismissed: true });
+      await AsyncStorage.removeItem(legacyDismissKey(companyId));
+      return true;
+    }
+  } catch {
+    // Sin la copia antigua, se muestra la guía.
+  }
+  return false;
+}
 
 /**
  * Primeros pasos para el dueño/administrador de una empresa nueva.
@@ -30,12 +48,7 @@ export function OnboardingChecklist() {
       let mounted = true;
 
       void (async () => {
-        let wasDismissed = false;
-        try {
-          wasDismissed = (await AsyncStorage.getItem(dismissKey(companyId))) === "1";
-        } catch {
-          wasDismissed = false;
-        }
+        const wasDismissed = await wasChecklistDismissed(companyId);
         if (!mounted) return;
         setDismissed(wasDismissed);
         if (wasDismissed) return;
@@ -76,7 +89,7 @@ export function OnboardingChecklist() {
 
   const hide = () => {
     setDismissed(true);
-    void AsyncStorage.setItem(dismissKey(companyId), "1").catch(() => undefined);
+    void saveSyncedSetting(dismissSettingKey(companyId), { dismissed: true });
   };
 
   return (

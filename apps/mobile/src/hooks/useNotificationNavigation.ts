@@ -3,7 +3,10 @@ import { type Href, router } from "expo-router";
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 
+import { markNotificationsRead } from "@/services/notifications-service";
 import { notificationRoute } from "@/utils/client-portal";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Lleva a la pantalla del aviso cuando se toca una notificación push:
@@ -23,6 +26,11 @@ export function useNotificationNavigation({ enabled, isClient }: { enabled: bool
       handled.current.add(key);
 
       const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+      // El aviso también está guardado en la bandeja: queda leído.
+      const notificationId = data?.notificationId;
+      if (typeof notificationId === "string" && UUID.test(notificationId)) {
+        void markNotificationsRead({ space: isClient ? "client" : "company" }, { ids: [notificationId] }).catch(() => undefined);
+      }
       const target = notificationRoute(data, isClient);
       if (target) router.push(target as Href);
       try {

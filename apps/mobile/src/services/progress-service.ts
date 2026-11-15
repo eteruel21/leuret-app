@@ -3,6 +3,7 @@ import {
   cacheOfflineData,
   enqueueOfflineAction,
   getCachedOfflineData,
+  getOfflineQueue,
   isRetryableOfflineError
 } from "./offline-sync-service";
 
@@ -21,21 +22,37 @@ export type ProjectProgressHistoryRecord = {
   is_pending_sync?: boolean;
 };
 
-export async function listProjectProgressHistory(
+/** Historial de avance. Sin conexión usa la última copia y lo indica (fromCache). */
+export async function listProjectProgressHistoryResult(
   companyId: string,
   projectId: string
-): Promise<ProjectProgressHistoryRecord[]> {
+): Promise<{ history: ProjectProgressHistoryRecord[]; fromCache: boolean; error: string | null }> {
   const cacheKey = `progress_history_${companyId}_${projectId}`;
   try {
     const res = await authenticatedRequest<{ history: ProjectProgressHistoryRecord[] }>(
       `/companies/${companyId}/projects/${projectId}/progress-history`
     );
-    await cacheOfflineData(cacheKey, res.history);
-    return res.history;
-  } catch {
+    const queued = new Set((await getOfflineQueue()).map((action) => `off_prog_${action.id}`));
+    const cached = (await getCachedOfflineData<ProjectProgressHistoryRecord[]>(cacheKey)) ?? [];
+    const pending = cached.filter((record) => record.is_pending_sync && queued.has(record.id));
+    const history = [...pending, ...res.history];
+    await cacheOfflineData(cacheKey, history);
+    return { history, fromCache: false, error: null };
+  } catch (error) {
     const cached = await getCachedOfflineData<ProjectProgressHistoryRecord[]>(cacheKey);
-    return cached ?? [];
+    return {
+      history: cached ?? [],
+      fromCache: true,
+      error: error instanceof Error && error.message ? error.message : "No se pudo cargar el historial de avance."
+    };
   }
+}
+
+export async function listProjectProgressHistory(
+  companyId: string,
+  projectId: string
+): Promise<ProjectProgressHistoryRecord[]> {
+  return (await listProjectProgressHistoryResult(companyId, projectId)).history;
 }
 
 export async function recordProjectProgressHistory(
@@ -62,7 +79,7 @@ export async function recordProjectProgressHistory(
   } catch (error) {
     if (!isRetryableOfflineError(error)) return null;
     // Si no hay red, encolar en el almacenamiento local y retornar registro optimista
-    await enqueueOfflineAction({
+    const action = await enqueueOfflineAction({
       type: "RECORD_PROGRESS",
       endpoint,
       method: "POST",
@@ -70,7 +87,7 @@ export async function recordProjectProgressHistory(
     });
 
     const optimisticRecord: ProjectProgressHistoryRecord = {
-      id: `off_prog_${Date.now()}`,
+      id: `off_prog_${action.id}`,
       company_id: companyId,
       project_id: projectId,
       progress_percentage: progressPercentage,

@@ -125,10 +125,57 @@ export async function clearOfflineQueue(): Promise<void> {
   }
 }
 
+export type OfflineQueueSummary = {
+  pending: number;
+  blocked: number;
+  lastError: string | null;
+};
+
+/** Cambios hechos sin conexión que aún no llegan al servidor. */
+export async function getOfflineQueueSummary(): Promise<OfflineQueueSummary> {
+  const queue = await getOfflineQueue();
+  const blocked = queue.filter((action) => action.blocked);
+  return {
+    pending: queue.length - blocked.length,
+    blocked: blocked.length,
+    lastError: blocked[blocked.length - 1]?.lastError ?? null
+  };
+}
+
+/** Vuelve a intentar las acciones bloqueadas (el usuario lo pide). */
+export async function retryBlockedOfflineActions(): Promise<void> {
+  const userId = await currentUserId();
+  if (!userId) return;
+  const queue = await getOfflineQueue();
+  await saveOfflineQueue(userId, queue.map((action) => (
+    action.blocked ? { ...action, blocked: false, retryCount: 0 } : action
+  )));
+}
+
+/** Descarta las acciones que el servidor rechazó. */
+export async function discardBlockedOfflineActions(): Promise<void> {
+  const userId = await currentUserId();
+  if (!userId) return;
+  const queue = await getOfflineQueue();
+  await saveOfflineQueue(userId, queue.filter((action) => !action.blocked));
+}
+
+let syncInFlight: Promise<SyncResultSummary> | null = null;
+
 /**
- * Procesa en lote todas las acciones acumuladas en la cola offline.
+ * Procesa en lote todas las acciones acumuladas en la cola offline. Si ya hay
+ * una sincronización en curso, devuelve esa misma (evita enviar dos veces).
  */
-export async function processOfflineSyncQueue(): Promise<SyncResultSummary> {
+export function processOfflineSyncQueue(): Promise<SyncResultSummary> {
+  if (!syncInFlight) {
+    syncInFlight = runOfflineSync().finally(() => {
+      syncInFlight = null;
+    });
+  }
+  return syncInFlight;
+}
+
+async function runOfflineSync(): Promise<SyncResultSummary> {
   const userId = await currentUserId();
   if (!userId) {
     return { processed: 0, succeeded: 0, failed: 0, remaining: 0 };
@@ -167,13 +214,16 @@ export async function processOfflineSyncQueue(): Promise<SyncResultSummary> {
     }
   }
 
-  await saveOfflineQueue(userId, remainingQueue);
+  // Acciones encoladas mientras se sincronizaba: no se pierden.
+  const processedIds = new Set(queue.map((action) => action.id));
+  const addedMeanwhile = (await getOfflineQueue()).filter((action) => !processedIds.has(action.id));
+  await saveOfflineQueue(userId, [...remainingQueue, ...addedMeanwhile]);
 
   return {
     processed: queue.length,
     succeeded,
     failed,
-    remaining: remainingQueue.length
+    remaining: remainingQueue.length + addedMeanwhile.length
   };
 }
 

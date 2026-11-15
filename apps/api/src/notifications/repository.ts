@@ -129,3 +129,107 @@ export async function findCompanyManagerIdsRepo(contextUserId: string, companyId
     return result.rows.map((row) => row.user_id);
   });
 }
+
+export type InboxSpace = "client" | "company";
+
+export type UserNotificationInput = {
+  companyId: string | null;
+  space: InboxSpace | null;
+  title: string;
+  body: string;
+  type: string;
+  data: Record<string, unknown>;
+};
+
+export type UserNotificationRow = {
+  id: string;
+  company_id: string | null;
+  space: InboxSpace | null;
+  title: string;
+  body: string;
+  type: string;
+  data: Record<string, unknown>;
+  read_at: string | null;
+  created_at: string;
+};
+
+/**
+ * Guarda un aviso en la bandeja del destinatario. Se ejecuta con la identidad
+ * del destinatario (política notifications_insert_own, migración 047).
+ */
+export async function recordUserNotificationRepo(
+  recipientId: string,
+  input: UserNotificationInput
+): Promise<string> {
+  return withUserTransaction(recipientId, async (client) => {
+    const result = await client.query<{ id: string }>(
+      `
+        INSERT INTO public.notifications (company_id, user_id, title, body, type, space, data)
+        VALUES ($1, app.current_user_id(), left($2, 200), left($3, 1000), $4, $5, $6::jsonb)
+        RETURNING id
+      `,
+      [input.companyId, input.title, input.body, input.type, input.space, JSON.stringify(input.data)]
+    );
+    return result.rows[0].id;
+  });
+}
+
+/** Condición común: avisos del espacio activo (y de la empresa activa). */
+const INBOX_SCOPE_SQL = `
+  user_id = app.current_user_id()
+  AND (space IS NULL OR space = $1::text)
+  AND ($1::text <> 'company' OR company_id IS NULL OR company_id = $2::uuid)
+`;
+
+export async function listUserInboxRepo(
+  userId: string,
+  options: { space: InboxSpace; companyId: string | null; limit: number }
+): Promise<{ notifications: UserNotificationRow[]; unread: number }> {
+  return withUserTransaction(userId, async (client) => {
+    // Consultas en serie: un mismo cliente de pg no ejecuta en paralelo.
+    const rows = await client.query<UserNotificationRow>(
+      `
+        SELECT id, company_id, space, title, body, type, data, read_at, created_at
+        FROM public.notifications
+        WHERE ${INBOX_SCOPE_SQL}
+        ORDER BY created_at DESC
+        LIMIT $3
+      `,
+      [options.space, options.companyId, options.limit]
+    );
+    const unread = await client.query<{ unread: number }>(
+      `
+        SELECT count(*)::integer AS unread
+        FROM public.notifications
+        WHERE ${INBOX_SCOPE_SQL} AND read_at IS NULL
+      `,
+      [options.space, options.companyId]
+    );
+    return { notifications: rows.rows, unread: unread.rows[0]?.unread ?? 0 };
+  });
+}
+
+/** Marca como leídos los avisos indicados del usuario, o todos los del espacio si ids es null. */
+export async function markUserNotificationsReadRepo(
+  userId: string,
+  options: { space: InboxSpace; companyId: string | null; ids: string[] | null }
+): Promise<number> {
+  return withUserTransaction(userId, async (client) => {
+    const result = await client.query(
+      `
+        UPDATE public.notifications
+        SET read_at = now()
+        WHERE user_id = app.current_user_id()
+          AND read_at IS NULL
+          AND (
+            -- Con ids: esos avisos del usuario (p. ej. al tocar el push).
+            id = ANY ($3::uuid[])
+            -- Sin ids: todos los del espacio activo.
+            OR ($3::uuid[] IS NULL AND ${INBOX_SCOPE_SQL})
+          )
+      `,
+      [options.space, options.companyId, options.ids]
+    );
+    return result.rowCount ?? 0;
+  });
+}

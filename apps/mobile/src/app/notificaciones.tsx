@@ -12,10 +12,17 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { listClientConnections } from "@/services/client-connections-service";
 import { getJobRequestInbox } from "@/services/job-request-service";
 import { listReceivedCompanyInvitations, type ReceivedCompanyInvitation } from "@/services/users-service";
+import {
+  getNotificationInbox,
+  markNotificationsRead,
+  type InboxNotification,
+  type NotificationInbox,
+} from "@/services/notifications-service";
+import { notificationRoute } from "@/utils/client-portal";
 import { ROLE_LABELS } from "@/permissions/permissions";
 import type { JobRequestInbox, JobRequestInboxConversation } from "@/types/job-request";
 import { timeAgo } from "@/utils/job-requests";
-import { badgeLabel, inboxConversationRoute, inboxPreview, refreshesBell } from "@/utils/notifications-inbox";
+import { badgeLabel, inboxConversationRoute, inboxNotificationIcon, inboxPreview, refreshesBell } from "@/utils/notifications-inbox";
 
 function messageFor(error: unknown) {
   return error instanceof Error ? error.message : "No pudimos cargar las notificaciones.";
@@ -24,7 +31,10 @@ function messageFor(error: unknown) {
 export default function NotificationsScreen() {
   const { activeCompany, companies, setActiveCompanyId } = useCompany();
   const space = activeCompany ? "company" : "client";
+  const companyId = activeCompany?.id ?? null;
   const [inbox, setInbox] = useState<JobRequestInbox | null>(null);
+  const [notices, setNotices] = useState<NotificationInbox | null>(null);
+  const [noticesError, setNoticesError] = useState<string | null>(null);
   const [pendingConnections, setPendingConnections] = useState(0);
   const [invitations, setInvitations] = useState<ReceivedCompanyInvitation[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -36,10 +46,11 @@ export default function NotificationsScreen() {
   const load = useCallback(async (showRefresh = false) => {
     const number = ++requestNumber.current;
     if (showRefresh) setRefreshing(true);
-    const [inboxResult, connectionResult, invitationResult] = await Promise.allSettled([
+    const [inboxResult, connectionResult, invitationResult, noticeResult] = await Promise.allSettled([
       getJobRequestInbox({ limit: 30, space }),
       listClientConnections(true, space),
       listReceivedCompanyInvitations(),
+      getNotificationInbox({ space, companyId, limit: 30 }),
     ]);
     if (number !== requestNumber.current) return;
     if (inboxResult.status === "fulfilled") {
@@ -52,8 +63,14 @@ export default function NotificationsScreen() {
       setPendingConnections(connectionResult.value.requests.filter((item) => item.incoming).length);
     }
     if (invitationResult.status === "fulfilled") setInvitations(invitationResult.value.invitations);
+    if (noticeResult.status === "fulfilled") {
+      setNotices(noticeResult.value);
+      setNoticesError(null);
+    } else {
+      setNoticesError(messageFor(noticeResult.reason));
+    }
     setRefreshing(false);
-  }, [space]);
+  }, [space, companyId]);
 
   useFocusEffect(useCallback(() => {
     void load();
@@ -88,7 +105,46 @@ export default function NotificationsScreen() {
     }
   }
 
+  async function openNotice(notice: InboxNotification) {
+    if (opening) return;
+    setOpening(notice.id);
+    setOpenError(null);
+    try {
+      if (!notice.read_at) {
+        await markNotificationsRead({ space, companyId }, { ids: [notice.id] });
+        setNotices((current) => current && {
+          unread: Math.max(0, current.unread - 1),
+          notifications: current.notifications.map((item) =>
+            item.id === notice.id ? { ...item, read_at: new Date().toISOString() } : item),
+        });
+      }
+      // Avisos de otra empresa del usuario: se cambia la empresa activa.
+      const noticeCompany = typeof notice.data.companyId === "string" ? notice.data.companyId : notice.company_id;
+      if (space === "company" && noticeCompany && noticeCompany !== activeCompany?.id
+        && companies.some((item) => item.id === noticeCompany)) {
+        await setActiveCompanyId(noticeCompany);
+      }
+      const target = notificationRoute({ ...notice.data, type: notice.type }, space === "client");
+      if (target) router.push(target as Href);
+    } catch (err) {
+      setOpenError(messageFor(err));
+    } finally {
+      setOpening(null);
+    }
+  }
+
+  async function markAllRead() {
+    setOpenError(null);
+    try {
+      await markNotificationsRead({ space, companyId }, { all: true });
+      await load();
+    } catch (err) {
+      setOpenError(messageFor(err));
+    }
+  }
+
   const conversations = inbox?.conversations ?? [];
+  const noticeItems = notices?.notifications ?? [];
   const showCompany = companies.length > 1;
 
   return (
@@ -134,6 +190,50 @@ export default function NotificationsScreen() {
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </Pressable>
       ))}
+
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Avisos</Text>
+        {notices?.unread ? (
+          <Pressable accessibilityRole="button" onPress={() => void markAllRead()}>
+            <Text style={styles.sectionMeta}>Marcar todo como leído</Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {noticesError ? (
+        <LeuretFeedback title="No pudimos cargar los avisos" message={noticesError} tone="error"
+          actionLabel="Reintentar" onAction={() => void load(true)} compact />
+      ) : null}
+      {!notices && !noticesError ? <LeuretLoading message="Cargando avisos…" compact /> : null}
+      {notices && noticeItems.length === 0 ? (
+        <LeuretEmptyState icon="notifications-outline" title="Sin avisos"
+          description="Aquí verás presupuestos aprobados, facturas, peticiones nuevas y otros avisos." compact />
+      ) : null}
+
+      {noticeItems.map((notice) => {
+        const unread = !notice.read_at;
+        return (
+          <Pressable
+            key={notice.id}
+            accessibilityRole="button"
+            accessibilityLabel={`${notice.title}${unread ? ", sin leer" : ""}`}
+            disabled={Boolean(opening)}
+            style={({ pressed }) => [styles.card, styles.row, unread && styles.unreadCard, pressed && styles.pressed]}
+            onPress={() => void openNotice(notice)}
+          >
+            <View style={[styles.icon, unread && styles.iconUnread]}>
+              <Ionicons name={inboxNotificationIcon(notice.type)} size={20} color={unread ? colors.accent : colors.primary} />
+            </View>
+            <View style={styles.body}>
+              <View style={styles.topLine}>
+                <Text style={[styles.title, styles.flex]} numberOfLines={1}>{notice.title}</Text>
+                <Text style={[styles.time, unread && styles.timeUnread]}>{timeAgo(notice.created_at)}</Text>
+              </View>
+              <Text style={[styles.text, unread && styles.previewUnread]} numberOfLines={3}>{notice.body}</Text>
+            </View>
+          </Pressable>
+        );
+      })}
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Mensajes</Text>

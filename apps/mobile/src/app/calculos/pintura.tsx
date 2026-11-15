@@ -20,7 +20,7 @@ import {
 } from "../../services/calculators/catalog-pricing";
 import { calculatePaint, type PaintResult } from "../../services/calculators/pintura";
 import { formatDecimal, formatMoney } from "../../utils/format";
-import { loadLocalData, saveLocalData } from "../../utils/local-storage";
+import { loadSyncedSetting, saveSyncedSetting } from "@/services/user-settings-service";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
 import { useSavedCalculation } from "@/components/SaveCalculation";
 import type { BudgetLineDraft } from "@/services/budget-service";
@@ -76,7 +76,7 @@ export default function PaintScreen() {
 
   useEffect(() => {
     async function restore() {
-      const saved = await loadLocalData<Saved>(KEY);
+      const saved = await loadSyncedSetting<Saved>(KEY);
       if (saved) {
         const { primer: savedPrimer, ...settings } = saved;
         setForm((current) => ({ ...current, ...settings }));
@@ -91,7 +91,7 @@ export default function PaintScreen() {
     if (!loaded) return;
     const { length: _l, height: _h, wallCount: _c,
       directArea: _a, openings: _o, ...settings } = form;
-    void saveLocalData<Saved>(KEY, { ...settings, primer });
+    void saveSyncedSetting<Saved>(KEY, { ...settings, primer });
   }, [form, loaded, primer]);
 
   useEffect(() => {

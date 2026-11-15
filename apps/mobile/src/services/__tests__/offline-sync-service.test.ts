@@ -250,3 +250,38 @@ test("una acción que agota los reintentos permanece bloqueada y no se pierde", 
   expect(fetchMock.mock.calls.length).toBe(callsBeforeBlockedRetry);
   expect(summary.remaining).toBe(1);
 });
+
+test("dos sincronizaciones a la vez no envían la misma acción dos veces", async () => {
+  await clearOfflineQueue();
+  await enqueueOfflineAction({
+    type: "RECORD_PROGRESS",
+    endpoint: "/companies/comp-1/projects/proj-1/progress-history",
+    method: "POST",
+    body: { progressPercentage: 40 }
+  });
+  fetchMock.mockReset();
+  fetchMock.mockResolvedValue(successfulResponse());
+
+  const [first, second] = await Promise.all([processOfflineSyncQueue(), processOfflineSyncQueue()]);
+
+  expect(first).toEqual(second);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(await getOfflineQueue()).toHaveLength(0);
+});
+
+test("una tarea creada sin conexión desaparece de la lista al sincronizarse (sin duplicados)", async () => {
+  await clearOfflineQueue();
+  fetchMock.mockRejectedValueOnce(new Error("Sin conexión a internet"));
+  const optimistic = await createProjectTask("comp-1", "proj-1", { title: "Armar formaleta" });
+  expect(optimistic?.is_pending_sync).toBe(true);
+
+  // Con la acción aún en cola, la lista del servidor la sigue mostrando.
+  fetchMock.mockResolvedValueOnce(successfulResponse({ tasks: [] }));
+  expect((await listProjectTasks("comp-1", "proj-1")).map((task) => task.id)).toEqual([optimistic!.id]);
+
+  fetchMock.mockResolvedValueOnce(successfulResponse({ task: { id: "server-task" } }));
+  await processOfflineSyncQueue();
+
+  fetchMock.mockResolvedValueOnce(successfulResponse({ tasks: [{ id: "server-task", title: "Armar formaleta" }] }));
+  expect((await listProjectTasks("comp-1", "proj-1")).map((task) => task.id)).toEqual(["server-task"]);
+});

@@ -23,7 +23,7 @@ import {
   calculateGypsum, type GypsumBoardSides, type GypsumResult,
 } from "../../services/calculators/gypsum";
 import { formatDecimal, formatMoney } from "../../utils/format";
-import { loadLocalData, saveLocalData } from "../../utils/local-storage";
+import { loadSyncedSetting, saveSyncedSetting } from "@/services/user-settings-service";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
 import { useSavedCalculation } from "@/components/SaveCalculation";
 import type { BudgetLineDraft } from "@/services/budget-service";
@@ -90,7 +90,7 @@ export default function GypsumScreen() {
 
   useEffect(() => {
     async function restore() {
-      const saved = await loadLocalData<Saved>(SETTINGS_KEY);
+      const saved = await loadSyncedSetting<Saved>(SETTINGS_KEY);
       if (saved) {
         const { sides: savedSides, ...settings } = saved;
         setForm((current) => ({ ...current, ...settings }));
@@ -104,7 +104,7 @@ export default function GypsumScreen() {
   useEffect(() => {
     if (!loaded) return;
     const { wallLength: _l, wallHeight: _h, openingsArea: _o, ...settings } = form;
-    void saveLocalData<Saved>(SETTINGS_KEY, { ...settings, sides });
+    void saveSyncedSetting<Saved>(SETTINGS_KEY, { ...settings, sides });
   }, [form, loaded, sides]);
 
   useEffect(() => {

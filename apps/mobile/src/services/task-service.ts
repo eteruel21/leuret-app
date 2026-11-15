@@ -3,6 +3,7 @@ import {
   cacheOfflineData,
   enqueueOfflineAction,
   getCachedOfflineData,
+  getOfflineQueue,
   isRetryableOfflineError
 } from "./offline-sync-service";
 
@@ -38,18 +39,45 @@ export type CreateTaskInput = {
   dueDate?: string | null;
 };
 
-export async function listProjectTasks(companyId: string, projectId: string): Promise<ProjectTask[]> {
+export function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+/** Tareas de la obra. Sin conexión usa la última copia y lo indica (fromCache). */
+export async function listProjectTasksResult(
+  companyId: string,
+  projectId: string
+): Promise<{ tasks: ProjectTask[]; fromCache: boolean; error: string | null }> {
   const cacheKey = `tasks_${companyId}_${projectId}`;
   try {
     const res = await authenticatedRequest<{ tasks: ProjectTask[] }>(
       `/companies/${companyId}/projects/${projectId}/tasks`
     );
-    await cacheOfflineData(cacheKey, res.tasks);
-    return res.tasks;
-  } catch {
+    // Las tareas creadas sin conexión siguen visibles mientras su acción
+    // siga en la cola; al sincronizarse llegan del servidor.
+    const queued = new Set((await getOfflineQueue()).map((action) => `off_task_${action.id}`));
+    const cached = (await getCachedOfflineData<ProjectTask[]>(cacheKey)) ?? [];
+    const pending = cached.filter((task) => task.is_pending_sync && queued.has(task.id));
+    const tasks = [...res.tasks, ...pending];
+    await cacheOfflineData(cacheKey, tasks);
+    return { tasks, fromCache: false, error: null };
+  } catch (error) {
     const cached = await getCachedOfflineData<ProjectTask[]>(cacheKey);
-    return cached ?? [];
+    return {
+      tasks: cached ?? [],
+      fromCache: true,
+      error: errorMessage(error, "No se pudieron cargar las tareas.")
+    };
   }
+}
+
+export async function listProjectTasks(companyId: string, projectId: string): Promise<ProjectTask[]> {
+  return (await listProjectTasksResult(companyId, projectId)).tasks;
+}
+
+/** Una tarea creada sin conexión aún no existe en el servidor. */
+export function isUnsyncedTask(task: Pick<ProjectTask, "id" | "is_pending_sync">): boolean {
+  return Boolean(task.is_pending_sync) || task.id.startsWith("off_task_");
 }
 
 export type MyTask = ProjectTask & {
@@ -96,7 +124,7 @@ export async function createProjectTask(
     return res.task;
   } catch (error) {
     if (!isRetryableOfflineError(error)) return null;
-    await enqueueOfflineAction({
+    const action = await enqueueOfflineAction({
       type: "CREATE_TASK",
       endpoint,
       method: "POST",
@@ -104,7 +132,7 @@ export async function createProjectTask(
     });
 
     const optimisticTask: ProjectTask = {
-      id: `off_task_${Date.now()}`,
+      id: `off_task_${action.id}`,
       company_id: companyId,
       project_id: projectId,
       assigned_user_id: input.assignedUserId || null,
@@ -132,7 +160,10 @@ export async function updateProjectTask(
   projectId: string,
   taskId: string,
   input: Partial<CreateTaskInput>
-): Promise<ProjectTask | null> {
+): Promise<{ task: ProjectTask | null; error: string | null }> {
+  if (taskId.startsWith("off_task_")) {
+    return { task: null, error: "Esta tarea se creó sin conexión. Podrás cambiarla cuando se sincronice." };
+  }
   try {
     const res = await authenticatedRequest<{ task: ProjectTask }>(
       `/companies/${companyId}/projects/${projectId}/tasks/${taskId}`,
@@ -141,9 +172,9 @@ export async function updateProjectTask(
         body: JSON.stringify(input)
       }
     );
-    return res.task;
-  } catch {
-    return null;
+    return { task: res.task, error: null };
+  } catch (error) {
+    return { task: null, error: errorMessage(error, "No se pudo actualizar la tarea.") };
   }
 }
 
@@ -151,14 +182,17 @@ export async function deleteProjectTask(
   companyId: string,
   projectId: string,
   taskId: string
-): Promise<boolean> {
+): Promise<{ ok: boolean; error: string | null }> {
+  if (taskId.startsWith("off_task_")) {
+    return { ok: false, error: "Esta tarea se creó sin conexión. Podrás eliminarla cuando se sincronice." };
+  }
   try {
     await authenticatedRequest(
       `/companies/${companyId}/projects/${projectId}/tasks/${taskId}`,
       { method: "DELETE" }
     );
-    return true;
-  } catch {
-    return false;
+    return { ok: true, error: null };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error, "No se pudo eliminar la tarea.") };
   }
 }

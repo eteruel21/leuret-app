@@ -619,6 +619,13 @@ export async function buildAccountExport(userId: string, origin: string) {
        WHERE region.user_id = app.current_user_id()`
     );
 
+    const appSettingsRes = await client.query(
+      `SELECT setting.setting_key, setting.value, setting.created_at, setting.updated_at
+       FROM public.user_app_settings AS setting
+       WHERE setting.user_id = app.current_user_id()
+       ORDER BY setting.setting_key ASC`
+    );
+
     // El token push es una credencial del dispositivo: solo se exporta la
     // plataforma y las fechas.
     const pushDevicesRes = await client.query(
@@ -704,6 +711,7 @@ export async function buildAccountExport(userId: string, origin: string) {
         notifications: notificationsRes.rows,
         pushDevices: pushDevicesRes.rows
       },
+      appSettings: appSettingsRes.rows,
       administrativeAuditLogs: auditLogsRes.rows,
       catalog: {
         personalPrices: catalogOverridesRes.rows,

@@ -43,10 +43,7 @@ import {
   formatDecimal,
   formatMoney,
 } from "../../utils/format";
-import {
-  loadLocalData,
-  saveLocalData,
-} from "../../utils/local-storage";
+import { loadSyncedSetting, saveSyncedSetting } from "@/services/user-settings-service";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
 import { useSavedCalculation } from "@/components/SaveCalculation";
 import type { BudgetLineDraft } from "@/services/budget-service";
@@ -173,7 +170,7 @@ export default function MasonryCalculatorScreen() {
   useEffect(() => {
     async function loadSettings() {
       const saved =
-        await loadLocalData<MasonrySavedSettings>(
+        await loadSyncedSetting<MasonrySavedSettings>(
           MASONRY_SETTINGS_KEY,
         );
 
@@ -222,7 +219,7 @@ export default function MasonryCalculatorScreen() {
       plasterSides,
     };
 
-    void saveLocalData(MASONRY_SETTINGS_KEY, settings);
+    void saveSyncedSetting(MASONRY_SETTINGS_KEY, settings);
   }, [form, plasterSides, settingsLoaded]);
 
   const canCalculate = useMemo(

@@ -23,7 +23,7 @@ import {
   calculatePvcCeiling, type PvcCeilingResult,
 } from "../../services/calculators/cielo-raso-pvc";
 import { formatDecimal, formatMoney } from "../../utils/format";
-import { loadLocalData, saveLocalData } from "../../utils/local-storage";
+import { loadSyncedSetting, saveSyncedSetting } from "@/services/user-settings-service";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
 import { useSavedCalculation } from "@/components/SaveCalculation";
 import type { BudgetLineDraft } from "@/services/budget-service";
@@ -90,7 +90,7 @@ export default function PvcCeilingScreen() {
 
   useEffect(() => {
     async function restore() {
-      const saved = await loadLocalData<Saved>(SETTINGS_KEY);
+      const saved = await loadSyncedSetting<Saved>(SETTINGS_KEY);
       if (saved) setForm((current) => ({ ...current, ...saved }));
       setSettingsLoaded(true);
     }
@@ -103,7 +103,7 @@ export default function PvcCeilingScreen() {
       length: _l, width: _w, directArea: _a,
       directPerimeter: _p, ...settings
     } = form;
-    void saveLocalData<Saved>(SETTINGS_KEY, settings);
+    void saveSyncedSetting<Saved>(SETTINGS_KEY, settings);
   }, [form, settingsLoaded]);
 
   useEffect(() => {

@@ -246,6 +246,9 @@ describe("Legal and Account Data End-to-End Tests (T-141)", () => {
     expect(allSql).not.toContain("token.expo_push_token");
     expect(allSql).not.toContain("phone_code");
     expect(allSql).toContain("private.export_own_connection_requests()");
+    // Ajustes de calculadoras y guía de inicio (migración 047).
+    expect(allSql).toContain("FROM public.user_app_settings AS setting");
+    expect(body.appSettings).toEqual([]);
     await app.close();
   });
 
