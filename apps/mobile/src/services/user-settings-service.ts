@@ -158,11 +158,11 @@ export async function loadSyncedSetting<T extends object>(key: string): Promise<
   const legacy = cached ?? (key !== cacheKey ? await readJson<T>(key) : null);
   if (!serverKey || !userId) return legacy;
 
-  const pending = await pendingFor(userId);
-  if (pending[serverKey]) {
+  const pendingValue = (await pendingFor(userId))[serverKey];
+  if (pendingValue) {
     // Hay un cambio sin subir: es el más reciente.
-    void upload(userId, serverKey, pending[serverKey]);
-    return pending[serverKey] as unknown as T;
+    void upload(userId, serverKey, pendingValue);
+    return pendingValue as unknown as T;
   }
 
   const remote = await remoteSettings(userId);
