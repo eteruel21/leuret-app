@@ -1,71 +1,24 @@
-import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
-import {
-  type ColorValue,
-  StyleSheet,
-  View,
-} from "react-native";
+import { Tabs } from "expo-router/js-tabs";
 
 import { BackBar } from "@/components/back-navigation";
-import { colors } from "@/constants/theme";
-
-type IconName = React.ComponentProps<typeof Ionicons>["name"];
-
-function TabIcon({
-  focused,
-  active,
-  inactive,
-  color,
-}: {
-  focused: boolean;
-  active: IconName;
-  inactive: IconName;
-  color: ColorValue;
-}) {
-  return (
-    <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
-      <Ionicons
-        name={focused ? active : inactive}
-        size={21}
-        color={color}
-      />
-    </View>
-  );
-}
+import { TabIcon, useLeuretTabsOptions } from "@/components/leuret-tabs";
 
 export default function ClientTabsLayout() {
+  const tabsOptions = useLeuretTabsOptions();
   return (
     <Tabs
       backBehavior="history"
       screenOptions={({ route }) => ({
         headerShown: route.name !== "index",
         header: () => <BackBar tone="light" fallback="/(client-tabs)" fallbackMode="navigate" />,
-        tabBarHideOnKeyboard: true,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: {
-          height: 76,
-          paddingTop: 7,
-          paddingBottom: 9,
-          backgroundColor: colors.surface,
-          borderTopWidth: 0,
-          shadowColor: colors.surfaceDark,
-          shadowOffset: { width: 0, height: -5 },
-          shadowOpacity: 0.06,
-          shadowRadius: 15,
-          elevation: 12,
-        },
-        tabBarLabelStyle: {
-          marginTop: 2,
-          fontSize: 10,
-          fontWeight: "800",
-        },
+        ...tabsOptions,
       })}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Inicio",
+          tabBarAccessibilityLabel: "Inicio",
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused} active="home" inactive="home-outline" color={color} />
           ),
@@ -76,6 +29,7 @@ export default function ClientTabsLayout() {
         name="peticiones"
         options={{
           title: "Peticiones",
+          tabBarAccessibilityLabel: "Peticiones",
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused} active="megaphone" inactive="megaphone-outline" color={color} />
           ),
@@ -86,6 +40,7 @@ export default function ClientTabsLayout() {
         name="proyectos"
         options={{
           title: "Proyectos",
+          tabBarAccessibilityLabel: "Proyectos",
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused} active="business" inactive="business-outline" color={color} />
           ),
@@ -96,6 +51,7 @@ export default function ClientTabsLayout() {
         name="presupuestos"
         options={{
           title: "Presupuestos",
+          tabBarAccessibilityLabel: "Presupuestos",
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused} active="document-text" inactive="document-text-outline" color={color} />
           ),
@@ -106,6 +62,7 @@ export default function ClientTabsLayout() {
         name="facturas"
         options={{
           title: "Facturas",
+          tabBarAccessibilityLabel: "Facturas",
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused} active="receipt" inactive="receipt-outline" color={color} />
           ),
@@ -118,6 +75,7 @@ export default function ClientTabsLayout() {
         options={{
           href: null,
           title: "Cuenta",
+          tabBarAccessibilityLabel: "Cuenta",
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused} active="person" inactive="person-outline" color={color} />
           ),
@@ -126,16 +84,3 @@ export default function ClientTabsLayout() {
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  iconWrap: {
-    width: 40,
-    height: 29,
-    borderRadius: 11,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconWrapActive: {
-    backgroundColor: colors.primarySoft,
-  },
-});

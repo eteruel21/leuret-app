@@ -1,4 +1,4 @@
-import { browserAccount, turnstileToken } from "../../../tests/e2e/fixtures.mjs";
+import { browserAccount, browserAdmin, browserContractor, contractorCompanies, turnstileToken } from "../../../tests/e2e/fixtures.mjs";
 import { deriveTestDatabaseEnvironment } from "../src/db/test-database-env.ts";
 
 const database = deriveTestDatabaseEnvironment(process.env.TEST_DATABASE_URL, process.env.NODE_ENV);
@@ -12,7 +12,8 @@ Object.assign(process.env, {
   PGPORT: database.PGPORT,
   PGDATABASE: database.PGDATABASE,
   PGSSL: "disable",
-  CORS_ORIGINS: "http://127.0.0.1:8081",
+  CORS_ORIGINS: "http://127.0.0.1:8081,http://127.0.0.1:3000",
+  ADMIN_WEB_ORIGINS: "http://127.0.0.1:3000",
   APP_WEB_ORIGINS: "http://127.0.0.1:8081",
   TURNSTILE_SECRET_KEY: "isolated-ci-turnstile",
   TURNSTILE_ALLOWED_HOSTNAMES: "127.0.0.1"
@@ -34,9 +35,7 @@ globalThis.fetch = async (input, init) => {
 const { buildApp } = await import("../src/app.ts");
 const { hashPassword } = await import("../src/auth/services.ts");
 const { adminPool } = await import("../src/db/test-db.ts");
-const { email, password, fullName } = browserAccount();
-
-try {
+async function seedAccount({ email, password, fullName }, role) {
   const { rows: [user] } = await adminPool.query(
     `INSERT INTO app_auth.users (email, password_hash, email_confirmed_at, raw_user_meta_data)
      VALUES ($1, $2, now(), jsonb_build_object('role', 'client', 'full_name', $3::text))
@@ -45,9 +44,27 @@ try {
   );
   await adminPool.query(
     `UPDATE public.profiles
-     SET role = 'client', active = true, approved_at = now(), terms_accepted = true
+     SET role = $2::public.global_user_role, active = true, approved_at = now(), terms_accepted = true
      WHERE id = $1`,
-    [user.id]
+    [user.id, role]
+  );
+  return user.id;
+}
+
+try {
+  await seedAccount(browserAccount(), "client");
+  await seedAccount(browserAdmin(), "super_admin");
+  const contractorId = await seedAccount(browserContractor(), "contractor");
+  const { rows: companies } = await adminPool.query(
+    `INSERT INTO public.companies (name, created_by)
+     SELECT name, $1 FROM unnest($2::text[]) AS name
+     RETURNING id`,
+    [contractorId, contractorCompanies]
+  );
+  await adminPool.query(
+    `INSERT INTO public.company_members (company_id, user_id, role)
+     SELECT id, $1, 'owner' FROM unnest($2::uuid[]) AS id`,
+    [contractorId, companies.map(({ id }) => id)]
   );
 } finally {
   await adminPool.end();

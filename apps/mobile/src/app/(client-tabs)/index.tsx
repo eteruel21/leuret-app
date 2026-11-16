@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Link, type Href, router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { Link, type Href, router } from "expo-router";
+import { useCallback } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ContactActions } from "@/components/client/ContactActions";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
+import { LeuretBrand } from "@/components/LeuretBrand";
 import { LeuretButton } from "@/components/LeuretButton";
 import { LeuretEmptyState } from "@/components/LeuretEmptyState";
 import { LeuretFeedback } from "@/components/LeuretFeedback";
@@ -13,8 +14,9 @@ import { LeuretLoading } from "@/components/LeuretLoading";
 import { MotionPressable } from "@/components/MotionPressable";
 import { colors, radius, shadows } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
-import { getClientContractorCompanies, type ContractorCompany } from "@/services/client-service";
-import { getClientSummary, type ClientSummary } from "@/services/client-portal-service";
+import { useFocusedResource } from "@/hooks/useFocusedResource";
+import { getClientContractorCompanies } from "@/services/client-service";
+import { getClientSummary } from "@/services/client-portal-service";
 import { relativeDayLabel, shortMonth, todayKey } from "@/utils/client-portal";
 import { formatMoney } from "@/utils/format";
 
@@ -30,38 +32,22 @@ function greeting(): string {
 }
 
 export default function ClientHomeScreen() {
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const profileId = profile?.id;
-  const [contractors, setContractors] = useState<ContractorCompany[]>([]);
-  const [summary, setSummary] = useState<ClientSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(
-    async (showRefresh = false) => {
-      if (!profileId) return;
-      if (showRefresh) setRefreshing(true);
-
-      const [companiesResult, summaryResult] = await Promise.all([
-        getClientContractorCompanies(profileId),
-        getClientSummary(),
-      ]);
-
-      if (!companiesResult.error) setContractors(companiesResult.companies);
-      if (summaryResult.summary) setSummary(summaryResult.summary);
-      setError(companiesResult.error || summaryResult.error);
-      setLoading(false);
-      setRefreshing(false);
-    },
-    [profileId],
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load]),
-  );
+  const scope = profileId && session?.sessionId ? `${session.sessionId}:${profileId}` : null;
+  const loadSummary = useCallback(async () => {
+    const result = await getClientSummary();
+    return { data: result.summary ?? undefined, error: result.error };
+  }, []);
+  const loadContractors = useCallback(async () => {
+    const result = await getClientContractorCompanies(profileId!);
+    return { data: result.error ? undefined : result.companies, error: result.error };
+  }, [profileId]);
+  const summaryResource = useFocusedResource(scope, loadSummary);
+  const contractorsResource = useFocusedResource(scope, loadContractors, 0);
+  const { data: summary, error: summaryError, reload: reloadSummary } = summaryResource;
+  const { data: contractors, error: contractorsError, reload: reloadContractors } = contractorsResource;
+  const refresh = () => { void reloadSummary(); void reloadContractors(); };
 
   const firstName = (profile?.first_name || profile?.full_name || "").trim().split(/\s+/)[0] || "Cliente";
   const pending = summary?.pending_budgets ?? 0;
@@ -74,6 +60,7 @@ export default function ClientHomeScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <View style={styles.header}>
+        <LeuretBrand width={56} />
         <View style={styles.headerText}>
           <Text style={styles.welcome}>{greeting()},</Text>
           <Text style={styles.name} numberOfLines={1}>
@@ -82,6 +69,7 @@ export default function ClientHomeScreen() {
         </View>
         <NotificationsBell />
         <Pressable
+          accessibilityRole="button"
           accessibilityLabel="Mi cuenta"
           onPress={() => router.navigate("/(client-tabs)/cuenta" as Href)}
           style={styles.profileButton}
@@ -92,81 +80,87 @@ export default function ClientHomeScreen() {
 
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={summaryResource.refreshing || contractorsResource.refreshing}
+            onRefresh={refresh}
+            tintColor={colors.primary}
+          />
+        }
       >
-        {loading ? (
+        {summaryResource.loading ? (
           <LeuretLoading message="Preparando tu resumen…" compact />
-        ) : (
-          <>
-            {error ? (
-              <LeuretFeedback
-                tone="error"
-                title="No pudimos actualizar tu resumen"
-                message={error}
-                actionLabel="Reintentar"
-                onAction={() => void load(true)}
-              />
-            ) : null}
-
-            {pending > 0 ? (
-              <MotionPressable
-                onPress={() => router.navigate("/(client-tabs)/presupuestos" as Href)}
-                pressedScale={0.985}
-                style={styles.actionBanner}
-                accessibilityRole="button"
-              >
-                <View style={styles.actionIcon}>
-                  <Ionicons name="document-text" size={22} color={colors.textInverse} />
-                </View>
-                <View style={styles.actionText}>
-                  <Text style={styles.actionTitle}>
-                    {pending === 1 ? "Tienes un presupuesto por responder" : `Tienes ${pending} presupuestos por responder`}
-                  </Text>
-                  <Text style={styles.actionBody}>Revísalo y apruébalo o pide cambios.</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.textInverse} />
-              </MotionPressable>
-            ) : null}
-
-            <MotionPressable
-              onPress={() => router.push("/cliente-peticiones/nueva" as Href)}
-              pressedScale={0.985}
-              style={styles.requestCard}
-              accessibilityRole="button"
-              accessibilityLabel="Publicar una petición de trabajo"
-            >
-              <View style={styles.requestGlow} />
-              <View style={styles.requestTop}>
-                <View style={styles.requestIcon}>
-                  <Ionicons name="megaphone" size={22} color={colors.textInverse} />
-                </View>
-                <View style={styles.actionText}>
-                  <Text style={styles.requestEyebrow}>PETICIONES DE TRABAJO</Text>
-                  <Text style={styles.requestTitle}>¿Necesitas un trabajo?</Text>
-                </View>
-              </View>
-              <Text style={styles.requestBody}>
-                Describe lo que necesitas y recibe hasta 5 presupuestos de contratistas de tu zona.
+        ) : null}
+        {summaryError ? (
+          <LeuretFeedback
+            tone="error"
+            title="No pudimos actualizar tu resumen"
+            message={summary ? "Se muestran los últimos datos cargados. " + summaryError : summaryError}
+            actionLabel="Reintentar"
+            onAction={() => void reloadSummary()}
+          />
+        ) : null}
+        {summary && pending > 0 ? (
+          <MotionPressable
+            onPress={() => router.navigate("/(client-tabs)/presupuestos" as Href)}
+            pressedScale={0.985}
+            style={styles.actionBanner}
+            accessibilityRole="button"
+          >
+            <View style={styles.actionIcon}>
+              <Ionicons name="document-text" size={22} color={colors.textInverse} />
+            </View>
+            <View style={styles.actionText}>
+              <Text style={styles.actionTitle}>
+                {pending === 1 ? "Tienes un presupuesto por responder" : `Tienes ${pending} presupuestos por responder`}
               </Text>
-              <View style={styles.requestPerks}>
-                {(["Gratis", "Sin compromiso", "Tus datos protegidos"] as const).map((perk) => (
-                  <View key={perk} style={styles.requestPerk}>
-                    <Ionicons name="checkmark-circle" size={14} color={colors.sand} />
-                    <Text style={styles.requestPerkText}>{perk}</Text>
-                  </View>
-                ))}
-              </View>
-              <View style={styles.requestCta}>
-                <Text style={styles.requestCtaText}>Publicar petición</Text>
-                <Ionicons name="arrow-forward" size={17} color={colors.textInverse} />
-              </View>
-            </MotionPressable>
+              <Text style={styles.actionBody}>Revísalo y apruébalo o pide cambios.</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textInverse} />
+          </MotionPressable>
+        ) : null}
 
+        <MotionPressable
+          onPress={() => router.push("/cliente-peticiones/nueva" as Href)}
+          pressedScale={0.985}
+          style={styles.requestCard}
+          accessibilityRole="button"
+          accessibilityLabel="Publicar una petición de trabajo"
+        >
+          <View style={styles.requestGlow} />
+          <View style={styles.requestTop}>
+            <View style={styles.requestIcon}>
+              <Ionicons name="megaphone" size={22} color={colors.textInverse} />
+            </View>
+            <View style={styles.actionText}>
+              <Text style={styles.requestEyebrow}>PETICIONES DE TRABAJO</Text>
+              <Text style={styles.requestTitle}>¿Necesitas un trabajo?</Text>
+            </View>
+          </View>
+          <Text style={styles.requestBody}>
+            Describe lo que necesitas y recibe hasta 5 presupuestos de contratistas de tu zona.
+          </Text>
+          <View style={styles.requestPerks}>
+            {(["Gratis", "Sin compromiso", "Tus datos protegidos"] as const).map((perk) => (
+              <View key={perk} style={styles.requestPerk}>
+                <Ionicons name="checkmark-circle" size={14} color={colors.sand} />
+                <Text style={styles.requestPerkText}>{perk}</Text>
+              </View>
+            ))}
+          </View>
+          <View style={styles.requestCta}>
+            <Text style={styles.requestCtaText}>Publicar petición</Text>
+            <Ionicons name="arrow-forward" size={17} color={colors.textInverse} />
+          </View>
+        </MotionPressable>
+
+        {summary ? (
+          <>
             <View style={styles.tiles}>
               <Tile
                 icon="business-outline"
                 label="Proyectos activos"
-                value={String(summary?.active_projects ?? 0)}
+                value={String(summary.active_projects)}
                 onPress={() => router.navigate("/(client-tabs)/proyectos" as Href)}
               />
               <Tile
@@ -221,44 +215,55 @@ export default function ClientHomeScreen() {
               </View>
             )}
 
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Tus contratistas</Text>
-              <LeuretButton label="Agregar contratista" icon="add" variant="secondary" onPress={() => router.push("/solicitudes")} />
-            </View>
-            {contractors.length === 0 ? (
-              <LeuretEmptyState
-                icon="business-outline"
-                title="Sin contratistas vinculados"
-                description="Envía una solicitud con el correo o celular de tu contratista. También puedes aceptar las solicitudes que te envíen."
-                compact
-              />
-            ) : (
-              contractors.map((company) => (
-                <View key={company.id} style={styles.companyCard}>
-                  <Link href={{ pathname: "/contratistas/[id]", params: { id: company.id } }} asChild>
-                    <Pressable style={styles.companyHeader} accessibilityLabel={`Ver perfil de ${company.name}`}>
-                      <View style={styles.companyAvatar}>
-                        <Text style={styles.companyInitial}>{company.name.trim().charAt(0).toUpperCase()}</Text>
-                      </View>
-                      <View style={styles.companyInfo}>
-                        <Text style={styles.companyName}>{company.name}</Text>
-                        {company.address ? <Text style={styles.companyMeta} numberOfLines={1}>{company.address}</Text> : null}
-                      </View>
-                      <Ionicons name="chevron-forward" size={18} color={colors.primary} />
-                    </Pressable>
-                  </Link>
-                  <View style={styles.companyActions}>
-                    <ContactActions
-                      phone={company.phone}
-                      email={company.email}
-                      address={company.address}
-                      whatsappMessage="Hola, te escribo desde Leuret."
-                    />
-                  </View>
-                </View>
-              ))
-            )}
           </>
+        ) : null}
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Tus contratistas</Text>
+          <LeuretButton label="Agregar contratista" icon="add" variant="secondary" onPress={() => router.push("/solicitudes")} />
+        </View>
+        {contractorsResource.loading ? <LeuretLoading message="Cargando contratistas…" compact /> : null}
+        {contractorsError ? (
+          <LeuretFeedback
+            tone="error"
+            title="No pudimos cargar tus contratistas"
+            message={contractorsError}
+            actionLabel="Reintentar"
+            onAction={() => void reloadContractors()}
+          />
+        ) : null}
+        {contractors?.length === 0 ? (
+          <LeuretEmptyState
+            icon="business-outline"
+            title="Sin contratistas vinculados"
+            description="Envía una solicitud con el correo o celular de tu contratista. También puedes aceptar las solicitudes que te envíen."
+            compact
+          />
+        ) : (
+          contractors?.map((company) => (
+            <View key={company.id} style={styles.companyCard}>
+              <Link href={{ pathname: "/contratistas/[id]", params: { id: company.id } }} asChild>
+                <Pressable style={styles.companyHeader} accessibilityLabel={`Ver perfil de ${company.name}`}>
+                  <View style={styles.companyAvatar}>
+                    <Text style={styles.companyInitial}>{company.name.trim().charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <View style={styles.companyInfo}>
+                    <Text style={styles.companyName}>{company.name}</Text>
+                    {company.address ? <Text style={styles.companyMeta} numberOfLines={1}>{company.address}</Text> : null}
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+                </Pressable>
+              </Link>
+              <View style={styles.companyActions}>
+                <ContactActions
+                  phone={company.phone}
+                  email={company.email}
+                  address={company.address}
+                  whatsappMessage="Hola, te escribo desde Leuret."
+                />
+              </View>
+            </View>
+          ))
         )}
       </ScrollView>
     </SafeAreaView>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, History, Loader2, RefreshCw, Search } from "lucide-react";
 import {
   loadPriceAlerts,
@@ -8,7 +8,7 @@ import {
   type PriceAlertsResponse,
   type PriceHistoryEntry,
 } from "../admin-data";
-import { EmptyState, Field, SectionHeader, SelectField, Table } from "./CommonUI";
+import { PanelRefreshContext, EmptyState, Field, SectionHeader, SelectField, Table } from "./CommonUI";
 import { errorMessage, formatDate, formatMoney } from "../utils/helpers";
 
 const KIND_LABELS: Record<PriceAlertKind, string> = {
@@ -38,6 +38,7 @@ function percentLabel(value: number | null) {
 }
 
 export function PriceMonitor({ onOpenItem }: { onOpenItem?: (itemId: string) => void }) {
+  const panelRevision = useContext(PanelRefreshContext);
   const [alerts, setAlerts] = useState<PriceAlertsResponse | null>(null);
   const [history, setHistory] = useState<PriceHistoryEntry[]>([]);
   const [kindFilter, setKindFilter] = useState<PriceAlertKind | "all">("all");
@@ -80,12 +81,12 @@ export function PriceMonitor({ onOpenItem }: { onOpenItem?: (itemId: string) => 
 
   useEffect(() => {
     void refreshAlerts();
-  }, [refreshAlerts]);
+  }, [refreshAlerts, panelRevision]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void refreshHistory(), 300);
     return () => window.clearTimeout(timer);
-  }, [refreshHistory]);
+  }, [refreshHistory, panelRevision]);
 
   const visibleAlerts = useMemo(
     () =>

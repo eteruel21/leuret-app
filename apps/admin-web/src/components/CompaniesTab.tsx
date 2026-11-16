@@ -1,5 +1,5 @@
 import { Building2, Eye, History, Loader2, PauseCircle, PlayCircle, RefreshCw, UserRound, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import type { PlatformUser } from "../admin-data";
 import {
@@ -18,7 +18,7 @@ import {
   type CompanySort,
 } from "../companies-data";
 import { errorMessage, formatDate } from "../utils/helpers";
-import { AlertBanner, EmptyState, SectionHeader, Table } from "./CommonUI";
+import { PanelRefreshContext, AlertBanner, EmptyState, SectionHeader, Table } from "./CommonUI";
 import type { OpsNavigate } from "./ops/navigation";
 
 interface CompaniesTabProps {
@@ -44,6 +44,7 @@ const SORTS: Array<{ value: CompanySort; label: string }> = [
 ];
 
 export function CompaniesTab({ users, onViewProfile, focusId = null, onNavigate }: CompaniesTabProps) {
+  const panelRevision = useContext(PanelRefreshContext);
   const [companies, setCompanies] = useState<AdminCompany[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +67,7 @@ export function CompaniesTab({ users, onViewProfile, focusId = null, onNavigate 
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, panelRevision]);
 
   const visible = useMemo(() => filterCompanies(companies, search, filter, sort), [companies, search, filter, sort]);
 
@@ -244,6 +245,7 @@ function CompanyDetailModal({
   onStatusChanged: (companyId: string, active: boolean) => void;
   onNavigate: OpsNavigate;
 }) {
+  const panelRevision = useContext(PanelRefreshContext);
   const [detail, setDetail] = useState<AdminCompanyDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [statusFormOpen, setStatusFormOpen] = useState(false);
@@ -280,7 +282,7 @@ function CompanyDetailModal({
     return () => {
       active = false;
     };
-  }, [companyId]);
+  }, [companyId, panelRevision]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();

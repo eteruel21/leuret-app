@@ -19,6 +19,10 @@ export default defineConfig({
     {
       command: "vite preview apps/mobile --host 127.0.0.1 --port 8081 --strictPort",
       url: "http://127.0.0.1:8081"
+    },
+    {
+      command: "vite preview apps/admin-web --host 127.0.0.1 --port 3000 --strictPort",
+      url: "http://127.0.0.1:3000"
     }
   ]
 });

@@ -1,9 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { type Href, router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { type Href, router } from "expo-router";
+import { useCallback } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
+import { LeuretFeedback } from "@/components/LeuretFeedback";
+import { LeuretLoading } from "@/components/LeuretLoading";
+import { useFocusedResource } from "@/hooks/useFocusedResource";
 import { colors, radius, shadows } from "@/constants/theme";
 import { getCompanyDashboard } from "@/services/dashboard-service";
 import {
@@ -12,7 +15,6 @@ import {
   projectsKpiDetail,
   type AttentionItem,
   type AttentionSeverity,
-  type CompanyDashboard,
 } from "@/utils/dashboard";
 import { formatMoney } from "@/utils/format";
 
@@ -102,42 +104,28 @@ export function AttentionList({ items: attention }: { items: AttentionItem[] }) 
 
 /** Resumen del negocio para owner/admin: cobros, cartera, presupuestos y alertas. */
 export function OwnerDashboard({ companyId }: { companyId: string }) {
-  const [dashboard, setDashboard] = useState<CompanyDashboard | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [stale, setStale] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const loadDashboard = useCallback(async () => {
+    const result = await getCompanyDashboard(companyId);
+    return {
+      data: result.dashboard ? { dashboard: result.dashboard, stale: result.fromCache } : undefined,
+      error: result.error,
+    };
+  }, [companyId]);
+  const { data, loading, error, reload } = useFocusedResource(companyId, loadDashboard);
 
-  useFocusEffect(
-    useCallback(() => {
-      let mounted = true;
-      void getCompanyDashboard(companyId).then((result) => {
-        if (!mounted) return;
-        setDashboard(result.dashboard);
-        setStale(result.fromCache);
-        setError(result.dashboard ? null : result.error);
-        setLoading(false);
-      });
-      return () => {
-        mounted = false;
-      };
-    }, [companyId])
-  );
-
-  if (loading && !dashboard) {
-    return (
-      <View style={dashboardStyles.loadingBox}>
-        <ActivityIndicator color={colors.primary} />
-        <Text style={dashboardStyles.muted}>Calculando tus indicadores…</Text>
-      </View>
-    );
-  }
-
+  if (loading) return <LeuretLoading message="Cargando tus indicadores…" compact />;
+  const dashboard = data?.dashboard;
+  const stale = data?.stale;
   if (!dashboard) {
     return (
-      <View style={dashboardStyles.loadingBox}>
-        <Ionicons name="cloud-offline-outline" size={22} color={colors.textMuted} />
-        <Text style={dashboardStyles.muted}>{error ?? "No se pudieron cargar los indicadores."}</Text>
-      </View>
+      <LeuretFeedback
+        tone="error"
+        title="No pudimos cargar tus indicadores"
+        message={error ?? undefined}
+        actionLabel="Reintentar"
+        onAction={() => void reload()}
+        compact
+      />
     );
   }
 
@@ -157,10 +145,21 @@ export function OwnerDashboard({ companyId }: { companyId: string }) {
         {stale ? (
           <View style={dashboardStyles.staleBadge}>
             <Ionicons name="cloud-offline-outline" size={13} color={colors.textSecondary} />
-            <Text style={dashboardStyles.staleText}>Sin conexión</Text>
+            <Text style={dashboardStyles.staleText}>Datos guardados</Text>
           </View>
         ) : null}
       </View>
+
+      {error ? (
+        <LeuretFeedback
+          tone="warning"
+          title="No pudimos actualizar los indicadores"
+          message={error}
+          actionLabel="Reintentar"
+          onAction={() => void reload()}
+          compact
+        />
+      ) : null}
 
       <View style={dashboardStyles.kpiGrid}>
         <Kpi
@@ -253,16 +252,6 @@ export const dashboardStyles = StyleSheet.create({
   attentionItemTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
   allGood: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 6 },
   allGoodText: { flex: 1, color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
-  loadingBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    padding: 16,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
   muted: { flex: 1, color: colors.textSecondary, fontSize: 12, lineHeight: 17 },
   pressed: { opacity: 0.75 },
 });

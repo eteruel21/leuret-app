@@ -1,30 +1,32 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { router } from "expo-router";
+import { useCallback, useMemo } from "react";
 import {
   Alert,
   Pressable,
-  ScrollView,
+  SectionList,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { LeuretFeedback } from "@/components/LeuretFeedback";
+import { LeuretLoading } from "@/components/LeuretLoading";
 import { LeuretEmptyState } from "@/components/LeuretEmptyState";
 import { MotionPressable } from "@/components/MotionPressable";
 
 import { colors, radius, shadows, typography } from "@/constants/theme";
+import { useFocusedResource } from "@/hooks/useFocusedResource";
 import { useCompany } from "@/contexts/CompanyContext";
-import { formatDate as formatDateUtil } from "@/utils/format";
+import { formatDate } from "@/utils/format";
 import {
-  deleteAppointment,
   getAppointments,
   type Appointment,
   type AppointmentStatus,
   type AppointmentType,
 } from "@/utils/appointment-storage";
+import { deleteRemoteActivity } from "@/services/activity-service";
 import { cancelScheduledNotification } from "@/utils/appointment-notifications";
 
 const statusLabels: Record<AppointmentStatus, string> = {
@@ -42,54 +44,21 @@ const typeLabels: Record<AppointmentType, string> = {
   other: "Otro",
 };
 
-// La función formatDate se define dentro del componente usando la zona horaria de la empresa
-
 export default function AgendaScreen() {
-  const { activeCompany } = useCompany();
-  const [appointments, setAppointments] =
-    useState<Appointment[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
+  const { activeCompany, activeMembership } = useCompany();
+  const companyId = activeCompany?.id;
+  const scope = companyId && activeMembership ? `${companyId}:${activeMembership.role}` : null;
+  const loadAgenda = useCallback(async () => ({ data: await getAppointments(companyId!) }), [companyId]);
+  const { data: appointments, loading, error, refreshing, reload } = useFocusedResource(scope, loadAgenda, 0);
 
-  const formatDate = (dateStr: string) => {
-    return formatDateUtil(dateStr, activeCompany?.timezone || undefined);
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-
-      setAppointments([]);
-      setLoadError(null);
-      if (!activeCompany?.id) {
-        return () => { active = false; };
-      }
-      void getAppointments(activeCompany.id)
-        .then((items) => {
-          if (active) setAppointments(items);
-        })
-        .catch((error) => {
-          if (!active) return;
-          console.error("[Agenda] Error de sincronización:", error);
-          setAppointments([]);
-          setLoadError("No pudimos consultar las actividades de Supabase. Revisa la conexión o tus permisos e inténtalo nuevamente.");
-        });
-
-      return () => {
-        active = false;
-      };
-    }, [activeCompany?.id, reloadKey]),
-  );
-
-  const grouped = useMemo(() => {
-    return appointments.reduce<Record<string, Appointment[]>>(
-      (accumulator, item) => {
-        accumulator[item.date] ??= [];
-        accumulator[item.date].push(item);
-        return accumulator;
-      },
-      {},
-    );
+  const sections = useMemo(() => {
+    const groups = new Map<string, Appointment[]>();
+    for (const item of appointments ?? []) {
+      const group = groups.get(item.date);
+      if (group) group.push(item);
+      else groups.set(item.date, [item]);
+    }
+    return Array.from(groups, ([date, data]) => ({ key: date, date, data }));
   }, [appointments]);
 
   function openAppointment(id: string) {
@@ -102,9 +71,9 @@ export default function AgendaScreen() {
   async function removeAppointment(item: Appointment) {
     if (!activeCompany?.id) { Alert.alert("Empresa requerida", "Selecciona una empresa activa."); return; }
     try {
-      const items = await deleteAppointment(item.id, activeCompany.id);
+      await deleteRemoteActivity(activeCompany.id, item.id);
       try { await cancelScheduledNotification(item.notificationId); } catch {}
-      setAppointments(items);
+      await reload();
     } catch (error) {
       Alert.alert("No se pudo eliminar", error instanceof Error ? error.message : "Inténtalo nuevamente.");
     }
@@ -127,16 +96,17 @@ export default function AgendaScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["left", "right"]}>
-      <Animated.View entering={FadeInDown.duration(420)} style={styles.header}>
+      <View style={styles.header}>
         <View>
-          <Text style={styles.eyebrow}>LEURET AGENDA</Text>
           <Text style={styles.title}>Agenda</Text>
-          <Text style={styles.subtitle}>
-            {appointments.length} actividad(es)
-          </Text>
+          {appointments ? (
+            <Text style={styles.subtitle}>{appointments.length} {appointments.length === 1 ? "actividad" : "actividades"}</Text>
+          ) : null}
         </View>
 
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Agregar actividad"
           onPress={() => openAppointment("nuevo")}
           style={({ pressed }) => [
             styles.addButton,
@@ -149,19 +119,27 @@ export default function AgendaScreen() {
             color={colors.textLight}
           />
         </Pressable>
-      </Animated.View>
+      </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {loadError ? (
-          <LeuretEmptyState
-            icon="cloud-offline-outline"
-            title="No se pudo sincronizar la agenda"
-            description={loadError}
+      <SectionList
+        sections={sections}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.content}
+        refreshing={refreshing && !loading}
+        onRefresh={() => void reload()}
+        stickySectionHeadersEnabled={false}
+        ListHeaderComponent={error ? (
+          <LeuretFeedback
+            tone="error"
+            title="No pudimos actualizar la agenda"
+            message={appointments ? "Se muestran las últimas actividades cargadas. " + error : error}
             actionLabel="Reintentar"
-            actionIcon="refresh"
-            onAction={() => setReloadKey((key) => key + 1)}
+            onAction={() => void reload()}
             style={styles.emptyStateSpacing}
           />
+        ) : null}
+        ListEmptyComponent={loading ? (
+          <LeuretLoading message="Cargando agenda…" compact />
         ) : !activeCompany ? (
           <LeuretEmptyState
             icon="business-outline"
@@ -169,7 +147,7 @@ export default function AgendaScreen() {
             description="Selecciona una empresa para ver sus actividades guardadas."
             style={styles.emptyStateSpacing}
           />
-        ) : appointments.length === 0 ? (
+        ) : appointments?.length === 0 ? (
           <LeuretEmptyState
             icon="calendar-clear-outline"
             title="No hay actividades programadas"
@@ -179,79 +157,74 @@ export default function AgendaScreen() {
             onAction={() => openAppointment("nuevo")}
             style={styles.emptyStateSpacing}
           />
-        ) : (
-          Object.entries(grouped).map(([date, items]) => (
-            <View key={date} style={styles.dayGroup}>
-              <Text style={styles.dayTitle}>
-                {formatDate(date)}
+        ) : null}
+        renderSectionHeader={({ section }) => (
+          <Text style={styles.dayTitle}>{formatDate(section.date, activeCompany?.timezone || undefined)}</Text>
+        )}
+        renderItem={({ item }) => (
+          <MotionPressable
+            accessibilityRole="button"
+            onPress={() => openAppointment(item.id)}
+            pressedScale={0.985}
+            style={styles.card}
+          >
+            <View style={styles.timeBlock}>
+              <Text style={styles.timeText}>
+                {item.time}
+              </Text>
+              {item.endTime ? (
+                <Text style={styles.endTimeText}>
+                  {item.endTime}
+                </Text>
+              ) : null}
+            </View>
+
+            <View style={styles.cardBody}>
+              <Text style={styles.cardTitle}>
+                {item.title}
               </Text>
 
-              {items.map((item, index) => (
-                <MotionPressable
-                  key={item.id}
-                  entering={FadeInUp.delay(index * 45).duration(320)}
-                  onPress={() => openAppointment(item.id)}
-                  pressedScale={0.985}
-                  style={styles.card}
+              <Text style={styles.cardMeta}>
+                {typeLabels[item.type]}
+                {item.clientName
+                  ? ` · ${item.clientName}`
+                  : ""}
+              </Text>
+
+              {item.address ? (
+                <Text
+                  style={styles.cardAddress}
+                  numberOfLines={1}
                 >
-                  <View style={styles.timeBlock}>
-                    <Text style={styles.timeText}>
-                      {item.time}
-                    </Text>
-                    {item.endTime ? (
-                      <Text style={styles.endTimeText}>
-                        {item.endTime}
-                      </Text>
-                    ) : null}
-                  </View>
+                  {item.address}
+                </Text>
+              ) : null}
 
-                  <View style={styles.cardBody}>
-                    <Text style={styles.cardTitle}>
-                      {item.title}
-                    </Text>
-
-                    <Text style={styles.cardMeta}>
-                      {typeLabels[item.type]}
-                      {item.clientName
-                        ? ` · ${item.clientName}`
-                        : ""}
-                    </Text>
-
-                    {item.address ? (
-                      <Text
-                        style={styles.cardAddress}
-                        numberOfLines={1}
-                      >
-                        {item.address}
-                      </Text>
-                    ) : null}
-
-                    <View style={styles.statusBadge}>
-                      <Text style={styles.statusText}>
-                        {statusLabels[item.status]}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <Pressable
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      confirmDelete(item);
-                    }}
-                    style={styles.deleteButton}
-                  >
-                    <Ionicons
-                      name="trash-outline"
-                      size={17}
-                      color={colors.danger}
-                    />
-                  </Pressable>
-                </MotionPressable>
-              ))}
+              <View style={styles.statusBadge}>
+                <Text style={styles.statusText}>
+                  {statusLabels[item.status]}
+                </Text>
+              </View>
             </View>
-          ))
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Eliminar ${item.title}`}
+              onPress={(event) => {
+                event.stopPropagation();
+                confirmDelete(item);
+              }}
+              style={styles.deleteButton}
+            >
+              <Ionicons
+                name="trash-outline"
+                size={17}
+                color={colors.danger}
+              />
+            </Pressable>
+          </MotionPressable>
         )}
-      </ScrollView>
+      />
     </SafeAreaView>
   );
 }
@@ -272,13 +245,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  eyebrow: {
-    color: colors.accent,
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 1.6,
-  },
-
   title: {
     marginTop: 6,
     color: colors.textLight,
@@ -304,9 +270,6 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 40,
     backgroundColor: colors.background,
-  },
-  dayGroup: {
-    marginBottom: 22,
   },
   dayTitle: {
     marginBottom: 11,

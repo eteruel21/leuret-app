@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, Loader2, RefreshCw, Search, ShieldAlert, X } from "lucide-react";
 
+import { PanelRefreshContext } from "../CommonUI";
 import type { Company } from "../../admin-data";
 import type { ListQuery, Page, Tone } from "../../operations-data";
 import { errorMessage } from "../../utils/helpers";
@@ -40,6 +41,7 @@ export function useAdminList<P extends Page<unknown>>(
   loader: (query: ListQuery) => Promise<P>,
   query: ListQuery
 ): ListState<P> {
+  const panelRevision = useContext(PanelRefreshContext);
   const [page, setPage] = useState<P | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +63,7 @@ export function useAdminList<P extends Page<unknown>>(
       .finally(() => {
         if (current === requestId.current) setLoading(false);
       });
-  }, [loader, key, version]);
+  }, [loader, key, version, panelRevision]);
 
   const reload = useCallback(() => setVersion((value) => value + 1), []);
   return { page, loading, error, reload, setError };
@@ -69,6 +71,7 @@ export function useAdminList<P extends Page<unknown>>(
 
 /** Carga un detalle por id con estado de carga y error. */
 export function useDetail<T>(loader: (id: string) => Promise<T>, id: string | null) {
+  const panelRevision = useContext(PanelRefreshContext);
   const [detail, setDetail] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
@@ -83,7 +86,7 @@ export function useDetail<T>(loader: (id: string) => Promise<T>, id: string | nu
     return () => {
       active = false;
     };
-  }, [loader, id, version]);
+  }, [loader, id, version, panelRevision]);
 
   useEffect(() => setDetail(null), [id]);
 

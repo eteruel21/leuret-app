@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import { Building2, FileText, HardHat, Receipt, RefreshCw } from "lucide-react";
 
 import { BUDGET_STATUS, PROJECT_STATUS, type AdminOverview, dateTime, loadOverview, money } from "../../operations-data";
 import { errorMessage } from "../../utils/helpers";
-import { AlertBanner } from "../CommonUI";
+import { PanelRefreshContext, AlertBanner } from "../CommonUI";
 import { KpiCard, LoadingBlock, MonthlyColumns, StatusBars } from "./OpsUI";
 import type { OpsNavigate } from "./navigation";
 
 /** Panorama de la operación de todas las empresas: cobros, obras y presupuestos. */
 export function OverviewPanel({ onNavigate }: { onNavigate: OpsNavigate }) {
+  const panelRevision = useContext(PanelRefreshContext);
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,7 +28,7 @@ export function OverviewPanel({ onNavigate }: { onNavigate: OpsNavigate }) {
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, panelRevision]);
 
   if (!overview) {
     return error ? <AlertBanner message={`No se pudo cargar el panorama operativo: ${error}`} onClose={() => setError(null)} /> : <LoadingBlock label="Calculando panorama operativo..." />;

@@ -2,10 +2,10 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   type Href,
   router,
-  useFocusEffect,
 } from "expo-router";
 import {
   useCallback,
+  useDeferredValue,
   useMemo,
   useState,
 } from "react";
@@ -24,11 +24,11 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { FadeInUp } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LeuretEmptyState } from "@/components/LeuretEmptyState";
 import { LeuretButton } from "@/components/LeuretButton";
+import { LeuretFeedback } from "@/components/LeuretFeedback";
 import { LeuretLoading } from "@/components/LeuretLoading";
 import { MotionPressable } from "@/components/MotionPressable";
 import {
@@ -38,6 +38,7 @@ import {
   typography,
 } from "@/constants/theme";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useFocusedResource } from "@/hooks/useFocusedResource";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   createClient,
@@ -54,78 +55,29 @@ import { validateClientAddress, validateClientIdentity } from "@/utils/client-va
 
 export default function ClientsScreen() {
   const { activeCompany } = useCompany();
-  const { can } = usePermissions();
+  const { role, can } = usePermissions();
   const canEditClients = can("clients.edit");
-  // Archivar y restaurar: propietario o administrador (igual que la API).
   const canArchiveClients = can("clients.delete");
+  const companyId = activeCompany?.id;
   const [showArchived, setShowArchived] = useState(false);
+  const scope = companyId && role ? `${companyId}:${role}:${showArchived}` : null;
 
-  const [clients, setClients] = useState<
-    ClientWithDetails[]
-  >([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] =
-    useState(false);
-  const [modalVisible, setModalVisible] =
-    useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   const [search, setSearch] = useState("");
+  const query = useDeferredValue(search.trim().toLowerCase());
+  const fetchClients = useCallback(async () => {
+    const result = await listClients(companyId!, { archived: showArchived });
+    return { data: result.error ? undefined : result.clients, error: result.error };
+  }, [companyId, showArchived]);
+  const { data: clients, error, loading, refreshing, reload, updateData } = useFocusedResource(scope, fetchClients, 0);
 
   const filteredClients = useMemo(() => {
-    const query = search.trim().toLowerCase();
-
-    if (!query) return clients;
-
-    return clients.filter((client) => {
-      const name =
-        getClientDisplayName(client).toLowerCase();
-
-      const phone = client.phone?.toLowerCase() ?? "";
-      const email = client.email?.toLowerCase() ?? "";
-      const documentNumber =
-        client.document_number?.toLowerCase() ?? "";
-
-      return (
-        name.includes(query) ||
-        phone.includes(query) ||
-        email.includes(query) ||
-        documentNumber.includes(query)
-      );
-    });
-  }, [clients, search]);
-
-  const loadClients = useCallback(
-    async (showRefresh = false) => {
-      if (!activeCompany) return;
-
-      if (showRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      const { clients: loadedClients, error } =
-        await listClients(activeCompany.id, { archived: showArchived });
-
-      if (error) {
-        Alert.alert(
-          "No fue posible cargar los clientes",
-          error,
-        );
-      } else {
-        setClients(loadedClients);
-      }
-
-      setLoading(false);
-      setRefreshing(false);
-    },
-    [activeCompany, showArchived],
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadClients();
-    }, [loadClients]),
-  );
+    if (!clients || !query) return clients;
+    return clients.filter((client) =>
+      [getClientDisplayName(client), client.phone, client.email, client.document_number]
+        .some((value) => value?.toLowerCase().includes(query))
+    );
+  }, [clients, query]);
 
   async function handleDeactivateClient(
     client: ClientWithDetails,
@@ -158,7 +110,7 @@ export default function ClientsScreen() {
               return;
             }
 
-            setClients((current) => current.filter((entry) => entry.id !== client.id));
+            updateData((current) => current.filter((entry) => entry.id !== client.id));
           },
         },
       ],
@@ -174,7 +126,7 @@ export default function ClientsScreen() {
       return;
     }
 
-    setClients((current) => current.filter((entry) => entry.id !== client.id));
+    updateData((current) => current.filter((entry) => entry.id !== client.id));
     Alert.alert("Cliente restaurado", `${getClientDisplayName(client)} vuelve a estar en tu lista de clientes.`);
   }
 
@@ -191,10 +143,6 @@ export default function ClientsScreen() {
     );
   }
 
-  if (loading) {
-    return <LeuretLoading message="Cargando clientes…" fullScreen />;
-  }
-
   return (
     <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
       <FlatList
@@ -203,13 +151,14 @@ export default function ClientsScreen() {
         contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() =>
-              void loadClients(true)
-            }
+            refreshing={refreshing && !loading}
+            onRefresh={() => void reload()}
+            tintColor={colors.primary}
           />
         }
-        ListEmptyComponent={
+        ListEmptyComponent={loading ? (
+          <LeuretLoading message="Cargando clientes…" compact />
+        ) : clients ? (
           <LeuretEmptyState
             icon={search.trim() ? "search-outline" : "people-outline"}
             title={search.trim() ? "Sin coincidencias" : showArchived ? "No hay clientes archivados" : "No hay clientes"}
@@ -219,17 +168,16 @@ export default function ClientsScreen() {
             onAction={() => search.trim() ? setSearch("") : setModalVisible(true)}
             style={styles.emptySpacing}
           />
-        }
+        ) : null}
         ListFooterComponent={
           <View style={{ height: 24 }} />
         }
         ListHeaderComponentStyle={{
           marginBottom: 16,
         }}
-        renderItem={({ item, index }) => (
+        renderItem={({ item }) => (
           <ClientCard
             client={item}
-            index={index}
             onPress={() =>
               router.push({
                 pathname: "/clientes/[id]",
@@ -291,6 +239,17 @@ export default function ClientsScreen() {
             <LeuretButton label="Solicitudes de vinculación" icon="notifications-outline" variant="secondary"
               onPress={() => router.push("/solicitudes")} />
 
+            {error ? (
+              <LeuretFeedback
+                tone="error"
+                title="No pudimos cargar los clientes"
+                message={error}
+                actionLabel="Reintentar"
+                onAction={() => void reload()}
+                compact
+              />
+            ) : null}
+
             <View style={styles.searchBox}>
               <Ionicons
                 name="search-outline"
@@ -329,13 +288,12 @@ export default function ClientsScreen() {
               })}
             </View>
 
-            <Text style={styles.counter}>
-              {filteredClients.length} cliente
-              {filteredClients.length === 1
-                ? ""
-                : "s"}
-              {showArchived ? " archivado" + (filteredClients.length === 1 ? "" : "s") : ""}
-            </Text>
+            {filteredClients ? (
+              <Text style={styles.counter}>
+                {filteredClients.length} {filteredClients.length === 1 ? "cliente" : "clientes"}
+                {showArchived ? (filteredClients.length === 1 ? " archivado" : " archivados") : ""}
+              </Text>
+            ) : null}
           </View>
         }
       />
@@ -343,7 +301,7 @@ export default function ClientsScreen() {
       <CreateClientModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
-        onCreated={() => void loadClients(true)}
+        onCreated={() => void reload()}
         companyId={activeCompany.id}
       />
     </SafeAreaView>
@@ -352,7 +310,6 @@ export default function ClientsScreen() {
 
 type ClientCardProps = {
   client: ClientWithDetails;
-  index: number;
   archived: boolean;
   onPress: () => void;
   /** Solo propietario o administrador pueden archivar. */
@@ -362,7 +319,6 @@ type ClientCardProps = {
 
 function ClientCard({
   client,
-  index,
   archived,
   onPress,
   onDeactivate,
@@ -375,7 +331,6 @@ function ClientCard({
 
   return (
     <MotionPressable
-      entering={FadeInUp.delay(index * 45).duration(320)}
       onPress={onPress}
       pressedScale={0.985}
       style={styles.clientCard}

@@ -1,6 +1,6 @@
 import type { FormEvent } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Briefcase, Loader2, Lock, Mail, RefreshCw } from "lucide-react";
+import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Lock, Mail, RefreshCw } from "lucide-react";
 
 import {
   adjustPrices,
@@ -34,9 +34,11 @@ import {
   type FormulaDraft,
 } from "./admin-data";
 import {
+  ApiError,
   type AdminSession,
   loginAdmin,
   logoutAdmin,
+  onAdminSessionEnded,
   restoreAdminSession,
 } from "./api";
 import TurnstileChallenge from "./TurnstileChallenge";
@@ -44,29 +46,42 @@ import { errorMessage } from "./utils/helpers";
 import {
   FullScreenLoader,
   AlertBanner,
+  BrandMark,
+  ContentLoader,
+  PanelRefreshContext,
   SuccessBanner,
   Field,
 } from "./components/CommonUI";
 import { Sidebar, type Tab } from "./components/Sidebar";
 import { DashboardTab } from "./components/DashboardTab";
 import { UsersTab } from "./components/UsersTab";
-import { CatalogTab } from "./components/CatalogTab";
-import { CalculationsTab } from "./components/CalculationsTab";
-import { PricingTab } from "./components/PricingTab";
 import { SystemTab } from "./components/SystemTab";
 import { EditorModal, type Editor } from "./components/EditorModal";
 import { UserProfileModal } from "./components/UserProfileModal";
-import { CompaniesTab } from "./components/CompaniesTab";
-import { MailTab } from "./components/MailTab";
-import { ProjectsTab } from "./components/ops/ProjectsTab";
-import { BudgetsTab } from "./components/ops/BudgetsTab";
-import { InvoicesTab } from "./components/ops/InvoicesTab";
-import { ClientsTab } from "./components/ops/ClientsTab";
-import { AuditTab } from "./components/ops/AuditTab";
 import { OverviewPanel } from "./components/ops/OverviewPanel";
 import { CommandPalette } from "./components/ops/CommandPalette";
 import { UserSessionsPanel } from "./components/ops/UserSessionsPanel";
 import { isTab, readHash, writeHash, type NavTarget } from "./components/ops/navigation";
+
+const CatalogTab = lazy(() => import("./components/CatalogTab").then((module) => ({ default: module.CatalogTab })));
+
+const CalculationsTab = lazy(() => import("./components/CalculationsTab").then((module) => ({ default: module.CalculationsTab })));
+
+const PricingTab = lazy(() => import("./components/PricingTab").then((module) => ({ default: module.PricingTab })));
+
+const CompaniesTab = lazy(() => import("./components/CompaniesTab").then((module) => ({ default: module.CompaniesTab })));
+
+const MailTab = lazy(() => import("./components/MailTab").then((module) => ({ default: module.MailTab })));
+
+const ProjectsTab = lazy(() => import("./components/ops/ProjectsTab").then((module) => ({ default: module.ProjectsTab })));
+
+const BudgetsTab = lazy(() => import("./components/ops/BudgetsTab").then((module) => ({ default: module.BudgetsTab })));
+
+const InvoicesTab = lazy(() => import("./components/ops/InvoicesTab").then((module) => ({ default: module.InvoicesTab })));
+
+const ClientsTab = lazy(() => import("./components/ops/ClientsTab").then((module) => ({ default: module.ClientsTab })));
+
+const AuditTab = lazy(() => import("./components/ops/AuditTab").then((module) => ({ default: module.AuditTab })));
 
 const EMPTY_DATA: AdminData = {
   users: [],
@@ -159,6 +174,9 @@ function formulaDraft(formula: Formula): FormulaDraft {
 export default function App() {
   const [session, setSession] = useState<AdminSession | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const restoring = useRef(false);
+  const sessionId = session?.sessionId;
 
   const isAuthorized = Boolean(
     session?.user.active && session.user.role === "super_admin"
@@ -175,15 +193,20 @@ export default function App() {
   const [nav, setNav] = useState<NavTarget & { key: number }>(() => {
     const fromHash = typeof window !== "undefined" ? readHash(window.location.hash) : null;
     if (fromHash) return { ...fromHash, key: 0 };
-    const saved = localStorage.getItem("admin_active_tab");
-    return { tab: isTab(saved) ? saved : "dashboard", key: 0 };
+    try {
+      const saved = localStorage.getItem("admin_active_tab");
+      if (isTab(saved)) return { tab: saved, key: 0 };
+    } catch {
+      // La preferencia local es opcional.
+    }
+    return { tab: "dashboard", key: 0 };
   });
   const activeTab = nav.tab;
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   const navigate = useCallback((target: NavTarget) => {
-    setNav((current) => ({ ...target, key: current.key + 1 }));
     const nextHash = writeHash(target);
+    setNav((current) => writeHash(current) === nextHash ? current : { ...target, key: current.key + 1 });
     if (window.location.hash !== nextHash) {
       window.history.pushState(null, "", nextHash);
     }
@@ -192,16 +215,28 @@ export default function App() {
   const setActiveTab = useCallback((tab: Tab) => navigate({ tab }), [navigate]);
 
   useEffect(() => {
-    localStorage.setItem("admin_active_tab", activeTab);
-  }, [activeTab]);
+    if (!isAuthorized) return;
+    if (!readHash(window.location.hash)) {
+      window.history.replaceState(null, "", writeHash(nav));
+    }
+    try {
+      localStorage.setItem("admin_active_tab", nav.tab);
+    } catch {
+      // El historial del navegador sigue disponible.
+    }
+  }, [isAuthorized, nav]);
 
   useEffect(() => {
-    const onPop = () => {
-      const target = readHash(window.location.hash);
-      if (target) setNav((current) => ({ ...target, key: current.key + 1 }));
+    const syncNavigation = () => {
+      const target = readHash(window.location.hash) ?? { tab: "dashboard" as const };
+      setNav((current) => writeHash(current) === writeHash(target) ? current : { ...target, key: current.key + 1 });
     };
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
+    window.addEventListener("popstate", syncNavigation);
+    window.addEventListener("hashchange", syncNavigation);
+    return () => {
+      window.removeEventListener("popstate", syncNavigation);
+      window.removeEventListener("hashchange", syncNavigation);
+    };
   }, []);
 
   useEffect(() => {
@@ -211,11 +246,15 @@ export default function App() {
         setPaletteOpen((open) => !open);
       }
     };
+    if (!isAuthorized) return;
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [isAuthorized]);
 
-  const [data, setData] = useState<AdminData>(EMPTY_DATA);
+  const [snapshot, setSnapshot] = useState<{ sessionId: string; data: AdminData; revision: number } | null>(null);
+  const loadedData = sessionId && snapshot?.sessionId === sessionId ? snapshot.data : null;
+  const data = loadedData ?? EMPTY_DATA;
+  const lastDataRequest = useRef(0);
   const [loadingData, setLoadingData] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -256,56 +295,64 @@ export default function App() {
   const [priceNotes, setPriceNotes] = useState("");
   const [adjustingPrices, setAdjustingPrices] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-
-    async function restoreSession() {
-      try {
-        const nextSession = await restoreAdminSession();
-
-        if (!active) return;
-
-        setSession(nextSession);
-        setAuthError(null);
-      } catch (error) {
-        if (!active) return;
-
-        setSession(null);
-        setAuthError(errorMessage(error));
-      } finally {
-        if (active) {
-          setSessionLoading(false);
-        }
+  const retryRestore = useCallback(async () => {
+    if (restoring.current) return;
+    restoring.current = true;
+    setSessionLoading(true);
+    setRestoreError(null);
+    try {
+      setSession(await restoreAdminSession());
+      setAuthError(null);
+    } catch (error) {
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+        setAuthError(error.status === 403 ? error.message : "Tu sesión terminó. Inicia sesión para continuar.");
+      } else {
+        setRestoreError(error instanceof ApiError ? error.message : "Inténtalo de nuevo.");
       }
+    } finally {
+      restoring.current = false;
+      setSessionLoading(false);
     }
-
-    void restoreSession();
-
-    return () => {
-      active = false;
-    };
   }, []);
 
+  useEffect(() => { void retryRestore(); }, [retryRestore]);
+
+  const clearPanel = useCallback(() => {
+    lastDataRequest.current += 1;
+    setSession(null);
+    setSnapshot(null);
+    setLoadingData(false);
+    setDataError(null);
+    setReviewUser(null);
+    setContractorReview(null);
+    setEditor(null);
+    setPaletteOpen(false);
+  }, []);
+
+  useEffect(() => onAdminSessionEnded((endedSessionId) => {
+    if (endedSessionId !== sessionId) return;
+    clearPanel();
+    setAuthError("Tu sesión terminó. Inicia sesión para continuar.");
+  }), [clearPanel, sessionId]);
+
   const loadData = useCallback(async () => {
-    if (!isAuthorized) return;
+    if (!isAuthorized || !sessionId) return;
+    const requestId = ++lastDataRequest.current;
     setLoadingData(true);
     setDataError(null);
     try {
       const nextData = await loadAdminData();
-      setData(nextData);
-      setDataError(
-        nextData.warnings.length > 0 ? nextData.warnings.join(" ") : null
-      );
+      if (lastDataRequest.current !== requestId) return;
+      setSnapshot({ sessionId, data: nextData, revision: requestId });
+      setDataError(nextData.warnings.length ? nextData.warnings.join(" ") : null);
     } catch (error) {
-      setDataError(errorMessage(error));
+      if (lastDataRequest.current === requestId) setDataError(errorMessage(error));
     } finally {
-      setLoadingData(false);
+      if (lastDataRequest.current === requestId) setLoadingData(false);
     }
-  }, [isAuthorized]);
+  }, [isAuthorized, sessionId]);
 
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  useEffect(() => { void loadData(); }, [loadData]);
 
   const pendingUsers = useMemo(
     () => data.users.filter((user) =>
@@ -314,22 +361,19 @@ export default function App() {
     ),
     [data.users]
   );
-  const normalizedSearch = search.trim().toLowerCase();
-  const visibleUsers = data.users.filter((user) =>
-    [user.fullName, user.phone, user.companyName, user.role]
-      .join(" ")
-      .toLowerCase()
-      .includes(normalizedSearch)
-  );
-  const visibleItems = data.items.filter((item) =>
-    [item.sku, item.name, item.categoryName, item.companyName]
-      .join(" ")
-      .toLowerCase()
-      .includes(normalizedSearch)
-  );
+  const normalizedSearch = useDeferredValue(search.trim().toLowerCase());
+  const visibleUsers = useMemo(() => activeTab === "users"
+    ? data.users.filter((user) => [user.fullName, user.phone, user.companyName, user.role]
+      .join(" ").toLowerCase().includes(normalizedSearch))
+    : data.users, [activeTab, data.users, normalizedSearch]);
+  const visibleItems = useMemo(() => activeTab === "catalog"
+    ? data.items.filter((item) => [item.sku, item.name, item.categoryName, item.companyName]
+      .join(" ").toLowerCase().includes(normalizedSearch))
+    : data.items, [activeTab, data.items, normalizedSearch]);
 
   async function handleLogin(event: FormEvent) {
     event.preventDefault();
+    if (authLoading) return;
 
     if (!captchaToken) {
       setAuthError("Completa la verificación de seguridad antes de iniciar sesión.");
@@ -357,9 +401,10 @@ export default function App() {
   async function handleSignOut() {
     try {
       await logoutAdmin();
+    } catch (error) {
+      setAuthError(errorMessage(error));
     } finally {
-      setSession(null);
-      setData(EMPTY_DATA);
+      clearPanel();
     }
   }
 
@@ -698,7 +743,24 @@ export default function App() {
   }
 
   if (sessionLoading) {
-    return <FullScreenLoader label="Verificando acceso administrativo..." />;
+    return <FullScreenLoader label="Recuperando tu sesión…" />;
+  }
+
+  if (restoreError) {
+    return (
+      <main className="login-container">
+        <div className="login-card">
+          <div className="login-brand">
+            <BrandMark />
+            <h1>No pudimos recuperar tu sesión</h1>
+          </div>
+          <AlertBanner message={restoreError} />
+          <button className="button button-primary" onClick={() => void retryRestore()}>
+            <RefreshCw size={17} /> Reintentar
+          </button>
+        </div>
+      </main>
+    );
   }
 
   if (!session || !isAuthorized) {
@@ -706,9 +768,8 @@ export default function App() {
       <div className="login-container">
         <form className="login-card" onSubmit={handleLogin}>
           <div className="login-brand">
-            <Briefcase size={42} />
-            <h1>Leuret</h1>
-            <p>Panel central de Super Admin</p>
+            <BrandMark />
+            <h1>Panel administrativo</h1>
           </div>
           {authError && <AlertBanner message={authError} />}
           <Field label="Correo electrónico">
@@ -738,9 +799,13 @@ export default function App() {
             </div>
           </Field>
           <TurnstileChallenge onToken={setCaptchaToken} resetKey={captchaResetKey} />
-          <button className="button button-primary button-block" disabled={authLoading || !captchaToken}>
+          <button
+            className="button button-primary button-block"
+            disabled={authLoading || !captchaToken}
+            aria-busy={authLoading}
+          >
             {authLoading ? <Loader2 className="spin" size={18} /> : <Lock size={18} />}
-            Ingresar
+            Iniciar sesión
           </button>
         </form>
       </div>
@@ -774,148 +839,154 @@ export default function App() {
         onOpenSearch={() => setPaletteOpen(true)}
       />
 
-      <main className="main-content">
+      <main className="main-content" aria-busy={loadingData && activeTab !== "mail"}>
         <header className="header">
           <div className="title-container">
             <h1>{titles[activeTab][0]}</h1>
             <p>{titles[activeTab][1]}</p>
           </div>
           {activeTab !== "mail" && <button className="button button-secondary" onClick={() => void loadData()} disabled={loadingData}>
-            <RefreshCw className={loadingData ? "spin" : ""} size={17} /> Actualizar
+            <RefreshCw className={loadingData ? "spin" : ""} size={17} />
+            {loadingData ? "Actualizando…" : "Actualizar"}
           </button>}
         </header>
 
-        {dataError && <AlertBanner message={dataError} onClose={() => setDataError(null)} />}
+        {dataError && activeTab !== "mail" && (
+          <AlertBanner
+            message={loadedData ? dataError : `No pudimos cargar los datos del panel. ${dataError}`}
+            onClose={loadedData ? () => setDataError(null) : undefined}
+            onRetry={() => void loadData()}
+          />
+        )}
         {success && <SuccessBanner message={success} />}
 
-        {loadingData && activeTab !== "mail" ? (
-          <div className="content-loader">
-            <Loader2 className="spin" size={34} />
-            <span>Sincronizando con PostgreSQL...</span>
-          </div>
+        {!loadedData && activeTab !== "mail" ? (
+          dataError ? null : <ContentLoader label="Cargando los datos del panel…" />
         ) : (
-          <>
-            {activeTab === "mail" && <MailTab />}
-            {activeTab === "dashboard" && <OverviewPanel onNavigate={navigate} />}
-            {activeTab === "dashboard" && (
-              <DashboardTab
-                data={data}
-                pendingUsers={pendingUsers}
-                onViewProfile={openContractorReview}
-                onEdit={(user) => setEditor({ kind: "user", draft: userDraft(user) })}
-                onToggle={toggleUser}
-              />
-            )}
-            {activeTab === "users" && (
-              <UsersTab
-                users={visibleUsers}
-                onViewProfile={openContractorReview}
-                search={search}
-                setSearch={setSearch}
-                currentUserId={session.user.id}
-                saving={saving}
-                onEdit={(user) => setEditor({ kind: "user", draft: userDraft(user) })}
-                onToggle={toggleUser}
-              />
-            )}
-            {activeTab === "companies" && (
-              <CompaniesTab
-                key={nav.key}
-                users={data.users}
-                onViewProfile={openContractorReview}
-                focusId={nav.id ?? null}
-                onNavigate={navigate}
-              />
-            )}
-            {activeTab === "projects" && (
-              <ProjectsTab
-                key={nav.key}
-                companies={data.companies}
-                initialStatus={nav.status ?? ""}
-                initialCompanyId={nav.companyId ?? ""}
-                focusId={nav.id ?? null}
-                onNavigate={navigate}
-              />
-            )}
-            {activeTab === "budgets" && (
-              <BudgetsTab
-                key={nav.key}
-                companies={data.companies}
-                initialStatus={nav.status ?? ""}
-                initialCompanyId={nav.companyId ?? ""}
-                focusId={nav.id ?? null}
-                onNavigate={navigate}
-              />
-            )}
-            {activeTab === "invoices" && (
-              <InvoicesTab
-                key={nav.key}
-                companies={data.companies}
-                initialStatus={nav.status ?? ""}
-                initialCompanyId={nav.companyId ?? ""}
-                focusId={nav.id ?? null}
-                onNavigate={navigate}
-              />
-            )}
-            {activeTab === "clients" && (
-              <ClientsTab
-                key={nav.key}
-                companies={data.companies}
-                initialCompanyId={nav.companyId ?? ""}
-                initialSearch={nav.search ?? ""}
-                focusId={nav.id ?? null}
-                onNavigate={navigate}
-              />
-            )}
-            {activeTab === "audit" && (
-              <AuditTab key={nav.key} companies={data.companies} initialCompanyId={nav.companyId ?? ""} onNavigate={navigate} />
-            )}
-            {activeTab === "catalog" && (
-              <CatalogTab
-                categories={data.categories}
-                items={visibleItems}
-                search={search}
-                setSearch={setSearch}
-                onNewCategory={newCategory}
-                onNewItem={newItem}
-                onEditCategory={(category) => setEditor({ kind: "category", draft: categoryDraft(category) })}
-                onEditItem={(item) => setEditor({ kind: "item", draft: itemDraft(item) })}
-              />
-            )}
-            {activeTab === "calculations" && (
-              <CalculationsTab
-                formulas={data.formulas}
-                units={data.units}
-                yields={data.yields}
-                onNewFormula={newFormula}
-                onNewUnit={newUnit}
-                onNewYield={newYield}
-                onEditFormula={(formula) => setEditor({ kind: "formula", draft: formulaDraft(formula) })}
-                onEditUnit={(unit) => setEditor({ kind: "unit", draft: unitDraft(unit) })}
-                onEditYield={(value) => setEditor({ kind: "yield", draft: yieldDraft(value) })}
-              />
-            )}
-            {activeTab === "pricing" && (
-              <PricingTab
-                data={data}
-                itemType={priceType}
-                setItemType={setPriceType}
-                target={priceTarget}
-                setTarget={setPriceTarget}
-                percentage={pricePercentage}
-                setPercentage={setPricePercentage}
-                notes={priceNotes}
-                setNotes={setPriceNotes}
-                adjusting={adjustingPrices}
-                onSubmit={handlePriceAdjustment}
-                onEdit={(item) => setEditor({ kind: "globalPrice", draft: globalCatalogItemDraft(item) })}
-                onReload={loadData}
-              />
-            )}
-            {activeTab === "system" && (
-              <SystemTab data={data} email={session.user.email ?? ""} onSignOut={handleSignOut} />
-            )}
-          </>
+          <PanelRefreshContext.Provider value={snapshot?.revision ?? 0}>
+            <Suspense fallback={<ContentLoader label={`Abriendo ${titles[activeTab][0]}…`} />}>
+              {activeTab === "mail" && <MailTab />}
+              {activeTab === "dashboard" && <OverviewPanel onNavigate={navigate} />}
+              {activeTab === "dashboard" && (
+                <DashboardTab
+                  data={data}
+                  pendingUsers={pendingUsers}
+                  onViewProfile={openContractorReview}
+                  onEdit={(user) => setEditor({ kind: "user", draft: userDraft(user) })}
+                  onToggle={toggleUser}
+                />
+              )}
+              {activeTab === "users" && (
+                <UsersTab
+                  users={visibleUsers}
+                  onViewProfile={openContractorReview}
+                  search={search}
+                  setSearch={setSearch}
+                  currentUserId={session.user.id}
+                  saving={saving}
+                  onEdit={(user) => setEditor({ kind: "user", draft: userDraft(user) })}
+                  onToggle={toggleUser}
+                />
+              )}
+              {activeTab === "companies" && (
+                <CompaniesTab
+                  key={nav.key}
+                  users={data.users}
+                  onViewProfile={openContractorReview}
+                  focusId={nav.id ?? null}
+                  onNavigate={navigate}
+                />
+              )}
+              {activeTab === "projects" && (
+                <ProjectsTab
+                  key={nav.key}
+                  companies={data.companies}
+                  initialStatus={nav.status ?? ""}
+                  initialCompanyId={nav.companyId ?? ""}
+                  focusId={nav.id ?? null}
+                  onNavigate={navigate}
+                />
+              )}
+              {activeTab === "budgets" && (
+                <BudgetsTab
+                  key={nav.key}
+                  companies={data.companies}
+                  initialStatus={nav.status ?? ""}
+                  initialCompanyId={nav.companyId ?? ""}
+                  focusId={nav.id ?? null}
+                  onNavigate={navigate}
+                />
+              )}
+              {activeTab === "invoices" && (
+                <InvoicesTab
+                  key={nav.key}
+                  companies={data.companies}
+                  initialStatus={nav.status ?? ""}
+                  initialCompanyId={nav.companyId ?? ""}
+                  focusId={nav.id ?? null}
+                  onNavigate={navigate}
+                />
+              )}
+              {activeTab === "clients" && (
+                <ClientsTab
+                  key={nav.key}
+                  companies={data.companies}
+                  initialCompanyId={nav.companyId ?? ""}
+                  initialSearch={nav.search ?? ""}
+                  focusId={nav.id ?? null}
+                  onNavigate={navigate}
+                />
+              )}
+              {activeTab === "audit" && (
+                <AuditTab key={nav.key} companies={data.companies} initialCompanyId={nav.companyId ?? ""} onNavigate={navigate} />
+              )}
+              {activeTab === "catalog" && (
+                <CatalogTab
+                  categories={data.categories}
+                  items={visibleItems}
+                  search={search}
+                  setSearch={setSearch}
+                  onNewCategory={newCategory}
+                  onNewItem={newItem}
+                  onEditCategory={(category) => setEditor({ kind: "category", draft: categoryDraft(category) })}
+                  onEditItem={(item) => setEditor({ kind: "item", draft: itemDraft(item) })}
+                />
+              )}
+              {activeTab === "calculations" && (
+                <CalculationsTab
+                  formulas={data.formulas}
+                  units={data.units}
+                  yields={data.yields}
+                  onNewFormula={newFormula}
+                  onNewUnit={newUnit}
+                  onNewYield={newYield}
+                  onEditFormula={(formula) => setEditor({ kind: "formula", draft: formulaDraft(formula) })}
+                  onEditUnit={(unit) => setEditor({ kind: "unit", draft: unitDraft(unit) })}
+                  onEditYield={(value) => setEditor({ kind: "yield", draft: yieldDraft(value) })}
+                />
+              )}
+              {activeTab === "pricing" && (
+                <PricingTab
+                  data={data}
+                  itemType={priceType}
+                  setItemType={setPriceType}
+                  target={priceTarget}
+                  setTarget={setPriceTarget}
+                  percentage={pricePercentage}
+                  setPercentage={setPricePercentage}
+                  notes={priceNotes}
+                  setNotes={setPriceNotes}
+                  adjusting={adjustingPrices}
+                  onSubmit={handlePriceAdjustment}
+                  onEdit={(item) => setEditor({ kind: "globalPrice", draft: globalCatalogItemDraft(item) })}
+                  onReload={loadData}
+                />
+              )}
+              {activeTab === "system" && (
+                <SystemTab data={data} email={session.user.email ?? ""} onSignOut={handleSignOut} />
+              )}
+            </Suspense>
+          </PanelRefreshContext.Provider>
         )}
       </main>
 

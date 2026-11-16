@@ -8,18 +8,19 @@ import {
   useRef,
   useState
 } from "react";
+import { AppState } from "react-native";
 
 import {
   ApiError,
   type AppProfile,
   type AppRole,
-  clearStoredSession,
   getCurrentUser,
-  loadStoredSession,
   login,
   logout,
+  onSessionEnded,
   requestPasswordReset,
   register,
+  restoreStoredSession,
   type RegisterInput,
   type StoredSession,
   updateContractorProfile as updateContractorProfileRequest,
@@ -92,10 +93,13 @@ type AuthContextValue = {
   user: AppProfile | null;
   profile: AppProfile | null;
   loading: boolean;
+  restoreError: string | null;
+  sessionNotice: string | null;
   profileError: string | null;
   isAdmin: boolean;
 
   refreshProfile: () => Promise<void>;
+  retryRestore: () => Promise<void>;
 
   updateProfile: (
     input: UpdateProfileInput
@@ -144,6 +148,9 @@ function errorMessage(
   return "Ocurrió un error inesperado.";
 }
 
+const SESSION_ENDED_MESSAGE = "Tu sesión terminó. Inicia sesión para continuar.";
+const FOREGROUND_CHECK_MS = 60_000;
+
 export function AuthProvider({
   children
 }: PropsWithChildren) {
@@ -158,7 +165,10 @@ export function AuthProvider({
 
   const [profileError, setProfileError] =
     useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
   const currentSessionId = useRef<string | null>(null);
+  const restoring = useRef(false);
 
   const applySession = useCallback(
     (
@@ -172,54 +182,42 @@ export function AuthProvider({
         nextSession?.user ?? null
       );
       setProfileError(null);
+      setSessionNotice(null);
     },
     []
   );
 
   useEffect(() => {
-    let mounted = true;
-
-    async function restoreSession() {
-      try {
-        const stored =
-          await loadStoredSession();
-
-        if (!stored) return;
-
-        const current =
-          await getCurrentUser();
-
-        const nextSession: StoredSession = {
-          ...stored,
-          user: current.user,
-          requiresApproval:
-            current.requiresApproval
-        };
-
-        if (mounted) {
-          applySession(nextSession);
-        }
-      } catch (error) {
-        await clearStoredSession();
-
-        if (mounted) {
-          setProfileError(
-            errorMessage(error)
-          );
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void restoreSession();
-
-    return () => {
-      mounted = false;
-    };
+    return onSessionEnded((sessionId) => {
+      if (currentSessionId.current !== sessionId) return;
+      applySession(null);
+      setSessionNotice(SESSION_ENDED_MESSAGE);
+    });
   }, [applySession]);
+
+  const retryRestore = useCallback(async () => {
+    if (restoring.current) return;
+    restoring.current = true;
+    setLoading(true);
+    setRestoreError(null);
+    try {
+      applySession(await restoreStoredSession());
+    } catch (error) {
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+        applySession(null);
+        setSessionNotice(error.status === 403 ? error.message : SESSION_ENDED_MESSAGE);
+      } else {
+        setRestoreError(error instanceof ApiError
+          ? error.message
+          : "Revisa tu conexión e inténtalo de nuevo.");
+      }
+    } finally {
+      restoring.current = false;
+      setLoading(false);
+    }
+  }, [applySession]);
+
+  useEffect(() => { void retryRestore(); }, [retryRestore]);
 
   const sessionId = session?.sessionId;
   const refreshProfile =
@@ -246,6 +244,18 @@ export function AuthProvider({
         );
       }
     }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId && !restoreError) return;
+
+    let lastCheck = Date.now();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active" || Date.now() - lastCheck < FOREGROUND_CHECK_MS) return;
+      lastCheck = Date.now();
+      void (sessionId ? refreshProfile() : retryRestore());
+    });
+    return () => subscription.remove();
+  }, [refreshProfile, restoreError, retryRestore, sessionId]);
 
   const signIn = useCallback(
     async (
@@ -450,9 +460,12 @@ export function AuthProvider({
         user: profile,
         profile,
         loading,
+        restoreError,
+        sessionNotice,
         profileError,
         isAdmin,
         refreshProfile,
+        retryRestore,
         updateProfile,
         signIn,
         signUp,
@@ -464,9 +477,12 @@ export function AuthProvider({
         session,
         profile,
         loading,
+        restoreError,
+        sessionNotice,
         profileError,
         isAdmin,
         refreshProfile,
+        retryRestore,
         updateProfile,
         signIn,
         signUp,
