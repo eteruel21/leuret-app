@@ -311,7 +311,7 @@ test("equipo: invitar, unirse con el código, cambiar el rol y salir", async ({ 
   await test.step("la propietaria le cambia el rol a supervisor", async () => {
     await ownerPage.goto("/equipo");
     await ownerPage.getByRole("button", { name: new RegExp(accounts.invitee.fullName) }).click();
-    await ownerPage.getByText("Supervisor", { exact: true }).click();
+    await ownerPage.getByRole("button", { name: "Cambiar a Supervisor" }).click();
     await expect(ownerPage.getByRole("button", { name: new RegExp(`${accounts.invitee.fullName}.*Supervisor`) })).toBeVisible();
   });
 
