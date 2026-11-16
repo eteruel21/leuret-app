@@ -362,7 +362,21 @@ export async function addBudgetItemRepo(userId: string, budgetId: string, input:
           materials
         )
         VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb
+          $1,
+          $2,
+          -- Sin sección indicada (calculadoras, API): la primera del presupuesto,
+          -- para que la partida no quede aparte en «Sin sección».
+          COALESCE(
+            $3::uuid,
+            (
+              SELECT section.id
+              FROM public.budget_sections AS section
+              WHERE section.budget_id = $2 AND section.company_id = $1
+              ORDER BY section.sort_order, section.created_at
+              LIMIT 1
+            )
+          ),
+          $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb
         )
         RETURNING *
       `,

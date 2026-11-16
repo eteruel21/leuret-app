@@ -11,6 +11,7 @@ import {
 } from "react-native";
 
 import { colors, layout, radius } from "@/constants/theme";
+import { ROLE_LABELS } from "@/permissions/permissions";
 import {
   absoluteProfileResourceUrl,
   type UserProfileDetails
@@ -28,6 +29,11 @@ const roleLabels = {
   contractor: "Contratista",
   client: "Cliente"
 } as const;
+
+/** Rol en la empresa con su nombre en la app («estimator» → «Presupuestista»). */
+function roleLabel(role: string | null | undefined): string {
+  return (role && ROLE_LABELS[role as keyof typeof ROLE_LABELS]) || "Miembro";
+}
 
 const statusLabels = {
   email_pending: "Correo pendiente",
@@ -245,7 +251,7 @@ export function ProfileOverview({ details, loading, error, onRetry }: Props) {
                 <View style={styles.resourceText}>
                   <Text style={styles.resourceTitle}>{company.name}</Text>
                   <Text style={styles.resourceMeta}>
-                    {company.role || "Miembro"} · {company.active ? "Activo" : "Inactivo"}
+                    {roleLabel(company.role)} · {company.active ? "Activo" : "Inactivo"}
                   </Text>
                 </View>
               </View>

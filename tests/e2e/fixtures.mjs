@@ -27,6 +27,36 @@ export function browserContractor() {
   };
 }
 
+export const flowCompanies = { main: "Constructora Flujo QA", rival: "Instalaciones Pacífico QA" };
+
+/** Roles de equipo que se siembran como miembros activos de la empresa principal. */
+export const flowStaffRoles = ["admin", "estimator", "supervisor", "sales", "member"];
+
+/**
+ * Cuentas controladas para los recorridos por rol. Son independientes de las
+ * de las pruebas de sesión para que ningún dato creado aquí cambie esas pruebas.
+ */
+export function flowAccounts() {
+  const { password } = browserAccount();
+  const runId = process.env.LEURET_E2E_RUN_ID;
+  const account = (key, fullName) => ({ key, email: `flujo-${key}-${runId}@example.test`, password, fullName });
+
+  return {
+    owner: account("owner", "Olga Propietaria QA"),
+    admin: account("admin", "Adrián Administrador QA"),
+    estimator: account("estimator", "Elena Estimadora QA"),
+    supervisor: account("supervisor", "Saúl Supervisor QA"),
+    sales: account("sales", "Vanesa Ventas QA"),
+    member: account("member", "Mario Miembro QA"),
+    invitee: account("invitee", "Iván Invitado QA"),
+    rival: account("rival", "Ramiro Rival QA"),
+    client: account("client", "Carla Cliente QA"),
+    client2: account("client2", "Diego Cliente QA"),
+    buyer: account("buyer", "Beatriz Compradora QA"),
+    superAdmin: account("superadmin", "Sofía Superadmin QA")
+  };
+}
+
 export function mockBrowserTurnstile(page) {
   return page.route("https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit", (route) =>
     route.fulfill({

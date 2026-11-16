@@ -402,6 +402,8 @@ function MemberSheet({
                   <Pressable
                     key={role}
                     disabled={busy}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Cambiar a ${ROLE_LABELS[role]}`}
                     onPress={() => onChangeRole(member, role)}
                     style={({ pressed }) => [styles.roleOption, pressed && styles.pressed]}
                   >

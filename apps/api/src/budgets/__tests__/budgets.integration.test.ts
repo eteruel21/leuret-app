@@ -17,6 +17,7 @@ import {
   deleteCalculationRepo,
   updateCalculationRepo
 } from "../../calculations/repository.js";
+import { createBudgetItemSchema } from "../schemas.js";
 
 describe("T-057: Suite de Pruebas de Totales de Presupuestos (Subtotales, Impuestos, Descuentos, Redondeos)", () => {
   const suffix = Math.floor(Math.random() * 1000000);
@@ -184,6 +185,18 @@ describe("T-057: Suite de Pruebas de Totales de Presupuestos (Subtotales, Impues
   it("4c. Eliminar una partida inexistente responde false", async () => {
     const missing = await deleteBudgetItemRepo(userId, budgetId, "00000000-0000-4000-8000-000000000000", companyId);
     expect(missing).toBe(false);
+  });
+
+  it("4e. Una partida sin sección (calculadoras) va a la primera sección del presupuesto", async () => {
+    const input = createBudgetItemSchema.parse({ companyId, description: "Partida de calculadora", quantity: 1, unitPrice: 1 });
+    const item = await addBudgetItemRepo(userId, budgetId, input);
+    const firstSection = (await adminPool.query(
+      "SELECT id FROM public.budget_sections WHERE budget_id = $1 ORDER BY sort_order, created_at LIMIT 1",
+      [budgetId]
+    )).rows[0];
+    expect(firstSection?.id).toBeTruthy();
+    expect(item.section_id).toBe(firstSection.id);
+    expect(await deleteBudgetItemRepo(userId, budgetId, item.id, companyId)).toBe(true);
   });
 
   it("4d. El equipo no registra la aprobación de un borrador", async () => {

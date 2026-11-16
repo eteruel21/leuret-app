@@ -11,5 +11,7 @@ export const PANAMA_PROVINCES = [
   "Bocas del Toro",
   "Darién",
   "Comarca Guna Yala",
+  "Comarca Emberá-Wounaan",
   "Comarca Ngäbe-Buglé",
+  "Comarca Naso Tjër Di",
 ] as const;

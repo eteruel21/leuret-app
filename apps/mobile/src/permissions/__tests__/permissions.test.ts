@@ -32,9 +32,15 @@ describe("permisos por rol (deben coincidir con la API)", () => {
     }
   });
 
-  it("presupuestos: solo owner, admin y estimator", () => {
-    const allowed = ROLES.filter((role) => can(role, "budgets.view"));
-    expect(allowed).toEqual(["owner", "admin", "estimator"]);
+  it("presupuestos: ventas los consulta; solo owner, admin y estimator los editan", () => {
+    expect(ROLES.filter((role) => can(role, "budgets.view"))).toEqual(["owner", "admin", "sales", "estimator"]);
+    expect(ROLES.filter((role) => can(role, "budgets.edit"))).toEqual(["owner", "admin", "estimator"]);
+  });
+
+  it("quien registra la respuesta del cliente o factura puede abrir el presupuesto", () => {
+    for (const role of ROLES) {
+      if (can(role, "budgets.respond") || can(role, "invoices.create")) expect(can(role, "budgets.view")).toBe(true);
+    }
   });
 
   it("todo el equipo abre la obra, pero solo algunos ven sus montos", () => {

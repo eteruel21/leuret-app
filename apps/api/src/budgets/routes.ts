@@ -51,6 +51,10 @@ import { BudgetDecisionError, BudgetLockedError, BudgetNotDraftError, BudgetReop
 
 import { getCalculationDetailService } from "../calculations/services.js";
 
+// Ventas consulta los presupuestos (para dar seguimiento, registrar la respuesta
+// del cliente y facturar), pero no los edita.
+const BUDGET_VIEW_ROLES = ["owner", "admin", "estimator", "sales"] as const;
+
 function authenticatedUserId(
   request: FastifyRequest,
   reply: FastifyReply
@@ -114,7 +118,7 @@ export async function registerBudgetRoutes(
   app.get(
     "/budgets",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"], "query")]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(BUDGET_VIEW_ROLES, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -150,7 +154,19 @@ export async function registerBudgetRoutes(
       }
 
       const input = parsedBody.data;
-      const budgetId = await createProjectBudgetService(userId, input.companyId, input.projectId, input.title);
+      let budgetId: string | null;
+      try {
+        budgetId = await createProjectBudgetService(userId, input.companyId, input.projectId, input.title);
+      } catch (error) {
+        // create_project_budget avisa con RAISE EXCEPTION (P0001) si la obra no existe
+        // o no es de la empresa: es un 404/403, no un error del servidor.
+        const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code) : "";
+        if (code !== "P0001") throw error;
+        const message = error instanceof Error ? error.message : "";
+        if (/no encontrad/i.test(message)) return reply.status(404).send({ message: "No se encontró la obra." });
+        if (/acceso/i.test(message)) return reply.status(403).send({ message });
+        return reply.status(409).send({ message: message || "No se pudo crear el presupuesto." });
+      }
 
       if (!budgetId) {
         return reply.status(500).send({
@@ -165,7 +181,7 @@ export async function registerBudgetRoutes(
   app.get(
     "/budgets/:budgetId",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"], "query")]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(BUDGET_VIEW_ROLES, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);

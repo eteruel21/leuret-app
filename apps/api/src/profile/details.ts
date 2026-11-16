@@ -6,6 +6,7 @@ import {
   generateSignedPhotoUrl,
   generateSignedProfileDocumentUrl
 } from "../storage/signed-url.js";
+import { inSequence } from "../db/in-sequence.js";
 
 export type ProfileDocumentType =
   | "identification"
@@ -245,8 +246,8 @@ export async function getUserProfileDetails(
       if (!profile) return null;
 
       const [companiesResult, clientsResult, photosResult] =
-        await Promise.all([
-          client.query<CompanyAssociationRow>(
+        await inSequence([
+          () => client.query<CompanyAssociationRow>(
             `
               SELECT
                 company.id,
@@ -261,7 +262,7 @@ export async function getUserProfileDetails(
             `,
             [targetUserId]
           ),
-          client.query<ClientAssociationRow>(
+          () => client.query<ClientAssociationRow>(
             `
               SELECT
                 customer.id,
@@ -278,7 +279,7 @@ export async function getUserProfileDetails(
             `,
             [targetUserId]
           ),
-          client.query<ProjectPhotoRow>(
+          () => client.query<ProjectPhotoRow>(
             `
               SELECT
                 photo.id,

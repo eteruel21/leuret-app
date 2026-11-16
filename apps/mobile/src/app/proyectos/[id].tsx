@@ -800,7 +800,7 @@ function ProjectDetailScreenContent() {
                 <View style={styles.activityInfo}>
                   <Text style={styles.activityTitle}>{act.title}</Text>
                   <Text style={styles.activitySubtext}>
-                    {formatShortDate(act.date)} · {act.time} - {act.endTime}
+                    {formatShortDate(act.date)} · {act.time}{act.endTime && act.endTime !== act.time ? ` - ${act.endTime}` : ""}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />

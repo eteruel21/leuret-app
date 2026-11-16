@@ -13,6 +13,7 @@ web-build/
 .wrangler/
 **/.wrangler/
 test-results/
+e2e-audit/
 
 # IDE files
 .vscode/

@@ -369,8 +369,11 @@ export async function registerJobRequestRoutes(app: FastifyInstance): Promise<vo
       if (!userId) return;
 
       const params = conversationParamsSchema.safeParse(request.params);
+      if (!params.success) {
+        return reply.status(400).send({ message: "La petición o la empresa no son válidas." });
+      }
       const body = sendJobRequestMessageSchema.safeParse(request.body);
-      if (!params.success || !body.success) {
+      if (!body.success) {
         return reply.status(400).send({ message: "Escribe un mensaje (máximo 2000 caracteres) o adjunta una foto." });
       }
 
