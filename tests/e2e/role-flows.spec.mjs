@@ -102,7 +102,7 @@ test("cliente y empresa: vinculación, presupuesto, aprobación, factura solicit
     await ownerPage.getByPlaceholder("1", { exact: true }).first().fill("1");
     await ownerPage.getByPlaceholder("0.00").first().fill("450");
     await ownerPage.getByText("Guardar", { exact: true }).click();
-    await expect(ownerPage.getByText("Cambio de inodoro y lavamanos")).toBeVisible();
+    await expect(ownerPage.getByText("Cambio de inodoro y lavamanos").filter({ visible: true }).first()).toBeVisible();
     // La partida manual queda en la sección del presupuesto, no en «Sin sección».
     await expect(ownerPage.getByText("Sin sección", { exact: true })).toHaveCount(0);
 
@@ -122,7 +122,7 @@ test("cliente y empresa: vinculación, presupuesto, aprobación, factura solicit
     await buyerPage.goto("/presupuestos");
     await buyerPage.getByText("Remodelación de baño").first().click();
     await expect(buyerPage).toHaveURL(new RegExp(`/cliente-presupuestos/${state.buyerBudgetId}`));
-    await expect(buyerPage.getByText("Cambio de inodoro y lavamanos")).toBeVisible();
+    await expect(buyerPage.getByText("Cambio de inodoro y lavamanos").filter({ visible: true }).first()).toBeVisible();
     await buyerPage.getByRole("button", { name: "Aprobar", exact: true }).click();
     await expect(buyerPage.getByText("Presupuesto aprobado", { exact: true })).toBeVisible();
     await capture(buyerPage, "flujos", "cliente-presupuesto-aprobado");
@@ -198,7 +198,7 @@ test("petición de trabajo: publicar, conversar, cotizar y adjudicar", async ({ 
     await clientPage.getByRole("button", { name: "Publicar petición" }).click();
     await expect(clientPage).toHaveURL(/\/cliente-peticiones\/[0-9a-f-]{36}/);
     state.jobRequestId = clientPage.url().match(/cliente-peticiones\/([0-9a-f-]{36})/)[1];
-    await expect(clientPage.getByText(title)).toBeVisible();
+    await expect(clientPage.getByText(title).filter({ visible: true }).first()).toBeVisible();
   });
 
   const rivalContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -218,16 +218,16 @@ test("petición de trabajo: publicar, conversar, cotizar y adjudicar", async ({ 
     await rivalPage.getByRole("button", { name: "Preguntar al cliente" }).click();
     await rivalPage.getByPlaceholder("Escribe un mensaje…").fill("¿Las lámparas ya están compradas?");
     await rivalPage.getByRole("button", { name: "Enviar mensaje" }).click();
-    await expect(rivalPage.getByText("¿Las lámparas ya están compradas?")).toBeVisible();
+    await expect(rivalPage.getByText("¿Las lámparas ya están compradas?").filter({ visible: true }).first()).toBeVisible();
   });
 
   await test.step("el cliente ve el mensaje en Notificaciones y responde", async () => {
     await clientPage.goto("/notificaciones");
     await clientPage.getByText(flowCompanies.rival).first().click();
-    await expect(clientPage.getByText("¿Las lámparas ya están compradas?")).toBeVisible();
+    await expect(clientPage.getByText("¿Las lámparas ya están compradas?").filter({ visible: true }).first()).toBeVisible();
     await clientPage.getByPlaceholder("Escribe un mensaje…").fill("Sí, ya las tengo en casa.");
     await clientPage.getByRole("button", { name: "Enviar mensaje" }).click();
-    await expect(clientPage.getByText("Sí, ya las tengo en casa.")).toBeVisible();
+    await expect(clientPage.getByText("Sí, ya las tengo en casa.").filter({ visible: true }).first()).toBeVisible();
   });
 
   await test.step("la empresa prepara el presupuesto y lo envía", async () => {
@@ -241,7 +241,7 @@ test("petición de trabajo: publicar, conversar, cotizar y adjudicar", async ({ 
     await rivalPage.getByPlaceholder("1", { exact: true }).first().fill("4");
     await rivalPage.getByPlaceholder("0.00").first().fill("18");
     await rivalPage.getByText("Guardar", { exact: true }).click();
-    await expect(rivalPage.getByText("Instalación de lámpara LED")).toBeVisible();
+    await expect(rivalPage.getByText("Instalación de lámpara LED").filter({ visible: true }).first()).toBeVisible();
     await rivalPage.getByRole("button", { name: "Enviar al cliente" }).click();
     await rivalPage.getByRole("button", { name: "Enviar", exact: true }).click();
     await expect(rivalPage.getByText("Enviado", { exact: true }).filter({ visible: true }).first()).toBeVisible();
@@ -254,7 +254,7 @@ test("petición de trabajo: publicar, conversar, cotizar y adjudicar", async ({ 
 
   await test.step("el cliente aprueba el presupuesto y la petición queda adjudicada", async () => {
     await clientPage.goto(`/cliente-presupuestos/${state.jobBudgetId}`);
-    await expect(clientPage.getByText("Instalación de lámpara LED")).toBeVisible();
+    await expect(clientPage.getByText("Instalación de lámpara LED").filter({ visible: true }).first()).toBeVisible();
     await clientPage.getByRole("button", { name: "Aprobar", exact: true }).click();
     await expect(clientPage.getByText("Presupuesto aprobado", { exact: true })).toBeVisible();
     await clientPage.goto(`/cliente-peticiones/${state.jobRequestId}`);
