@@ -153,6 +153,7 @@ export async function updateRemoteActivity(
       body: JSON.stringify({
 
         clientId: data.clientId === undefined ? undefined : (data.clientId || null),
+        projectId: data.projectId === undefined ? undefined : (data.projectId || null),
         title: data.title,
         type: data.type,
         status: data.status,

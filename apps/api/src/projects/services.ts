@@ -6,7 +6,9 @@ import {
   findCompanyRoleRepo,
   updateProjectStatusRepo,
   updateProjectProgressRepo,
-  type CreateProjectInput
+  updateProjectRepo,
+  type CreateProjectInput,
+  type UpdateProjectInput
 } from "./repository.js";
 
 export async function getClientProjectsService(userId: string) {
@@ -47,4 +49,12 @@ export async function updateProjectStatusService(userId: string, projectId: stri
 
 export async function updateProjectProgressService(userId: string, projectId: string, companyId: string, progressPercentage: number) {
   return updateProjectProgressRepo(userId, projectId, companyId, progressPercentage);
+}
+
+/** Corrige los datos de la obra. Los montos solo los cambian los roles que los ven. */
+export async function updateProjectService(userId: string, projectId: string, input: UpdateProjectInput) {
+  const role = await findCompanyRoleRepo(userId, input.companyId);
+  const safeInput = role && FINANCIAL_ROLES.has(role) ? input : { ...input, budgetEstimate: undefined };
+  const updated = await updateProjectRepo(userId, projectId, safeInput);
+  return updated ? getProjectByIdService(userId, projectId, input.companyId) : null;
 }

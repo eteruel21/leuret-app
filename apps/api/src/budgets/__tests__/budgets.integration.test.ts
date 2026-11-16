@@ -6,12 +6,16 @@ import {
   addBudgetItemRepo,
   deleteBudgetItemRepo,
   getBudgetHistoryRepo,
-  reopenBudgetRepo
+  reopenBudgetRepo,
+  updateBudgetRepo,
+  updateBudgetItemRepo,
+  BudgetDecisionError
 } from "../repository.js";
 import {
   saveCalculationRepo,
   findCompanyCalculationsRepo,
-  deleteCalculationRepo
+  deleteCalculationRepo,
+  updateCalculationRepo
 } from "../../calculations/repository.js";
 
 describe("T-057: Suite de Pruebas de Totales de Presupuestos (Subtotales, Impuestos, Descuentos, Redondeos)", () => {
@@ -137,7 +141,58 @@ describe("T-057: Suite de Pruebas de Totales de Presupuestos (Subtotales, Impues
     expect(Number.isInteger(Math.round(Number(budget.total) * 100))).toBe(true);
   });
 
+  it("4b. Editar datos y partidas de un borrador recalcula los totales", async () => {
+    const updated = await updateBudgetRepo(userId, budgetId, {
+      companyId,
+      title: "Presupuesto Totales editado",
+      discountType: "none",
+      taxRate: 7,
+      terms: "Pago 50 % al inicio"
+    });
+    expect(updated).toBe(true);
+
+    let budget = (await adminPool.query(
+      "SELECT title, discount_type, discount_value, discount_amount, tax_amount, total, terms FROM public.budgets WHERE id = $1",
+      [budgetId]
+    )).rows[0];
+    expect(budget.title).toBe("Presupuesto Totales editado");
+    expect(budget.discount_type).toBe("none");
+    expect(Number(budget.discount_value)).toBe(0);
+    expect(Number(budget.discount_amount)).toBe(0);
+    expect(Number(budget.tax_amount)).toBe(10.89);
+    expect(Number(budget.total)).toBeCloseTo(266.38, 2);
+    expect(budget.terms).toBe("Pago 50 % al inicio");
+
+    const item = (await adminPool.query(
+      "SELECT id FROM public.budget_items WHERE budget_id = $1 AND description = 'Material A'",
+      [budgetId]
+    )).rows[0];
+    const edited = await updateBudgetItemRepo(userId, budgetId, item.id, { companyId, quantity: 20 });
+    expect(Number(edited.quantity)).toBe(20);
+    expect(Number(edited.subtotal)).toBeCloseTo(311, 2);
+
+    budget = (await adminPool.query("SELECT subtotal FROM public.budgets WHERE id = $1", [budgetId])).rows[0];
+    expect(Number(budget.subtotal)).toBeCloseTo(410.99, 2);
+
+    const history = await getBudgetHistoryRepo(userId, budgetId, companyId);
+    expect(history.some((entry) => entry.action === "item_updated")).toBe(true);
+    expect(history.some((entry) => entry.action === "details_updated")).toBe(true);
+
+    await updateBudgetItemRepo(userId, budgetId, item.id, { companyId, quantity: 10 });
+  });
+
+  it("4c. Eliminar una partida inexistente responde false", async () => {
+    const missing = await deleteBudgetItemRepo(userId, budgetId, "00000000-0000-4000-8000-000000000000", companyId);
+    expect(missing).toBe(false);
+  });
+
+  it("4d. El equipo no registra la aprobación de un borrador", async () => {
+    await expect(approveBudgetRepo(userId, budgetId, companyId)).rejects.toBeInstanceOf(BudgetDecisionError);
+    await expect(approveBudgetRepo(userId, budgetId, companyId)).rejects.toThrow("Envía el presupuesto");
+  });
+
   it("5. T-087 & T-090: Aprobación del cliente y registro de historial", async () => {
+    await adminPool.query("UPDATE public.budgets SET status = 'sent' WHERE id = $1", [budgetId]);
     const approved = await approveBudgetRepo(userId, budgetId, companyId);
     expect(approved.status).toBe("approved");
     expect(approved.approved_at).toBeDefined();
@@ -145,6 +200,14 @@ describe("T-057: Suite de Pruebas de Totales de Presupuestos (Subtotales, Impues
     const history = await getBudgetHistoryRepo(userId, budgetId, companyId);
     expect(history.length).toBeGreaterThan(0);
     expect(history.some((h) => h.action === "approved")).toBe(true);
+
+    // Migración 049: la obra toma el valor del presupuesto aprobado y pasa a «Aprobada».
+    const project = (await adminPool.query(
+      "SELECT status, contract_value FROM public.projects WHERE id = $1",
+      [projectId]
+    )).rows[0];
+    expect(project.status).toBe("approved");
+    expect(Number(project.contract_value)).toBeCloseTo(Number(approved.total), 2);
   });
 
   it("6. T-089: Bloquear modificación de presupuesto aprobado", async () => {
@@ -169,6 +232,7 @@ describe("T-057: Suite de Pruebas de Totales de Presupuestos (Subtotales, Impues
       SELECT public.create_project_budget($1, $2, 'Presupuesto Rechazo') AS id
     `, [companyId, projectId]);
     const rejBudgetId = budgetRes.rows[0].id;
+    await adminPool.query("UPDATE public.budgets SET status = 'sent' WHERE id = $1", [rejBudgetId]);
 
     const rejected = await rejectBudgetRepo(userId, rejBudgetId, "Presupuesto excede el presupuesto del cliente", companyId);
     expect(rejected.status).toBe("rejected");
@@ -195,6 +259,34 @@ describe("T-057: Suite de Pruebas de Totales de Presupuestos (Subtotales, Impues
     expect(list.length).toBeGreaterThan(0);
     expect(list[0].title).toBe("Vaciado Losa de Techo");
 
+    const updatedCalc = await updateCalculationRepo(userId, savedCalc.id, {
+      companyId,
+      projectId,
+      clientId,
+      formulaCode: "concrete",
+      title: "Vaciado Losa de Techo (revisado)",
+      inputData: { length: 12, width: 8, thickness: 0.15 },
+      priceData: { cementBag: 10 },
+      resultsData: { totalCost: 1800 },
+      totalCost: 1800
+    });
+    expect(updatedCalc?.id).toBe(savedCalc.id);
+    expect(Number(updatedCalc?.total_cost)).toBe(1800);
+
+    // Un cálculo no cambia de calculadora.
+    const otherFormula = await updateCalculationRepo(userId, savedCalc.id, {
+      companyId,
+      projectId,
+      clientId,
+      formulaCode: "paint",
+      title: "Otro",
+      inputData: {},
+      priceData: {},
+      resultsData: {},
+      totalCost: 0
+    });
+    expect(otherFormula).toBeNull();
+
     await deleteCalculationRepo(userId, savedCalc.id, companyId);
   });
 
@@ -216,6 +308,7 @@ describe("T-057: Suite de Pruebas de Totales de Presupuestos (Subtotales, Impues
       notes: ""
     };
 
+    await adminPool.query("UPDATE public.budgets SET status = 'viewed' WHERE id = $1", [reopenBudgetId]);
     await rejectBudgetRepo(userId, reopenBudgetId, "Necesito otra cotización", companyId);
     await expect(addBudgetItemRepo(userId, reopenBudgetId, item)).rejects.toThrow("Editar presupuesto");
 

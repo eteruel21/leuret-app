@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, router, Stack, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,6 +20,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LeuretLoading } from "@/components/LeuretLoading";
 import { colors, radius } from "@/constants/theme";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import {
   cancelInvoice,
   cancelInvoiceCreditNote,
@@ -47,6 +48,8 @@ import { formatMoney } from "@/types/budget";
 import { formatShortDate } from "@/utils/format";
 import { getClientDisplayName } from "@/types/client";
 import { shareInvoicePdf } from "@/utils/invoice-pdf";
+import { todayKey } from "@/utils/client-portal";
+import { isDateKey } from "@/utils/form-values";
 import { shareCreditNotePdf } from "@/utils/credit-note-pdf";
 import { shareReceiptPdf } from "@/utils/receipt-pdf";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -79,6 +82,8 @@ export default function InvoiceDetailScreen() {
   const [paymentMethod, setPaymentMethod] = useState<InvoicePaymentMethod>("bank_transfer");
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentNotes, setPaymentNotes] = useState("");
+  // Día en que se recibió el pago (antes siempre quedaba la fecha de hoy).
+  const [paymentDate, setPaymentDate] = useState(() => todayKey(activeCompany?.timezone || undefined));
   const [savingPayment, setSavingPayment] = useState(false);
   const [creditNoteModalVisible, setCreditNoteModalVisible] = useState(false);
   const [creditNoteAmount, setCreditNoteAmount] = useState("");
@@ -129,17 +134,7 @@ export default function InvoiceDetailScreen() {
     [activeCompany, invoiceId],
   );
 
-  useEffect(() => {
-    let active = true;
-
-    Promise.resolve().then(() => {
-      if (active) void loadInvoice();
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [loadInvoice]);
+  useRefreshOnFocus(loadInvoice);
 
   const handleShareInvoice = async () => {
     if (!activeCompany || !invoice) return;
@@ -240,6 +235,7 @@ export default function InvoiceDetailScreen() {
   };
 
   const resetPaymentForm = () => {
+    setPaymentDate(todayKey(activeCompany?.timezone || undefined));
     setPaymentAmount("");
     setPaymentMethod("bank_transfer");
     setPaymentReference("");
@@ -271,6 +267,13 @@ export default function InvoiceDetailScreen() {
       return;
     }
 
+    const today = todayKey(activeCompany.timezone || undefined);
+    const paidDay = paymentDate.trim();
+    if (!isDateKey(paidDay) || paidDay > today) {
+      Alert.alert("Fecha inválida", "Usa el formato AAAA-MM-DD y una fecha que no sea futura.");
+      return;
+    }
+
     try {
       setSavingPayment(true);
       const result = await recordInvoicePayment({
@@ -278,6 +281,8 @@ export default function InvoiceDetailScreen() {
         invoiceId: invoice.id,
         amount,
         method: paymentMethod,
+        // Hoy: la hora actual. Otro día: mediodía en Panamá (17:00 UTC).
+        paidAt: paidDay === today ? null : `${paidDay}T17:00:00.000Z`,
         reference: paymentReference,
         notes: paymentNotes
       });
@@ -1070,6 +1075,16 @@ export default function InvoiceDetailScreen() {
                 </Pressable>
               ))}
             </View>
+
+            <Text style={styles.inputLabel}>Fecha del pago</Text>
+            <TextInput
+              value={paymentDate}
+              onChangeText={setPaymentDate}
+              placeholder="AAAA-MM-DD"
+              placeholderTextColor={colors.textMuted}
+              maxLength={10}
+              style={styles.textInput}
+            />
 
             <Text style={styles.inputLabel}>Referencia (opcional)</Text>
             <TextInput

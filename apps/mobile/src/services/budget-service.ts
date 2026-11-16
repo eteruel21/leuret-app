@@ -432,6 +432,75 @@ export async function deleteBudgetItem(
   }
 }
 
+export type UpdateBudgetItemInput = {
+  companyId: string;
+  budgetId: string;
+  itemId: string;
+  description?: string;
+  unitName?: string;
+  quantity?: number;
+  unitPrice?: number;
+  unitCost?: number;
+  discountPercentage?: number;
+  taxable?: boolean;
+  notes?: string;
+};
+
+/** Edita una partida de un borrador (cantidad, precio, descripción…). */
+export async function updateBudgetItem(
+  input: UpdateBudgetItemInput
+): Promise<{
+  item: BudgetItem | null;
+  error: string | null;
+}> {
+  const { budgetId, itemId, ...body } = input;
+  try {
+    const response = await authenticatedRequest<{ item: BudgetItemRow }>(
+      `/budgets/${budgetId}/items/${itemId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body)
+      }
+    );
+    return { item: normalizeItem(response.item), error: null };
+  } catch (error) {
+    return { item: null, error: errorMessage(error) };
+  }
+}
+
+export type UpdateBudgetInput = {
+  companyId: string;
+  budgetId: string;
+  title?: string;
+  description?: string;
+  discountType?: Budget["discount_type"];
+  discountValue?: number;
+  taxRate?: number;
+  terms?: string;
+  notes?: string;
+};
+
+/** Datos generales de un borrador: título, descuento, ITBMS y condiciones. */
+export async function updateBudgetDetails(
+  input: UpdateBudgetInput
+): Promise<{
+  error: string | null;
+}> {
+  const { budgetId, ...body } = input;
+  try {
+    await authenticatedRequest(
+      `/budgets/${budgetId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body)
+      }
+    );
+    return { error: null };
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+}
+
 export async function listBudgetsForClient(
   _userId: string
 ): Promise<{

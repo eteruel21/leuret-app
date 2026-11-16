@@ -21,6 +21,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../../constants/theme";
 import { useCompany } from "../../contexts/CompanyContext";
 import { listClients } from "../../services/client-service";
+import { listProjectsByClient } from "../../services/project-service";
+import type { Project } from "../../types/project";
+import { todayKey } from "../../utils/client-portal";
 import type { ClientWithDetails } from "../../types/client";
 import { getClientDisplayName } from "../../types/client";
 import { LeuretFeedback } from "@/components/LeuretFeedback";
@@ -52,13 +55,12 @@ type FormState = {
   projectId: string;
 };
 
-const today = new Date().toISOString().slice(0, 10);
-
 const initialForm: FormState = {
   title: "",
   clientId: "",
   clientName: "",
-  date: today,
+  // Se reemplaza por la fecha de hoy en la zona horaria de la empresa.
+  date: "",
   time: "08:00",
   endTime: "09:00",
   type: "visit",
@@ -97,12 +99,23 @@ function parseAppointmentDate(
 }
 
 export default function AppointmentFormScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; clientId?: string; projectId?: string }>();
+  const id = params.id;
+  // Desde la ficha del cliente o de la obra: la actividad nace ligada a ellos.
+  const paramClientId = typeof params.clientId === "string" ? params.clientId : "";
+  const paramProjectId = typeof params.projectId === "string" ? params.projectId : "";
   const navigation = useNavigation();
   const { activeCompany } = useCompany();
   const isNew = id === "nuevo";
 
-  const [form, setForm] = useState<FormState>(initialForm);
+  const [form, setForm] = useState<FormState>(() => ({
+    ...initialForm,
+    // Hoy en Panamá, no en UTC (de noche en UTC ya es mañana).
+    date: todayKey(activeCompany?.timezone || undefined),
+    clientId: isNew ? paramClientId : "",
+    projectId: isNew ? paramProjectId : "",
+  }));
+  const [clientProjects, setClientProjects] = useState<Project[]>([]);
   const [clients, setClients] = useState<
     ClientWithDetails[]
   >([]);
@@ -186,6 +199,24 @@ export default function AppointmentFormScreen() {
       }
 
       setClients(loadedClients);
+
+      // Actividad nueva desde una ficha: completa el nombre y la dirección.
+      if (isNew && paramClientId) {
+        const preset = loadedClients.find((client) => client.id === paramClientId);
+        if (preset) {
+          const presetAddress =
+            preset.addresses.find((address) => address.is_primary) ?? preset.addresses[0] ?? null;
+          setForm((current) =>
+            current.clientId === paramClientId
+              ? {
+                  ...current,
+                  clientName: getClientDisplayName(preset),
+                  address: current.address || presetAddress?.address || "",
+                }
+              : current,
+          );
+        }
+      }
     }
 
     void loadCompanyClients();
@@ -193,7 +224,23 @@ export default function AppointmentFormScreen() {
     return () => {
       active = false;
     };
-  }, [activeCompany]);
+  }, [activeCompany, isNew, paramClientId]);
+
+  // Obras del cliente elegido, para ligar la actividad a una de ellas.
+  useEffect(() => {
+    let active = true;
+    const companyId = activeCompany?.id;
+    if (!companyId || !form.clientId) {
+      setClientProjects([]);
+      return;
+    }
+    void listProjectsByClient(companyId, form.clientId).then(({ projects }) => {
+      if (active) setClientProjects(projects);
+    });
+    return () => {
+      active = false;
+    };
+  }, [activeCompany?.id, form.clientId]);
 
   function updateField<K extends keyof FormState>(
     field: K,
@@ -215,6 +262,8 @@ export default function AppointmentFormScreen() {
       ...current,
       clientId: client.id,
       clientName: getClientDisplayName(client),
+      // La obra elegida era de otro cliente.
+      projectId: current.clientId === client.id ? current.projectId : "",
       address:
         current.address || primaryAddress?.address || "",
     }));
@@ -401,6 +450,23 @@ export default function AppointmentFormScreen() {
                   ))
                 )}
               </View>
+            ) : null}
+
+            {form.clientId && clientProjects.length > 0 ? (
+              <>
+                <Text style={styles.label}>Obra</Text>
+                <ChoiceRow
+                  options={[
+                    { value: "", label: "Sin obra" },
+                    ...clientProjects.map((project) => ({
+                      value: project.id,
+                      label: project.project_code ? `${project.project_code} · ${project.name}` : project.name,
+                    })),
+                  ]}
+                  value={form.projectId}
+                  onChange={(value) => updateField("projectId", value)}
+                />
+              </>
             ) : null}
 
             <View style={styles.grid}>

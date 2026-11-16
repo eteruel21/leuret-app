@@ -1,8 +1,9 @@
 import { withUserTransaction } from "../db/with-user-transaction.js";
 import type { z } from "zod";
-import type { createProjectSchema } from "./schemas.js";
+import type { createProjectSchema, updateProjectSchema } from "./schemas.js";
 
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
+export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 
 export async function findClientProjectsRepo(userId: string) {
   return withUserTransaction(userId, async (client) => {
@@ -117,18 +118,93 @@ export async function getProjectByIdRepo(userId: string, projectId: string, comp
   });
 }
 
+/**
+ * Cambia el estado de la obra. Al empezar fija la fecha de inicio si faltaba,
+ * y al terminar fija la fecha de fin real (en la zona horaria de la empresa).
+ */
 export async function updateProjectStatusRepo(userId: string, projectId: string, companyId: string, status: string) {
   return withUserTransaction(userId, async (client) => {
     const result = await client.query(
       `
-        UPDATE public.projects
-        SET status = $1, updated_at = now()
-        WHERE id = $2 AND company_id = $3
+        UPDATE public.projects AS project
+        SET status = $1::public.project_status,
+            start_date = CASE
+              WHEN $1 IN ('in_progress', 'completed') AND project.start_date IS NULL
+                THEN (now() AT TIME ZONE COALESCE(company.timezone, 'America/Panama'))::date
+              ELSE project.start_date
+            END,
+            actual_end_date = CASE
+              WHEN $1 = 'completed'
+                THEN COALESCE(project.actual_end_date, (now() AT TIME ZONE COALESCE(company.timezone, 'America/Panama'))::date)
+              WHEN $1 IN ('in_progress', 'paused') THEN NULL
+              ELSE project.actual_end_date
+            END,
+            progress_percentage = CASE WHEN $1 = 'completed' THEN 100 ELSE project.progress_percentage END,
+            updated_at = now()
+        FROM public.companies AS company
+        WHERE project.id = $2 AND project.company_id = $3 AND company.id = project.company_id
       `,
       [status, projectId, companyId]
     );
     return result.rowCount === 1;
   });
+}
+
+/** Corrige los datos generales de la obra. Devuelve la obra o null. */
+export async function updateProjectRepo(userId: string, projectId: string, input: UpdateProjectInput) {
+  return withUserTransaction(userId, async (client) => {
+    if (input.addressId) {
+      const address = await client.query(
+        `
+          SELECT 1
+          FROM public.client_addresses AS address
+          JOIN public.projects AS project ON project.client_id = address.client_id AND project.company_id = address.company_id
+          WHERE address.id = $1 AND project.id = $2 AND project.company_id = $3
+        `,
+        [input.addressId, projectId, input.companyId]
+      );
+      if ((address.rowCount ?? 0) === 0) {
+        throw new ProjectUpdateError("La dirección no pertenece al cliente de la obra.");
+      }
+    }
+
+    const result = await client.query(
+      `
+        UPDATE public.projects
+        SET
+          name = COALESCE($3, name),
+          description = CASE WHEN $4::text IS NULL THEN description ELSE NULLIF($4::text, '') END,
+          address_id = CASE WHEN $5::boolean THEN $6::uuid ELSE address_id END,
+          start_date = CASE WHEN $7::boolean THEN $8::date ELSE start_date END,
+          estimated_end_date = CASE WHEN $9::boolean THEN $10::date ELSE estimated_end_date END,
+          budget_estimate = COALESCE($11::numeric, budget_estimate),
+          updated_at = now()
+        WHERE id = $1 AND company_id = $2
+        RETURNING id
+      `,
+      [
+        projectId,
+        input.companyId,
+        input.name ?? null,
+        input.description ?? null,
+        input.addressId !== undefined,
+        input.addressId ?? null,
+        input.startDate !== undefined,
+        input.startDate ?? null,
+        input.estimatedEndDate !== undefined,
+        input.estimatedEndDate ?? null,
+        input.budgetEstimate ?? null
+      ]
+    );
+    return (result.rowCount ?? 0) > 0;
+  });
+}
+
+export class ProjectUpdateError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProjectUpdateError";
+  }
 }
 
 export async function updateProjectProgressRepo(userId: string, projectId: string, companyId: string, progressPercentage: number) {

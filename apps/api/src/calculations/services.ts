@@ -3,6 +3,7 @@ import {
   findCompanyCalculationsRepo,
   getCalculationDetailRepo,
   deleteCalculationRepo,
+  updateCalculationRepo,
   type SaveCalculationInput
 } from "./repository.js";
 
@@ -26,4 +27,8 @@ export async function getCalculationDetailService(userId: string, calculationId:
 
 export async function deleteCalculationService(userId: string, calculationId: string, companyId: string) {
   return deleteCalculationRepo(userId, calculationId, companyId);
+}
+
+export async function updateCalculationService(userId: string, calculationId: string, input: SaveCalculationInput) {
+  return updateCalculationRepo(userId, calculationId, input);
 }

@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, Stack, router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { ContactActions } from "@/components/client/ContactActions";
 import { StatusPill } from "@/components/client/StatusPill";
 import { LeuretFeedback } from "@/components/LeuretFeedback";
@@ -73,9 +74,7 @@ export default function ClientProjectDetailScreen() {
     [projectId],
   );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useRefreshOnFocus(load);
 
   async function requestInvoice() {
     if (!project || requesting) return;

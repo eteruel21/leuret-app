@@ -23,6 +23,8 @@ export const CAPABILITIES = {
   // Presupuestos — budgets/routes.ts
   "budgets.view": ["owner", "admin", "estimator"],
   "budgets.edit": ["owner", "admin", "estimator"],
+  // Registrar la respuesta del cliente (aprobó o rechazó fuera de Leuret).
+  "budgets.respond": ["owner", "admin", "estimator", "sales"],
 
   // Peticiones de trabajo de clientes — job-requests/routes.ts
   "jobRequests.view": ["owner", "admin", "estimator", "sales"],
@@ -35,6 +37,7 @@ export const CAPABILITIES = {
   "projects.financials": ["owner", "admin", "supervisor", "sales"],
   "projects.status.edit": ["owner", "admin", "supervisor", "sales"],
   "projects.create": ["owner", "admin", "supervisor", "sales"],
+  "projects.edit": ["owner", "admin", "supervisor", "sales"],
   "projects.progress.edit": MANAGERS,
 
   // Tareas y avances — projects/tasks, projects/progress, storage
@@ -62,6 +65,7 @@ export const CAPABILITIES = {
 
   // Cálculos — calculations/routes.ts
   "calculations.use": ALL_ROLES,
+  "calculations.update": ["owner", "admin", "estimator", "member", "sales"],
   "calculations.delete": ["owner", "admin", "estimator"],
 
   // Agenda — activities/routes.ts

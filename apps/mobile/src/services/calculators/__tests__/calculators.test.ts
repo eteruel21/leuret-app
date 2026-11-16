@@ -700,5 +700,33 @@ describe("T-056: Calculadoras de Construcción (10 Calculadoras)", () => {
       expect(result.totalEquipment).toBe(0);
       expect(result.totalCost).toBe(0);
     });
+
+    it("Solo cableado: sin equipos pero con puntos cableados", () => {
+      const result = calculateSpecialSystems(
+        {
+          systemType: "cctv",
+          deviceA: 0,
+          deviceB: 0,
+          deviceC: 0,
+          deviceD: 0,
+          deviceE: 0,
+          wiredPoints: 6,
+          averageRouteLength: 20,
+          cableRunsPerPoint: 1,
+          wastePercentage: 0,
+          cableRollLength: 305,
+          conduitPieceLength: 3
+        },
+        defaultPrices
+      );
+
+      expect(result.totalEquipment).toBe(0);
+      expect(result.cableRollsToBuy).toBe(1);
+      expect(result.conduitPieces).toBe(40);
+      expect(result.boxes).toBe(6);
+      expect(result.installationLaborCost).toBeGreaterThan(0);
+      expect(result.programmingCost).toBe(0);
+      expect(result.totalCost).toBeGreaterThan(0);
+    });
   });
 });

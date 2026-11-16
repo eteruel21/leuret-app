@@ -1364,7 +1364,8 @@ export function calculateSpecialSystems(
     input.conduitPieceLength,
   );
 
-  if (!totalEquipment) {
+  // Un trabajo «solo cableado» (sin equipos) también se cotiza.
+  if (!totalEquipment && !wiredPoints) {
     return {
       ...emptySpecialSystemsResult(input.systemType),
       deviceA,
@@ -1422,7 +1423,8 @@ export function calculateSpecialSystems(
 
   const installationLaborCost =
     wiredPoints * sanitizeNumber(prices.laborWiredPoint);
-  const programmingCost = sanitizeNumber(prices.programming);
+  // Sin equipos no hay sistema que programar.
+  const programmingCost = totalEquipment ? sanitizeNumber(prices.programming) : 0;
   const laborCost =
     installationLaborCost + programmingCost;
 

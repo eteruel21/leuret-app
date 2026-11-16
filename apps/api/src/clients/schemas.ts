@@ -6,6 +6,12 @@ export const companyQuerySchema = z.object({
   companyId: uuidSchema
 });
 
+/** Listado de clientes: activos por defecto; `archived=true` lista los archivados. */
+export const listClientsQuerySchema = z.object({
+  companyId: uuidSchema,
+  archived: z.enum(["true", "false"]).optional().transform((value) => value === "true")
+});
+
 export const clientParamsSchema = z.object({
   clientId: uuidSchema
 });

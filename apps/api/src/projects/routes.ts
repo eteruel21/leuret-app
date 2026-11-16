@@ -17,8 +17,10 @@ import {
   companyQuerySchema,
   createProjectSchema,
   statusSchema,
-  progressSchema
+  progressSchema,
+  updateProjectSchema
 } from "./schemas.js";
+import { ProjectUpdateError } from "./repository.js";
 
 import {
   getClientProjectsService,
@@ -26,7 +28,8 @@ import {
   createProjectService,
   getProjectByIdService,
   updateProjectStatusService,
-  updateProjectProgressService
+  updateProjectProgressService,
+  updateProjectService
 } from "./services.js";
 
 function authenticatedUserId(
@@ -141,6 +144,42 @@ export async function registerProjectRoutes(
       }
 
       return { project };
+    }
+  );
+
+  app.patch(
+    "/projects/:projectId",
+    {
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "supervisor", "sales"], "body")]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedParams = projectParamsSchema.safeParse(request.params);
+      const parsedBody = updateProjectSchema.safeParse(request.body);
+
+      if (!parsedParams.success || !parsedBody.success) {
+        return reply.status(400).send({
+          message: parsedBody.success
+            ? "El proyecto no es válido."
+            : parsedBody.error.issues[0]?.message ?? "Los datos del proyecto no son válidos.",
+          fields: parsedBody.success ? undefined : parsedBody.error.flatten().fieldErrors
+        });
+      }
+
+      try {
+        const project = await updateProjectService(userId, parsedParams.data.projectId, parsedBody.data);
+        if (!project) {
+          return reply.status(404).send({ message: "No se encontró el proyecto." });
+        }
+        return { project };
+      } catch (error) {
+        if (error instanceof ProjectUpdateError) {
+          return reply.status(400).send({ message: error.message });
+        }
+        throw error;
+      }
     }
   );
 

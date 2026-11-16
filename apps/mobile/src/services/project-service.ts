@@ -206,6 +206,58 @@ export async function getProjectById(
   }
 }
 
+export type UpdateProjectInput = {
+  companyId: string;
+  projectId: string;
+  name?: string;
+  description?: string;
+  addressId?: string | null;
+  startDate?: string | null;
+  estimatedEndDate?: string | null;
+  budgetEstimate?: number;
+};
+
+/** Corrige los datos de la obra (nombre, fechas, dirección, estimado). */
+export async function updateProject(
+  input: UpdateProjectInput
+): Promise<{
+  project: ProjectWithDetails | null;
+  error: string | null;
+}> {
+  const { projectId, ...body } = input;
+  try {
+    const response =
+      await authenticatedRequest<{
+        project:
+          ProjectRow & {
+            client: Client | null;
+            address:
+              ClientAddress | null;
+          };
+      }>(
+        `/projects/${projectId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(body)
+        }
+      );
+
+    return {
+      project: {
+        ...normalizeProject(response.project),
+        client: response.project.client,
+        address: response.project.address
+      },
+      error: null
+    };
+  } catch (error) {
+    return {
+      project: null,
+      error: errorMessage(error)
+    };
+  }
+}
+
 export async function updateProjectStatus(
   input: {
     companyId: string;

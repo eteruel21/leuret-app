@@ -5,6 +5,7 @@ import {
   getClientDetailsRepo,
   updateClientRepo,
   deactivateClientRepo,
+  setClientActiveRepo,
   addClientAddressRepo,
   updateClientAddressRepo,
   setPrimaryClientAddressRepo,
@@ -22,8 +23,8 @@ export async function getContractorCompaniesService(userId: string) {
   return findContractorCompaniesRepo(userId);
 }
 
-export async function getCompanyClientsService(userId: string, companyId: string) {
-  return findCompanyClientsRepo(userId, companyId);
+export async function getCompanyClientsService(userId: string, companyId: string, archived = false) {
+  return findCompanyClientsRepo(userId, companyId, archived);
 }
 
 export async function createClientService(userId: string, input: CreateClientInput) {
@@ -40,6 +41,10 @@ export async function updateClientService(userId: string, clientId: string, inpu
 
 export async function deactivateClientService(userId: string, clientId: string, companyId: string) {
   return deactivateClientRepo(userId, clientId, companyId);
+}
+
+export async function reactivateClientService(userId: string, clientId: string, companyId: string) {
+  return setClientActiveRepo(userId, clientId, companyId, true);
 }
 
 export async function addClientAddressService(userId: string, clientId: string, input: AddressInput) {

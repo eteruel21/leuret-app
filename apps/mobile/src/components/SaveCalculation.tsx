@@ -17,8 +17,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { CalculatorId } from "@/constants/calculators";
 import { colors, radius } from "@/constants/theme";
 import { useCompany } from "@/contexts/CompanyContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import type { BudgetLineDraft } from "@/services/budget-service";
-import { fetchCalculationDetail, saveCalculation } from "@/services/calculation-service";
+import { fetchCalculationDetail, saveCalculation, updateCalculation } from "@/services/calculation-service";
 import { listProjectsByCompany, type ProjectSummary } from "@/services/project-service";
 import { buildCalculationPayload, readCalculationState } from "@/utils/saved-calculation";
 
@@ -68,9 +69,14 @@ export function useSavedCalculation<State extends object>({
   const paramClientId = firstParam(params.clientId);
 
   const { activeCompany } = useCompany();
+  const { can } = usePermissions();
+  // Supervisores guardan cálculos nuevos, pero la política UPDATE no los incluye.
+  const canUpdateCalculations = can("calculations.update");
   const [visible, setVisible] = useState(false);
   const [lineTitle, setLineTitle] = useState("");
   const [savedTitle, setSavedTitle] = useState<string | null>(null);
+  // Cálculo abierto o recién guardado: «Guardar» puede actualizarlo en vez de duplicarlo.
+  const [currentId, setCurrentId] = useState<string | null>(null);
   const [loadedCalculation, setLoadedCalculation] = useState<{
     title: string;
     projectId: string | null;
@@ -104,6 +110,7 @@ export function useSavedCalculation<State extends object>({
           return;
         }
         restoreRef.current(state);
+        setCurrentId(calculation.id);
         setLoadedCalculation({
           title: calculation.title,
           projectId: calculation.project_id,
@@ -146,20 +153,26 @@ export function useSavedCalculation<State extends object>({
       defaultTitle={loadedCalculation?.title ?? lineTitle}
       defaultProjectId={paramProjectId ?? loadedCalculation?.projectId ?? null}
       defaultClientId={paramClientId ?? loadedCalculation?.clientId ?? null}
+      canUpdate={currentId !== null && canUpdateCalculations}
       onClose={() => setVisible(false)}
-      onSave={async ({ title, projectId, clientId }) => {
+      onSave={async ({ title, projectId, clientId, asNew }) => {
         const companyId = activeCompany?.id;
         const line = buildLine();
         if (!companyId || !line) return "Calcula el resultado antes de guardarlo.";
         try {
-          await saveCalculation({
+          const params = {
             companyId,
             projectId,
             clientId,
             formulaCode,
             title,
             ...buildCalculationPayload({ state: snapshot(), line, totalCost: totalCost ?? 0 }),
-          });
+          };
+          const saved = currentId && canUpdateCalculations && !asNew
+            ? await updateCalculation(currentId, params)
+            : await saveCalculation(params);
+          setCurrentId(saved.id);
+          setLoadedCalculation({ title, projectId, clientId });
           setSavedTitle(title);
           setVisible(false);
           return null;
@@ -178,7 +191,7 @@ export function useSavedCalculation<State extends object>({
         accessibilityRole="button"
       >
         <Ionicons name="bookmark-outline" size={18} color={colors.primary} />
-        <Text style={styles.saveButtonText}>{savedTitle ? "Guardar otra vez" : "Guardar cálculo"}</Text>
+        <Text style={styles.saveButtonText}>{currentId && canUpdateCalculations ? "Guardar cambios" : "Guardar cálculo"}</Text>
       </Pressable>
       {savedTitle ? (
         <Text style={styles.savedText}>
@@ -193,13 +206,14 @@ export function useSavedCalculation<State extends object>({
   return { saveButton, saveModal };
 }
 
-type SaveInput = { title: string; projectId: string | null; clientId: string | null };
+type SaveInput = { title: string; projectId: string | null; clientId: string | null; asNew: boolean };
 
 function SaveCalculationModal({
   visible,
   defaultTitle,
   defaultProjectId,
   defaultClientId,
+  canUpdate,
   onClose,
   onSave,
 }: {
@@ -207,6 +221,8 @@ function SaveCalculationModal({
   defaultTitle: string;
   defaultProjectId: string | null;
   defaultClientId: string | null;
+  /** Hay un cálculo abierto: se ofrece actualizarlo o guardar uno nuevo. */
+  canUpdate: boolean;
   onClose: () => void;
   onSave: (input: SaveInput) => Promise<string | null>;
 }) {
@@ -245,7 +261,7 @@ function SaveCalculationModal({
 
   const selectedProject = projects.find((project) => project.id === projectId) ?? null;
 
-  const submit = async () => {
+  const submit = async (asNew = false) => {
     const cleanTitle = title.trim();
     if (!cleanTitle) {
       setError("Escribe un nombre para el cálculo.");
@@ -254,7 +270,7 @@ function SaveCalculationModal({
     setSaving(true);
     setError(null);
     const clientId = selectedProject?.client_id ?? (projectId ? null : defaultClientId);
-    const message = await onSave({ title: cleanTitle.slice(0, 250), projectId, clientId });
+    const message = await onSave({ title: cleanTitle.slice(0, 250), projectId, clientId, asNew });
     setSaving(false);
     if (message) setError(message);
   };
@@ -338,9 +354,19 @@ function SaveCalculationModal({
             {saving ? (
               <ActivityIndicator color={colors.surface} />
             ) : (
-              <Text style={styles.primaryText}>Guardar</Text>
+              <Text style={styles.primaryText}>{canUpdate ? "Actualizar cálculo" : "Guardar"}</Text>
             )}
           </Pressable>
+          {canUpdate ? (
+            <Pressable
+              onPress={() => void submit(true)}
+              disabled={saving}
+              style={({ pressed }) => [styles.secondary, (pressed || saving) && styles.pressed]}
+              accessibilityRole="button"
+            >
+              <Text style={styles.secondaryText}>Guardar como cálculo nuevo</Text>
+            </Pressable>
+          ) : null}
         </View>
       </SafeAreaView>
     </Modal>
@@ -403,4 +429,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   primaryText: { color: colors.surface, fontWeight: "800", fontSize: 16 },
+  secondary: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: 13,
+    alignItems: "center",
+  },
+  secondaryText: { color: colors.primary, fontWeight: "800", fontSize: 15 },
 });

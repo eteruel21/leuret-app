@@ -48,6 +48,7 @@ import {
   deleteClientAddress,
   deleteClientContact,
   getClientById,
+  reactivateClient,
   setPrimaryClientAddress,
   updateClient,
   updateClientAddress,
@@ -82,6 +83,8 @@ export default function ClientDetailScreen() {
   const canEditClient = can("clients.edit");
   const canDeleteClientData = can("clients.delete");
   const canCreateProject = can("projects.create");
+  const canUseAgenda = can("agenda.use");
+  const [restoring, setRestoring] = useState(false);
 
   const [client, setClient] =
     useState<ClientWithDetails | null>(null);
@@ -280,6 +283,18 @@ export default function ClientDetailScreen() {
     await loadData(true);
   }
 
+  async function handleRestore() {
+    if (!activeCompany || !client || restoring) return;
+    setRestoring(true);
+    const { error } = await reactivateClient(activeCompany.id, client.id);
+    setRestoring(false);
+    if (error) {
+      Alert.alert("No fue posible restaurar el cliente", error);
+      return;
+    }
+    await loadData(true);
+  }
+
   if (!activeCompany || !clientId) {
     return (
       <View style={styles.loading}>
@@ -324,6 +339,15 @@ export default function ClientDetailScreen() {
       >
         {loadError ? <LeuretFeedback title="No pudimos actualizar la ficha" message={loadError}
           tone="error" actionLabel="Reintentar" onAction={() => void loadData(true)} /> : null}
+        {!client.active ? (
+          <LeuretFeedback
+            title="Cliente archivado"
+            message="No aparece en la lista ni en los selectores. Sus obras, presupuestos y facturas se conservan."
+            tone="warning"
+            actionLabel={canDeleteClientData ? (restoring ? "Restaurando…" : "Restaurar cliente") : undefined}
+            onAction={canDeleteClientData ? () => void handleRestore() : undefined}
+          />
+        ) : null}
         <View style={styles.profileCard}>
           <View style={styles.profileIcon}>
             <Ionicons
@@ -349,6 +373,20 @@ export default function ClientDetailScreen() {
             </Text>
           </View>
         </View>
+
+        {canUseAgenda && client.active ? (
+          <LeuretButton
+            label="Agendar visita"
+            icon="calendar-outline"
+            variant="secondary"
+            onPress={() =>
+              router.push({
+                pathname: "/agenda/[id]",
+                params: { id: "nuevo", clientId: client.id },
+              } as Href)
+            }
+          />
+        ) : null}
 
         {client.user_id || canEditClient ? (
           <InfoSection title="Vinculación en Leuret">

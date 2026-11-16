@@ -18,7 +18,6 @@ import {
 } from "expo-router";
 import {
   useCallback,
-  useEffect,
   useState,
 } from "react";
 import {
@@ -40,6 +39,7 @@ import {
   radius,
 } from "@/constants/theme";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   getProjectById,
@@ -86,6 +86,8 @@ import { prepareProjectPhoto, type ProjectPhotoSource } from "@/utils/project-ph
 import { RequirePermission } from "@/components/RequirePermission";
 import { SavedCalculationsSection } from "@/components/SavedCalculationsSection";
 import { OfflineSyncNotice } from "@/components/OfflineSyncNotice";
+import { EditProjectModal } from "@/components/EditProjectModal";
+import { formatShortDate } from "@/utils/format";
 
 function ProjectDetailScreenContent() {
   const params = useLocalSearchParams<{
@@ -103,6 +105,9 @@ function ProjectDetailScreenContent() {
   const canSeeFinancials = can("projects.financials");
   const canEditStatus = can("projects.status.edit");
   const canRecordProgress = can("progress.record");
+  const canEditProject = can("projects.edit");
+  const canUseAgenda = can("agenda.use");
+  const [editVisible, setEditVisible] = useState(false);
 
   const [project, setProject] = useState<ProjectWithDetails | null>(null);
   const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -199,17 +204,7 @@ function ProjectDetailScreenContent() {
     [activeCompany, projectId, canViewBudgets]
   );
 
-  useEffect(() => {
-    let active = true;
-
-    void Promise.resolve().then(() => {
-      if (active) void loadProject();
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [loadProject]);
+  useRefreshOnFocus(loadProject);
 
   async function handleChangeStatus(status: ProjectStatus) {
     if (!activeCompany || !project) return;
@@ -228,6 +223,8 @@ function ProjectDetailScreenContent() {
       }
 
       setProject({ ...project, status });
+      // La API fija inicio, fin real y 100 % al terminar: leer la obra de nuevo.
+      void loadProject(true);
     } finally {
       setSavingStatus(false);
     }
@@ -766,27 +763,70 @@ function ProjectDetailScreenContent() {
 
         {/* Actividades de Agenda del Proyecto */}
         <InfoSection title="Actividades del proyecto">
+          {canUseAgenda ? (
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: "/agenda/[id]",
+                  params: { id: "nuevo", projectId: project.id, clientId: project.client_id },
+                } as Href)
+              }
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.agendaButton, pressed && styles.pressed]}
+            >
+              <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+              <Text style={styles.agendaButtonText}>Agendar actividad</Text>
+            </Pressable>
+          ) : null}
           {activities.length === 0 ? (
             <View style={styles.emptyBox}>
               <Text style={styles.emptyText}>No hay actividades de agenda vinculadas a este proyecto.</Text>
             </View>
           ) : (
             activities.map((act) => (
-              <View key={act.id} style={styles.activityCard}>
+              <Pressable
+                key={act.id}
+                onPress={() =>
+                  router.push({ pathname: "/agenda/[id]", params: { id: act.id } } as Href)
+                }
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.activityCard, pressed && styles.pressed]}
+              >
                 <Ionicons name="calendar-outline" size={20} color={colors.primary} />
                 <View style={styles.activityInfo}>
                   <Text style={styles.activityTitle}>{act.title}</Text>
                   <Text style={styles.activitySubtext}>
-                    {act.date} · {act.time} - {act.endTime}
+                    {formatShortDate(act.date)} · {act.time} - {act.endTime}
                   </Text>
                 </View>
-              </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </Pressable>
             ))
           )}
         </InfoSection>
 
         {/* Información del Proyecto */}
         <InfoSection title="Información del proyecto">
+          {canEditProject ? (
+            <Pressable
+              onPress={() => setEditVisible(true)}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.agendaButton, pressed && styles.pressed]}
+            >
+              <Ionicons name="create-outline" size={18} color={colors.primary} />
+              <Text style={styles.agendaButtonText}>Editar datos de la obra</Text>
+            </Pressable>
+          ) : null}
+          <InfoRow
+            icon="calendar-outline"
+            label="Fechas"
+            value={[
+              `Inicio: ${project.start_date ? formatShortDate(project.start_date) : "sin fecha"}`,
+              project.actual_end_date
+                ? `Terminada: ${formatShortDate(project.actual_end_date)}`
+                : `Fin estimado: ${project.estimated_end_date ? formatShortDate(project.estimated_end_date) : "sin fecha"}`,
+            ].join(" · ")}
+          />
           <InfoRow
             icon="location-outline"
             label="Dirección"
@@ -881,6 +921,19 @@ function ProjectDetailScreenContent() {
           <SavedCalculationsSection projectId={project.id} />
         </View>
       </ScrollView>
+      {editVisible ? (
+        <EditProjectModal
+          visible
+          companyId={activeCompany.id}
+          project={project}
+          canEditFinancials={canSeeFinancials}
+          onClose={() => setEditVisible(false)}
+          onSaved={(saved) => {
+            setProject(saved);
+            setEditVisible(false);
+          }}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -952,6 +1005,23 @@ function InfoRow({
 }
 
 const styles = StyleSheet.create({
+  agendaButton: {
+    minHeight: 44,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  agendaButtonText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: "800",
+  },
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
