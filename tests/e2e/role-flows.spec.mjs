@@ -317,7 +317,7 @@ test("equipo: invitar, unirse con el código, cambiar el rol y salir", async ({ 
 
   await test.step("con el rol nuevo ya no puede abrir presupuestos y luego sale de la empresa", async () => {
     await inviteePage.goto("/presupuestos");
-    await expect(inviteePage).not.toHaveURL(/\/presupuestos$/);
+    await expect(inviteePage.getByText(/Tu rol \(Supervisor\) no tiene acceso a esta sección/)).toBeVisible();
     await inviteePage.goto("/equipo");
     await inviteePage.getByRole("button", { name: "Salir de la empresa" }).click();
     await expect(inviteePage.getByRole("button", { name: new RegExp(`Espacio activo: ${escapeRegExp(flowCompanies.main)}`) })).toHaveCount(0);
