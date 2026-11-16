@@ -210,7 +210,8 @@ test("petición de trabajo: publicar, conversar, cotizar y adjudicar", async ({ 
 
   await test.step("otra empresa la encuentra y pregunta", async () => {
     await rivalPage.goto("/peticiones");
-    await rivalPage.getByText(title).first().click();
+    // Es de electricidad en Panamá, como la empresa: aparece en «Para ti».
+    await rivalPage.getByRole("button", { name: new RegExp(`^${escapeRegExp(title)}`) }).click();
     await expect(rivalPage).toHaveURL(new RegExp(`/peticiones/${state.jobRequestId}`));
     // Antes del presupuesto, la dirección exacta es privada.
     await expect(rivalPage.getByText("PH Vista Mar, apto 8B")).toHaveCount(0);

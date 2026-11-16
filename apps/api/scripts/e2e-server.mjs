@@ -84,6 +84,11 @@ try {
   for (const key of ["owner", ...flowStaffRoles, "rival"]) {
     ids[key] = await seedAccount(flow[key], "contractor");
   }
+  // La empresa rival es de electricidad en Panamá: sus peticiones «Para ti» dependen de eso.
+  await adminPool.query(
+    `UPDATE public.profiles SET primary_category = 'Electricidad', province = 'Panamá' WHERE id = $1`,
+    [ids.rival]
+  );
   // Como quien se registra desde el enlace de una invitación: contratista sin aprobación propia.
   ids.invitee = await seedAccount(flow.invitee, "contractor", { contractorApproved: false });
   ids.client = await seedAccount(flow.client, "client");
