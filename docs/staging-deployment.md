@@ -1,92 +1,38 @@
-# Guía de Alojamiento y Despliegue en Staging — Leuret App
+# Entorno de staging de LEURET
 
-Este documento define la arquitectura de hosting, configuración de seguridad y procedimientos para el entorno de **Staging** de Leuret App.
+El repositorio contiene el flujo de producción y pruebas con PostgreSQL efímero. Esta guía describe cómo preparar un entorno persistente aislado. Los dominios bajo `.example` son marcadores para reemplazar con los del entorno que se configure.
 
----
+## Recursos
 
-## 1. Selección de Alojamiento
+- Prepara un PostgreSQL 17 de staging, roles de API y migrador, y un bucket privado separado.
+- Aloja la API Node.js con el [punto de entrada de Fastify](../apps/api/src/server.ts). Compila con `npm run build:api` y arranca con `npm run start -w apps/api` desde la raíz.
+- Compila Admin Web y la aplicación web después de configurar sus URLs y variables de Turnstile. Publica `apps/admin-web/dist` y `apps/mobile/dist` en proyectos de staging.
+- Usa cuentas y datos de prueba, un widget Turnstile de staging y credenciales separadas para almacenamiento, correo y sesiones.
 
-### PostgreSQL (T-061)
-- **Proveedor Recomendado**: Neon PostgreSQL / Render Managed PostgreSQL (Standard tier+).
-- **Justificación**:
-  - **Permanencia**: Almacenamiento persistente redundante con alta disponibilidad.
-  - **Conexiones Seguras**: Requiere transporte cifrado obligatorio SSL/TLS (`PGSSL=require`).
-  - **Backups**: La disponibilidad, retención y PITR dependen del proveedor y del plan contratado. Si no están incluidos, staging debe usar dumps lógicos y una prueba de restauración aislada según `docs/backup-restore-verification.md`.
-  - **Connection Pooling**: PgBouncer integrado nativo para optimizar el número de conexiones simultáneas.
+## Variables
 
-### Fastify API (T-062)
-- **Proveedor Recomendado**: Render Web Service / Railway / Fly.io (Node.js runtime o Docker).
-- **Justificación**:
-  - **Disponibilidad Permanente**: Instancia activa sin suspensión ("no cold start") garantizando respuesta continua a peticiones HTTP.
-  - **HTTPS & SSL**: Terminación TLS automática mediante certificados wildcard de Let's Encrypt / Cloudflare.
-  - **Variables Secretas**: Gestor seguro de entorno aislado en el panel de hosting (encriptación en reposo).
-  - **Logs**: Captura de logs en tiempo real (`stdout`/`stderr` en JSON vía Pino logger) exportables a recolectores de eventos.
+| Componente | Configuración de staging |
+| --- | --- |
+| API Node.js | `NODE_ENV=staging`, `API_HOST` y `API_PORT` acordes al hosting. Para PostgreSQL usa `DATABASE_MODE=postgres`, variables `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER` y `PGPASSWORD`. Usa `PGSSL=verify-full` con `PGSSL_CA_FILE` para conexiones remotas |
+| Sesiones y correo | `JWT_SECRET`, `RESEND_API_KEY` y `EMAIL_FROM` propios de staging |
+| Turnstile | `TURNSTILE_SECRET_KEY` y `TURNSTILE_ALLOWED_HOSTNAMES` con los hostnames web de staging. Distribuye la clave pública correspondiente en los dos builds |
+| Archivos | `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` y `S3_BUCKET` de staging para la API en Node.js |
+| Admin Web | `VITE_API_URL=https://staging-api.example`, `VITE_TURNSTILE_SITE_KEY` y `VITE_TURNSTILE_CHALLENGE_URL=/turnstile` si el cliente se publica en Pages |
+| Aplicación web | `EXPO_PUBLIC_API_URL=https://staging-api.example`, `EXPO_PUBLIC_TURNSTILE_SITE_KEY` y `EXPO_PUBLIC_TURNSTILE_CHALLENGE_URL=https://staging-app.example/turnstile` |
 
----
+Define las tres listas de orígenes para habilitar CORS y las cookies de cada interfaz por HTTPS.
 
-## 2. Configuración de Variables de Entorno de Staging
+~~~env
+CORS_ORIGINS=https://staging-admin.example,https://staging-app.example
+ADMIN_WEB_ORIGINS=https://staging-admin.example
+APP_WEB_ORIGINS=https://staging-app.example
+~~~
 
-### API Fastify (T-065)
+Consulta la validación de variables de la [API](../apps/api/src/config/env.ts) y el [proveedor de almacenamiento](../apps/api/src/storage/provider.ts).
 
-| Variable | Descripción / Ejemplo |
-| :--- | :--- |
-| `NODE_ENV` | `staging` |
-| `API_HOST` | `0.0.0.0` |
-| `API_PORT` | `3001` |
-| `PGHOST` | `ep-staging-db.neon.tech` (o host provisto por Render) |
-| `PGPORT` | `5432` |
-| `PGDATABASE` | `contractor_staging` |
-| `PGUSER` | `contractor_api` |
-| `PGPASSWORD` | `<secret_strong_password>` |
-| `PGSSL` | `require` |
-| `JWT_SECRET` | Secret de 256 bits (cadena aleatoria de alta entropía >= 43 caracteres) |
-| `JWT_ISSUER` | `contractor-api-staging` |
-| `JWT_AUDIENCE` | `contractor-app-staging` |
-| `CORS_ORIGINS` | Dominios exactos de staging (ver T-068) |
-| `RESEND_API_KEY` | API key privada de Resend para staging |
-| `EMAIL_FROM` | `Contractor Pro Staging <noreply@leurettech.com>` |
-| `TURNSTILE_SECRET_KEY` | Secret privado de Cloudflare Turnstile de Staging |
-| `TURNSTILE_ALLOWED_HOSTNAMES` | `<hostname_staging>` |
+## Publicación y comprobación
 
----
-
-### Frontends (T-066)
-
-#### Admin Web (`apps/admin-web`)
-- `VITE_API_URL`: `https://staging-api.contractor.app`
-
-#### Mobile / Expo (`apps/mobile`)
-- `EXPO_PUBLIC_API_URL`: `https://staging-api.contractor.app`
-
----
-
-## 3. Configuración de CORS Restrictivo (T-068)
-
-En Staging, la API rechazará cualquier origen no incluido explícitamente en la variable `CORS_ORIGINS`.
-
-**Ejemplo de `CORS_ORIGINS` en Staging:**
-```env
-CORS_ORIGINS=https://staging-admin.contractor.app,https://staging-app.contractor.app
-```
-
----
-
-## 4. Flujo de Despliegue de Staging (T-063 y T-064)
-
-1. **Despliegue de PostgreSQL**:
-   - Crear la base de datos `contractor_staging`.
-   - Ejecutar la migración automática desde CI/CD o consola de administración:
-     ```bash
-     MIGRATOR_DATABASE_URL="postgresql://contractor_migrator:<pass>@<host>:5432/contractor_staging?sslmode=require" npm run db:migrate
-     ```
-
-2. **Despliegue de API Fastify**:
-   - Construir la imagen Docker usando el Dockerfile del repositorio o mediante el runner de Node.js 22.
-   - Compilar el proyecto TypeScript:
-     ```bash
-     npm run build:api
-     ```
-   - Iniciar el servidor:
-     ```bash
-     npm run start -w apps/api
-     ```
+1. Configura el migrador con el destino de staging. Aplica `npm run db:migrate` y verifica `npm run db:status`. Si el entorno necesita catálogo de prueba, ejecuta `npm run db:seed`. Consulta [migraciones y semillas](migrations-and-seeds.md).
+2. Compila y arranca la API con las variables de staging. Compila los clientes con `npm run build:admin` y `npm run build:mobile`. Verifica que sus bundles apunten a la API de staging antes de publicar.
+3. Comprueba `GET /health`, `GET /health/database`, Turnstile, sesión en ambas webs, persistencia de datos e integraciones de prueba. Registra el SHA y los resultados en el PR.
+4. Para binarios destinados a staging, configura el entorno explícitamente. Los perfiles actuales `preview` y `pilot` en [Expo/EAS](native-testing-and-updates.md) apuntan a la API de producción.

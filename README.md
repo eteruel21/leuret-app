@@ -1,80 +1,43 @@
-# Contractor Pro
+# LEURET
 
-Plataforma integral de gestión para contratistas, empresas de construcción, profesionales y clientes en Panamá.
+Plataforma de LEURET TECH para contratistas, empresas de construcción, profesionales y clientes en Panamá. Gestiona clientes y equipos, catálogo y calculadoras, presupuestos, obras, agenda, facturación y cobros. Las cuentas pueden consultar los documentos legales vigentes, exportar sus datos y solicitar su eliminación.
 
----
+## Componentes
 
-## 🚀 Estructura del Monorepo
+| Workspace | Función | Producción |
+| --- | --- | --- |
+| [`apps/api`](apps/api) | API REST con Fastify y TypeScript | [api.leurettech.com](https://api.leurettech.com/health) en Cloudflare Workers |
+| [`apps/admin-web`](apps/admin-web) | Panel administrativo con React y Vite | [admin.leurettech.com](https://admin.leurettech.com/) en Cloudflare Pages |
+| [`apps/mobile`](apps/mobile) | Aplicación web, Android e iOS con Expo SDK 57, React Native y Expo Router | [app.leurettech.com](https://app.leurettech.com/) en Cloudflare Pages. Binarios nativos con EAS |
+| [`database`](database) | Migraciones, semillas y herramientas para PostgreSQL 17 | Supabase PostgreSQL mediante Cloudflare Hyperdrive |
 
-Contractor Pro está construido sobre una arquitectura **Monorepo** moderna con npm workspaces:
+## Documentación
 
-- [`apps/api`](apps/api): Backend REST de alto rendimiento en **Node.js 22**, **Fastify** y **TypeScript**.
-- [`apps/admin-web`](apps/admin-web): Panel administrativo web desarrollado con **React 19**, **Vite** y **TypeScript**.
-- [`apps/mobile`](apps/mobile): Aplicación móvil y web multiplataforma con **Expo 52**, **React Native** y **Expo Router**.
-- [`database`](database): Scripts de administración PostgreSQL con migraciones SQL seguras (checksums SHA-256) y catálogo oficial Panamá.
+| Tema | Guías |
+| --- | --- |
+| Plan del proyecto | [Roadmap de LEURET](docs/ROADMAP.md) |
+| Desarrollo | [Instalación local](docs/local-installation.md), [arquitectura](docs/architecture.md), [referencia de API](docs/api.md) |
+| Base de datos | [Migraciones y semillas](docs/migrations-and-seeds.md), [cambios de esquema en producción](docs/database-change-process.md) |
+| Publicación | [Despliegue en Cloudflare](docs/deployment.md), [configuración de producción](docs/production-environment-setup.md), [staging](docs/staging-deployment.md), [compilaciones nativas y actualizaciones](docs/native-testing-and-updates.md) |
+| Operación | [Lista posterior al despliegue](docs/post-deployment-checklist.md), [monitoreo](docs/monitoring-and-alerts.md), [respaldos y recuperación](docs/backup-restore-verification.md), [rollback](docs/rollback-procedure.md) |
+| Privacidad y cumplimiento | [Términos de Uso](docs/terms-of-service.md), [Política de Privacidad](docs/privacy-policy.md), [retención de documentos](docs/document-retention-policy.md) |
+| Revisiones históricas | [Auditoría de seguridad](docs/security-audit-report.md), [prueba piloto](docs/pilot-testing-report.md) |
 
----
+## Validación local
 
-## 🛠️ Módulos de la Aplicación
+Con Node.js 22 y las variables descritas en la [guía local](docs/local-installation.md), ejecuta desde la raíz del repositorio.
 
-1. **Gestión Comercial y Presupuestos**: Creación de presupuestos con partidas, desgloses, estados de aprobación y exportación.
-2. **Calculadoras de Construcción Especializadas**: Bloques, repello, concreto, gypsum, cielo raso PVC, pintura, electricidad, pisos, muebles MDF, AC y domótica.
-3. **Facturación, Cobros y Notas de Crédito**: Emisión de facturas con snapshots inmutables, registro de abonos y notas de crédito.
-4. **Gestión de Proyectos y Avances**: Tareas, porcentaje de avance e historial multimedia con imágenes privadas protegidas por URLs firmadas.
-5. **Agenda y Calendario de Campo**: Programación de visitas, entregas e inspecciones.
-6. **Gestión de Clientes y Equipos**: Miembros de empresa, roles y control de acceso RBAC.
-7. **Privacidad, Legal y Derechos ARCO**: Exportación de datos en formato JSON (`GET /account/export`), eliminación y anonimización de cuenta (`DELETE /account`), Términos de Uso y Política de Privacidad.
-
----
-
-## 📚 Documentación del Sistema
-
-- 🏛️ [**Arquitectura del Sistema**](docs/architecture.md)
-- 💻 [**Guía de Instalación Local**](docs/local-installation.md)
-- 🗄️ [**Migraciones y Semillas**](docs/migrations-and-seeds.md)
-- 🚢 [**Guía de Despliegue**](docs/deployment.md)
-- 📜 [**Términos de Uso**](docs/terms-of-service.md)
-- 🔒 [**Política de Privacidad**](docs/privacy-policy.md)
-- ⏱️ [**Política de Retención de Documentos**](docs/document-retention-policy.md)
-- 🛡️ [**Informe de Auditoría de Seguridad**](docs/security-audit-report.md)
-- 💾 [**Verificación de Backups**](docs/backup-restore-verification.md)
-- 🔄 [**Procedimiento de Rollback**](docs/rollback-procedure.md)
-- 🧪 [**Informe de Prueba Piloto**](docs/pilot-testing-report.md)
-- 📊 [**Monitoreo y Alertas**](docs/monitoring-and-alerts.md)
-
----
-
-## ⚡ Comandos Rápidos
-
-### Validación y Despliegue Seguro
-```bash
-# Validación completa del código (tipos y builds)
+~~~bash
+npm ci
 npm run validate
+npm run test:unit -w apps/api
+npm run test -w apps/mobile
+~~~
 
-# Despliegue seguro interactivo sin push automático a main
-npm run deploy:safe
+Las pruebas de integración usan una base PostgreSQL descartable. Consulta los pasos y las variables en el workflow [Validate](.github/workflows/validate.yml).
 
-# Despliegue directo a Cloudflare Pages
-npm run deploy:admin
-npm run deploy:mobile
-```
+Los cambios se integran por PR. La validación del commit en `main` da paso al [workflow de despliegue](.github/workflows/deploy.yml).
 
-### Base de Datos PostgreSQL
-```bash
-npm run db:bootstrap  # Creación inicial de esquemas y roles
-npm run db:migrate    # Aplicar migraciones SQL pendientes
-npm run db:status     # Estado de migraciones (aplicadas vs pendientes)
-npm run db:seed       # Importación del catálogo de rubros Panamá
-```
+## Derechos
 
-### Pruebas de Sistema
-```bash
-npm run test:api             # Pruebas integrales de API backend
-npm run test:database-tools  # Pruebas de herramientas de base de datos
-```
-
----
-
-## 🔒 Licencia y Confidencialidad
-
-Propiedad privada de Contractor Pro - Todos los derechos reservados.
+© LEURET TECH. Todos los derechos reservados.

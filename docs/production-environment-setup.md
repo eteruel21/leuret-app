@@ -1,40 +1,49 @@
-# Configuración del Entorno de Producción — Leuret App
+# Configuración de producción de LEURET
 
-**Fecha de actualización:** 21 de julio de 2026
+Usa esta guía para preparar y revisar los recursos del [despliegue](deployment.md). Los archivos de configuración versionan nombres de recursos, hosts y variables públicas. Las credenciales se gestionan en el servicio que las consume.
 
-Este documento detalla la lista de verificación y parámetros requeridos para la preparación y endurecimiento del entorno de producción de **Leuret App**.
+## Cloudflare Workers y Supabase
 
----
+| Recurso o variable | Configuración |
+| --- | --- |
+| Worker `leuret-api-worker` | Dominio `api.leurettech.com`, `NODE_ENV=production` y `DATABASE_MODE=hyperdrive` |
+| Binding `HYPERDRIVE` | PostgreSQL 17 en Supabase con el rol de la aplicación `contractor_api` |
+| Binding `R2_STORAGE` | Bucket operativo privado `contractor-private-storage` |
+| Binding `LEURET_METRICS` | Dataset de Analytics Engine `leuret_api_metrics` |
+| Cron del Worker | `*/5 * * * *` para la limpieza de almacenamiento y los recordatorios de pago |
+| `JWT_SECRET` | Clave de sesiones de al menos 43 caracteres, guardada como secreto del Worker |
+| `TURNSTILE_SECRET_KEY` y `TURNSTILE_ALLOWED_HOSTNAMES` | Secreto del widget y lista de hostnames autorizados. La configuración versionada indica `app.leurettech.com,admin.leurettech.com` |
+| `RESEND_API_KEY` y `EMAIL_FROM` | Credencial de envío y remitente del dominio verificado |
+| `RESEND_ADMIN_MAIL_API_KEY`, `RESEND_PRIVACY_INBOX_ID` y `RESEND_LEGAL_INBOX_ID` | Configuración de las [bandejas de administración](admin-mail-inboxes.md) |
+| `CORS_ORIGINS`, `ADMIN_WEB_ORIGINS` y `APP_WEB_ORIGINS` | Configuración de la API para orígenes exactos. Las listas de autenticación web deben estar incluidas también en CORS |
 
-## 1. Configuración de Infraestructura
+La [configuración del Worker](../apps/api/wrangler.worker.jsonc) determina bindings, secretos requeridos y rutas. [El esquema de entorno](../apps/api/src/config/env.ts) valida las variables y documenta sus valores predeterminados. En el modo Hyperdrive, el Worker recibe la cadena de conexión del binding.
 
-- **Base de Datos:** Supabase PostgreSQL 17 con transporte cifrado. El plan Free actual no incluye backups diarios administrados ni PITR; se debe ejecutar y conservar el respaldo lógico descrito en `docs/backup-restore-verification.md`.
-- **Backend API:** Node.js 22 LTS alojado en Render con auto-restart en fallos, SSL/TLS 1.3 terminado en proxy y balanceo de carga.
-- **Frontend Admin & Mobile Web:** Cloudflare Pages con CDN global, caching de estáticos y políticas de encabezados de seguridad.
-- **Almacenamiento de Archivos:** Cloudflare R2, bucket privado `contractor-private-storage`. Sus objetos requieren una copia independiente del backup de PostgreSQL.
+Los jobs de migración y comprobación de esquema usan una conexión separada para `contractor_migrator`, con el certificado de Supabase. Los nombres técnicos de roles y bucket forman parte de la configuración operativa.
 
----
+## GitHub Actions
 
-## 2. Checklist de Variables de Entorno de Producción
+| Tipo | Nombre | Uso |
+| --- | --- | --- |
+| Secreto | `CLOUDFLARE_API_TOKEN` | Publica el Worker y los proyectos Pages |
+| Secreto | `CLOUDFLARE_ACCOUNT_ID` | Selecciona la cuenta de Cloudflare |
+| Secreto | `PRODUCTION_MIGRATOR_DATABASE_URL` | Conexión de migrador que usan los workflows de despliegue y de migraciones |
+| Secreto | `PRODUCTION_DATABASE_SSL_CA` | Certificado PEM que los workflows convierten en `DATABASE_SSL_CA_FILE` |
+| Variable | `TURNSTILE_SITE_KEY` | Clave pública real de Turnstile, inyectada en ambas compilaciones web |
 
-| Variable | Descripción | Ejemplo / Requisito |
-|---|---|---|
-| `NODE_ENV` | Entorno de ejecución | `production` |
-| `HOST` | Dirección de escucha de API | `0.0.0.0` |
-| `PORT` | Puerto de escucha | `10000` |
-| `DATABASE_URL` | URI de PostgreSQL con credenciales RLS | `postgresql://contractor_api:SECRET@host:5432/contractor_pro?sslmode=require` |
-| `JWT_SECRET` | Clave secreta para tokens JWT | Mínimo 64 caracteres alfanuméricos aleatorios |
-| `CORS_ORIGINS` | Lista blanca de orígenes | `https://admin.leurettech.com,https://app.leurettech.com` |
-| `STORAGE_DRIVER` | Driver de almacenamiento | `r2` |
-| `R2_ACCOUNT_ID` | Account ID de Cloudflare | Credencial cifrada |
-| `R2_ACCESS_KEY_ID` | Clave de acceso R2 | Credencial cifrada |
-| `R2_SECRET_ACCESS_KEY` | Clave secreta R2 | Credencial cifrada |
-| `R2_BUCKET_NAME` | Nombre del bucket | `contractor-private-storage` |
+Verifica el alcance según los [secretos del workflow de despliegue](../.github/workflows/deploy.yml) y el entorno `production` del [workflow de migraciones](../.github/workflows/db-migrate.yml).
 
----
+## Compilación de los clientes
 
-## 3. Verificación de Seguridad y Red
+| Cliente | URL de API | Clave pública de Turnstile | Página del desafío |
+| --- | --- | --- | --- |
+| Admin Web | `VITE_API_URL=https://api.leurettech.com` | `VITE_TURNSTILE_SITE_KEY` | `VITE_TURNSTILE_CHALLENGE_URL=/turnstile` |
+| Aplicación web | `EXPO_PUBLIC_API_URL=https://api.leurettech.com` | `EXPO_PUBLIC_TURNSTILE_SITE_KEY` | `EXPO_PUBLIC_TURNSTILE_CHALLENGE_URL=https://app.leurettech.com/turnstile` |
 
-1. **Firewall / Security Groups:** Permitir conexiones entrantes a PostgreSQL únicamente desde las IPs autorizadas de la API Render y el ejecutor de migraciones.
-2. **Strict Transport Security (HSTS):** Forzado mediante encabezados Fastify.
-3. **CORS Restringido:** Solamente dominios autorizados de producción.
+Estas variables se incorporan a los bundles. Inyéctalas antes de compilar. Usa el widget correspondiente al entorno y conserva sus secretos del lado de la API.
+
+## Verificación operativa
+
+- Ejecuta la [lista posterior a la publicación](post-deployment-checklist.md).
+- Verifica la ejecución y entrega de [monitoreo y alertas](monitoring-and-alerts.md).
+- Revisa la última copia verificada y su evidencia de restauración según [respaldos y recuperación](backup-restore-verification.md).

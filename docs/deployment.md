@@ -1,93 +1,33 @@
-# LEURET APP — Guía de despliegue
+# Despliegue de LEURET en Cloudflare
 
-**Última revisión:** 15 de noviembre de 2026
+El flujo de GitHub Actions publica la API y los dos clientes web. Las compilaciones de Android e iOS siguen el [procedimiento de Expo/EAS](native-testing-and-updates.md).
 
-**Alcance:** API, panel administrativo y aplicación web en Cloudflare. Las compilaciones nativas de Expo/EAS no forman parte de este flujo.
-
-> **Fuente de verdad:** `.github/workflows/deploy.yml`, `.github/workflows/validate.yml`, `apps/api/wrangler.worker.jsonc` y `package.json`. Este documento no sustituye la configuración real ni autoriza una publicación.
-
-## 1. Arquitectura operativa
-
-El repositorio `eteruel21/leuret-app` contiene tres workspaces (`apps/api`, `apps/admin-web`, `apps/mobile`). GitHub Actions publica mediante Wrangler: los proyectos Cloudflare Pages no necesitan una conexión Git directa.
-
-| Componente | Servicio Cloudflare | Dominio | Origen |
+| Componente | Recurso | Dominio | Fuente |
 | --- | --- | --- | --- |
-| API REST Fastify/TypeScript | Worker `leuret-api-worker` | `https://api.leurettech.com` | `apps/api` |
-| Panel de administración React/Vite | Pages `leuret-admin-web` | `https://admin.leurettech.com` | `apps/admin-web` |
-| Aplicación de usuarios Expo Web | Pages `leuret-pro-web` | `https://app.leurettech.com` | `apps/mobile` |
-| App iOS/Android | Expo/EAS, separado | Distribución nativa | `apps/mobile` |
+| API | Worker `leuret-api-worker` | [api.leurettech.com](https://api.leurettech.com/health) | `apps/api` |
+| LEURET Admin | Pages `leuret-admin-web` | [admin.leurettech.com](https://admin.leurettech.com/) | `apps/admin-web/dist` |
+| Aplicación web | Pages `leuret-pro-web` | [app.leurettech.com](https://app.leurettech.com/) | `apps/mobile/dist` |
 
-La API ejecuta Fastify en Cloudflare Workers, usa PostgreSQL en Supabase mediante el binding **`HYPERDRIVE`** y archivos privados en R2 mediante **`R2_STORAGE`**. El bucket actual sigue llamándose `contractor-private-storage`: **no renombrar recursos productivos solo para actualizar la marca**. El Worker tiene un cron `*/5 * * * *` para limpiar archivos de cuentas eliminadas.
+Wrangler publica los dos directorios `dist` directamente en Pages. Los bindings del Worker y las variables de compilación se describen en la [configuración de producción](production-environment-setup.md).
 
-~~~mermaid
-flowchart TD
-    A[PR a main] --> B[GitHub Actions: Validate]
-    B --> C[Merge autorizado a main]
-    C --> D[Validate del commit en main]
-    D --> E[Verificación de migraciones y despliegue Cloudflare]
-    E --> F[Worker: leuret-api-worker]
-    F --> G[Pages: leuret-admin-web]
-    G --> H[Pages: leuret-pro-web]
-    F --> I[(Supabase PostgreSQL vía Hyperdrive)]
-    F --> J[(Cloudflare R2)]
-~~~
+## Flujo habitual en GitHub Actions
 
-## 2. Cómo se ejecuta CI/CD
+1. Abre un PR hacia `main`. Revisa el job **Validate Codebase & Build**, que verifica tipos, compilaciones, API, los paquetes Android e iOS, restauración y permisos en PostgreSQL aislado, y el flujo de sesión web en Chrome. [Workflow Validate](../.github/workflows/validate.yml).
+2. Antes del merge, identifica dependencias de esquema y prepara el [rollback](rollback-procedure.md). Si el PR lleva migraciones, revisa su compatibilidad con la API activa y aplica el [procedimiento de cambios de base de datos](database-change-process.md).
+3. El push a `main` vuelve a ejecutar **Validate**. Si pasa, llama a **Build & Deploy to Cloudflare** con el mismo SHA. El workflow comprueba el historial de migraciones y compara el esquema de Supabase con un PostgreSQL 17 efímero. Valida los bundles y comprueba que el commit sigue en la punta de `main`. [Workflow de despliegue](../.github/workflows/deploy.yml).
+4. Cloudflare recibe la API, luego Admin Web y finalmente la aplicación web. Al terminar, el workflow hace peticiones GET a ambas webs, a `/health` y a `/health/database`. Completa la [lista posterior al despliegue](post-deployment-checklist.md) y registra las versiones.
 
-- **Pull request hacia `main`.** `Validate` ejecuta las suites de API, móvil y navegador, comprueba los avisos nuevos de dependencias y prueba migraciones, permisos y restauración en PostgreSQL aislado.
-- **Push a `main`.** `Validate` prueba el commit antes de llamar a `deploy.yml` para ese mismo SHA. El despliegue comprueba el certificado, la deriva de migraciones y esquema, así como las compilaciones de producción.
-- La publicación sigue el orden API → Admin Web → Pro Web. Al terminar, el workflow comprueba la respuesta de la API, PostgreSQL y ambas webs. Revisa el [procedimiento de rollback](./rollback-procedure.md) si falla una comprobación posterior a la publicación.
+## Cuando el despliegue detecta una migración pendiente
 
-El paso `npm run db:check:supabase` inspecciona migraciones pendientes, checksums y registros inesperados **sin aplicar migraciones**. Si encuentra deriva, bloquea la publicación. El comando `npm run db:migrate:supabase` sí puede cambiar la base: solo se ejecuta por procedimiento separado, con autorización y respaldo.
+1. Revisa el mensaje del paso **Block deployment when database migrations drift**. Un archivo pendiente bloquea la publicación antes de que cambien los recursos de Cloudflare. Un checksum distinto o un archivo registrado que falta requieren reconciliar el historial.
+2. Si el archivo está pendiente y pertenece a `main`, confirma el respaldo. Ejecuta **Aplicar migraciones a producción** con `mode=status` desde Actions. Para aplicar, usa `mode=apply` y la confirmación `APLICAR` según el [procedimiento de base de datos](database-change-process.md).
+3. Comprueba que el job terminó sin pendientes ni deriva. Reintenta el despliegue del commit validado si sigue siendo el último de `main`. Si hay un commit posterior, revisa la ejecución de ese commit.
+4. Si el control de historial pasa y falla **Block deployment when production schema drifts from migrations**, revisa qué objetos difieren. Coteja el resultado con la migración y la base de referencia antes de reintentar.
 
-## 3. Credenciales y bindings
+## Validación local y publicación manual
 
-La configuración de GitHub Actions referencia secretos `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `PRODUCTION_DATABASE_SSL_CA`, `PRODUCTION_MIGRATOR_DATABASE_URL` y variable `TURNSTILE_SITE_KEY`. Verificar su existencia y permisos **sin exponer valores**.
+Desde la raíz del monorepo, `npm run validate` verifica tipos y compila los tres workspaces. `npm run deploy:safe` instala hooks, verifica tipos y compila la API y el panel. Su alcance es local.
 
-En el Worker `wrangler.worker.jsonc` se configuran dominio `api.leurettech.com`, bindings `HYPERDRIVE` y `R2_STORAGE`, y secretos declarados `JWT_SECRET`, `TURNSTILE_SECRET_KEY`, `RESEND_API_KEY`, `EMAIL_FROM`.
+Los scripts `npm run deploy:api`, `npm run deploy:admin`, `npm run deploy:mobile` y `npm run deploy:all` publican en producción. Para una publicación manual autorizada, usa el commit validado, comprueba los controles de historial y esquema e inyecta las [variables de compilación de producción](production-environment-setup.md#compilación-de-los-clientes). Registra los IDs de Cloudflare y ejecuta la [lista posterior al despliegue](post-deployment-checklist.md).
 
-Los clientes web se compilan con `VITE_API_URL` y `EXPO_PUBLIC_API_URL`, ambos dirigidos a `https://api.leurettech.com`. Nunca añadir contraseñas, dumps, certificados o archivos `.env` al repositorio.
-
-## 4. Validaciones locales y publicación
-
-Desde la raíz del repositorio, sin publicar:
-
-~~~bash
-npm ci
-npm run typecheck
-npm run test:worker-runtime -w apps/api
-npm run build:api
-npm run build:admin
-npm run build:mobile
-~~~
-
-`npm run deploy:safe` instala hooks, valida tipos y compila API/Admin; **no hace push a `main`, no despliega y no incluye el build móvil**. No reemplaza las comprobaciones de CI.
-
-**Publicación habitual:**
-
-1. Abrir PR; comprobar `Validate` y revisar impacto de API, interfaces, base y almacenamiento.
-2. Antes de la fusión, registrar el commit y preparar un plan de rollback.
-3. Fusionar a `main` solo con aprobación. En la ejecución de **Validate** del commit fusionado, comprueba el resultado de **Build & Deploy to Cloudflare** y de la verificación posterior.
-4. Verificar los dominios y las funciones críticas; un workflow exitoso no garantiza que el producto esté funcional.
-
-**Publicaciones manuales:** `npm run deploy:api`, `npm run deploy:admin`, `npm run deploy:mobile` o `npm run deploy:all` **modifican producción**. Requieren validación y autorización separadas.
-
-## 5. Comprobación posterior al despliegue
-
-Usar **GET**, no `curl -I` (HEAD):
-
-~~~bash
-curl --fail --show-error --silent https://api.leurettech.com/health
-curl --fail --show-error --silent https://api.leurettech.com/health/database
-~~~
-
-Después comprobar carga de `https://app.leurettech.com` y `https://admin.leurettech.com`, login con usuario de prueba autorizado, logs/errores HTTP del Worker, conectividad Hyperdrive y acceso a R2. Registrar IDs de despliegue y resultados. Revisar migraciones solo con `npm run db:check:supabase` y el entorno autorizado; no aplicarlas automáticamente.
-
-Ante incidentes, seguir [el procedimiento de rollback](./rollback-procedure.md).
-
-## 6. Referencias
-
-- [Backups y recuperación](./backup-restore-verification.md).
-- [Cloudflare: Workers Rollbacks](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/).
-- [Cloudflare: Pages Rollbacks](https://developers.cloudflare.com/pages/configuration/rollbacks/).
-- [GitHub: omitir ejecuciones por mensaje de commit](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/skip-workflow-runs).
+Consulta la [publicación directa de Pages con Wrangler](https://developers.cloudflare.com/workers/wrangler/commands/pages/#pages-deploy) y el [procedimiento de rollback de LEURET](rollback-procedure.md).

@@ -1,100 +1,53 @@
-# Control de Migraciones y Seeds - Contractor Pro
+# Migraciones y semillas de LEURET
 
-Este documento especifica el funcionamiento del sistema de migraciones, seeds y gestión del esquema de PostgreSQL en **Contractor Pro**.
+El ejecutor de LEURET usa los archivos SQL de [`database/migrations/`](../database/migrations) para el esquema y de [`database/seeds/`](../database/seeds) para los datos de catálogo. Las guías de [instalación local](local-installation.md) y [cambios en producción](database-change-process.md) contienen los pasos por entorno.
 
----
+## Roles e historial
 
-## 1. Visión General del Sistema
+| Rol o esquema | Uso |
+| --- | --- |
+| `contractor_owner` | Propietario de los objetos. El migrador puede asumirlo durante un cambio de esquema |
+| `contractor_migrator` | Conexión de mantenimiento para migraciones, semillas y verificaciones |
+| `contractor_api` | Conexión de la API con los permisos concedidos por las migraciones y las políticas RLS |
+| `app_migrations.schema_migrations` | Registra el nombre completo, SHA-256 y fecha de cada migración aplicada |
+| `app_migrations.seed_history` | Registro equivalente para las semillas |
 
-Contractor Pro utiliza un motor personalizado de migraciones y semillas escrito en Node.js ESM (`database/scripts/`), diseñado para garantizar:
+[El ejecutor](../database/scripts/migrate.mjs) ordena los archivos por nombre completo, comprueba el checksum de los ya registrados y usa un bloqueo asesor de PostgreSQL para serializar las ejecuciones. Cada archivo pendiente se aplica junto con su registro de historial en una transacción. Si falla, se revierte ese archivo y la próxima ejecución puede retomarlo. Las migraciones anteriores confirmadas conservan su registro.
 
-1. **Inmutabilidad y Control de Integridad**: Cada script SQL aplicado se registra con su suma de comprobación (SHA-256) en la tabla `app_migrations.schema_migrations`.
-2. **Segregación de Roles**: Diferenciación estricta entre el rol migrador (`DB_MIGRATOR_USER`) y el rol de aplicación en runtime (`DB_APP_USER`).
-3. **Control Transaccional**: Ejecución de cada migración dentro de un bloque transaccional atómico (`BEGIN ... COMMIT`).
+Hay prefijos históricos compartidos. Por ejemplo, `045_account_deletion_completion.sql` y `045_scope_company_data_access.sql` son dos migraciones. Usa el nombre completo al revisar o registrar un cambio.
 
----
+## Comandos
 
-## 2. Estructura de Directorios
+| Operación | PostgreSQL local | Supabase |
+| --- | --- | --- |
+| Preparar una base vacía | `npm run db:bootstrap` | Sigue el [procedimiento de cambios](database-change-process.md) y la [configuración de producción](production-environment-setup.md) |
+| Aplicar migraciones pendientes | `npm run db:migrate` | Workflow [Aplicar migraciones a producción](../.github/workflows/db-migrate.yml) o `npm run db:migrate:supabase` |
+| Consultar estado | `npm run db:status` | `npm run db:status:supabase` |
+| Comprobar historial sin crear objetos | `node --env-file=database/.env database/scripts/migrate.mjs --check` | `npm run db:check:supabase` |
+| Aplicar semillas pendientes | `npm run db:seed` | `npm run db:seed:supabase` |
+| Ejecutar lint de esquema | `npm run db:lint` | Se ejecuta sobre una base efímera en CI |
+| Comparar estructura real y esperada | Pasa las conexiones de ambas bases a [`schema-drift.mjs`](../database/scripts/schema-drift.mjs) | `npm run db:drift:supabase` con `REFERENCE_DATABASE_URL` |
 
-```
-database/
-├── migrations/         # Scripts SQL de estructura (001_*.sql a 019_*.sql...)
-├── seeds/              # Scripts SQL de datos de catálogo e inicialización
-├── scripts/
-│   ├── bootstrap.mjs   # Creación inicial de esquemas, roles y extensiones
-│   ├── migrate.mjs     # Ejecutor de migraciones con validación de checksums
-│   ├── seed.mjs        # Ejecutor de seeds de catálogo
-│   ├── baseline.mjs    # Registro de estado base y reparación de checksums
-│   └── db-utils.mjs    # Utilidades comunes de conexión PostgreSQL y hashing
-└── .env.example        # Plantilla de variables de conexión PostgreSQL
-```
+`--check` detecta archivos pendientes, checksums distintos y registros sin su archivo SQL. `schema-drift.mjs` compara el catálogo real con el de una base de referencia creada con las migraciones del mismo commit. Detecta, entre otros, cambios en columnas, restricciones, índices, políticas RLS, funciones y permisos. El workflow de despliegue ejecuta ambos controles y bloquea la publicación si hay diferencias.
 
----
+En local, copia [`database/.env.example`](../database/.env.example) a `database/.env`. Para Supabase, parte de [`database/.env.supabase.example`](../database/.env.supabase.example). Configura `MIGRATOR_DATABASE_URL` y `DATABASE_SSL_CA_FILE`. Usa la conexión directa o el pooler de sesión en el puerto 5432 si tu red requiere IPv4. Consulta [las opciones de conexión de Supabase](https://supabase.com/docs/guides/database/connecting-to-postgres).
 
-## 3. Scripts de Administración y Comandos `npm`
+`db:baseline` y `db:repair-checksums` son herramientas de mantenimiento excepcional. Revisa el [script de baseline](../database/scripts/baseline.mjs) y sus validaciones antes de usarlas.
 
-| Comando | Script Ejecutado | Propósito |
-| :--- | :--- | :--- |
-| `npm run db:bootstrap` | `bootstrap.mjs` | Crea esquemas (`app_auth`, `app_commercial`, `app_migrations`), roles con permisos mínimos y extensiones SQL |
-| `npm run db:migrate` | `migrate.mjs` | Aplica únicamente las migraciones pendientes y valida los checksums de las ya aplicadas |
-| `npm run db:status` | `migrate.mjs --status` | Muestra una tabla comparativa con el estado (APPLIED / PENDING) de cada archivo de migración |
-| `npm run db:seed` | `seed.mjs` | Aplica semillas pendientes (ej. catálogo oficial de construcción Panamá) |
-| `npm run db:baseline` | `baseline.mjs` | Registra el estado actual del esquema sin volver a ejecutar migraciones históricas |
-| `npm run db:repair-checksums` | `baseline.mjs --repair-checksums` | Actualiza la huella SHA-256 de archivos en entornos donde se autorizó un ajuste controlado |
+## Añadir una migración
 
----
+1. Usa el siguiente prefijo numérico disponible en `database/migrations/NNN_descripcion.sql`. Documenta qué objetos cambian y qué debe comprobarse.
+2. Si necesitas corregir una migración aplicada, añade un archivo nuevo. Conserva el archivo aplicado y su checksum.
+3. Revisa compatibilidad con la API activa, permisos del rol operativo y políticas RLS. Consulta las [reglas de esquema](database-change-process.md#reglas-de-esquema).
+4. Aplica el cambio en local. Ejecuta `npm run db:status`, `npm run db:lint` y las pruebas del flujo afectado.
+5. Incluye en el PR el efecto del cambio, el resultado de las pruebas y el plan de reversión cuando corresponda. Los scripts de [`database/rollbacks/`](../database/rollbacks) se revisan como base para una migración de reversión nueva.
 
-## 4. Registro Histórico de Migraciones Actuales
+## Semillas de catálogo
 
-| Archivo | Contenido / Alcance |
-| :--- | :--- |
-| `001_auth_foundation.sql` | Creación de esquemas base, tabla de usuarios y funciones auxiliares de autenticación. |
-| `002_auth_identities.sql` | Identidades de autenticación (email/password, OAuth provider links). |
-| `003_commercial_schema.sql` | Tablas comerciales principales: empresas, presupuestos, clientes, proyectos, facturación. |
-| `004_api_permissions.sql` | Asignación de permisos `GRANT` y políticas iniciales RLS para la API. |
-| `005_auth_sessions.sql` | Gestión de sesiones activas y control de estado de usuarios. |
-| `006_catalog_api_permissions.sql` | Permisos de lectura pública/autenticada sobre el catálogo de construcción. |
-| `007_company_client_api_permissions.sql` | Permisos de API para la gestión multi-tenant de clientes por empresa. |
-| `008_install_user_profile_trigger.sql` | Trigger automático para la creación de perfiles al registrar un nuevo usuario. |
-| `009_remaining_mobile_backend.sql` | Tablas y campos adicionales requeridos por la app móvil (ajustes, notificaciones). |
-| `010_admin_web_api_permissions.sql` | Permisos específicos para el panel de administración web. |
-| `011_remove_legacy_profile_rpc.sql` | Limpieza de funciones RPC heredadas de versiones anteriores. |
-| `012_authorization_and_rls.sql` | Hardening de seguridad, políticas RLS en PostgreSQL y helper `app.current_user_id()`. |
-| `013_auth_security_tokens.sql` | Tokens de refresco, restablecimiento de contraseña e invitaciones. |
-| `014_budget_approval_and_calculations.sql` | Estados de aprobación de presupuestos e integración con desgloses de cálculo. |
-| `015_invoice_snapshots_and_history.sql` | Snapshots inmutables de facturas y auditoría de cambios de estado. |
-| `016_invoice_payments_and_receipts.sql` | Registro de cobros, parciales/totales, comprobantes y actualización de saldos. |
-| `017_invoice_cancellations_and_credit_notes.sql` | Anulación de facturación, emisión de notas de crédito y reversión contable. |
-| `018_agenda_and_projects.sql` | Gestión de proyectos, asignación de tareas, avances con fotos y eventos de agenda. |
-| `019_teams_clients_audit.sql` | Invitaciones de equipo, roles por empresa, auditoría de clientes y seguridad RLS. |
+Las semillas se procesan después de las migraciones. [`seed.mjs`](../database/scripts/seed.mjs) exige el historial de migraciones al día y aplica cada semilla pendiente con su propio registro y checksum. Para actualizar precios o insumos, agrega una semilla.
 
----
+- `001_import_contraloria_catalog.sql` carga las partidas de referencia de Panamá.
+- `002_calculator_materials_unpriced.sql` agrega insumos base para las calculadoras.
+- Las siguientes semillas incorporan precios de mercado, materiales y mano de obra. Consulta la [actualización de noviembre de 2026](pricing/market-update-2026-11.md) y el [catálogo regional](pricing/regional-prices.md).
 
-## 5. Semillas de Datos (`database/seeds/`)
-
-- `001_import_contraloria_catalog.sql`: Carga el catálogo oficial de rubros de construcción de Panamá (Contraloría / precios de referencia del mercado panameño), que incluye códigos, descripciones, unidades de medida (m², m³, global, c/u) y valores de costo directo de referencia.
-- `002_calculator_materials_unpriced.sql`: Crea los insumos individuales (`leuret:material:*`, `leuret:labor:*`) que usan las calculadoras, sin precio.
-- `003_market_prices_2026_11.sql`: Actualización de mercado de noviembre 2026. Escala las partidas de la Contraloría con los índices IPMC del INEC, pone precio a materiales y mano de obra y registra el historial. Ver `docs/pricing/market-update-2026-11.md`.
-- `004_calculator_materials_2026_11.sql`: Agrega 15 materiales con precio de mercado (pasta y cinta de gypsum, track, pegamentos de cerámica y porcelanato, conduit, cajas, tomacorrientes, breakers y cielo raso PVC) para las calculadoras.
-
----
-
-## 6. Reglas e Invariantes para Desarrolladores
-
-> [!NOTE]
-> El proceso completo (reglas de RLS e índices, cómo aplicar en producción,
-> verificación de deriva y reversión) está en
-> [`docs/database-change-process.md`](database-change-process.md). CI ejecuta
-> además `database/scripts/schema-lint.mjs` sobre cada PR.
-
-> [!IMPORTANT]
-> **REGLA DE INMUTABILIDAD**: NUNCA edites ni elimines un archivo `.sql` dentro de `database/migrations/` o `database/seeds/` que ya haya sido aplicado en algún entorno. 
-
-### Pasos para añadir una nueva migración:
-1. Crea un nuevo archivo en `database/migrations/` siguiendo el patrón numérico de 3 dígitos:
-   `020_nombre_descriptivo.sql`
-2. Incluye comentarios explicativos al inicio del archivo SQL.
-3. Asegúrate de incluir las declaraciones de seguridad `GRANT` necesarias para los roles `contractor_api` o `contractor_admin`.
-4. Ejecuta `npm run db:migrate` en tu entorno local.
-5. Verifica el resultado con `npm run db:status`.
-6. Incluye el nuevo archivo SQL en tu commit de Git.
+El [workflow de migraciones](../.github/workflows/db-migrate.yml) aplica esquema. La siembra de datos usa su comando y su verificación por entorno.

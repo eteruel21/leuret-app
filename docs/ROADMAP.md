@@ -1,16 +1,12 @@
-# LEURET — ROADMAP OFICIAL
-### Plataforma SaaS de Gestión Empresarial y Soluciones para la Construcción
+# Roadmap de LEURET
 
-**Empresa desarrolladora:** LEURET TECH  
-**Plataforma:** LEURET  
-**Versión del roadmap:** 1.1  
-**Fecha:** 5 de noviembre de 2026  
-**Mercado inicial:** República de Panamá  
-**Estado:** Plan estratégico aprobado
+**Plan estratégico 1.1.** Aprobado el 5 de noviembre de 2026 y revisado el 16 de noviembre de 2026.
+
+El mercado inicial es Panamá. La Dirección de LEURET TECH es responsable del plan.
 
 ---
 
-## 1. VISIÓN GENERAL
+## 1. Visión general
 
 LEURET es una plataforma tecnológica desarrollada por LEURET TECH, orientada a contratistas, profesionales independientes, empresas de construcción y proveedores de servicios.
 
@@ -28,7 +24,7 @@ Su objetivo es integrar en un solo ecosistema digital herramientas para:
 
 LEURET será desarrollada como una solución SaaS escalable, modular y multiplataforma.
 
-## 2. DECISIONES ESTRATÉGICAS APROBADAS
+## 2. Decisiones estratégicas aprobadas
 
 ### D01 — Mercado inicial
 
@@ -76,88 +72,39 @@ No se modificarán los entornos productivos sin autorización.
 
 ---
 
-## 3. ARQUITECTURA Y ENTORNOS
+## 3. Arquitectura y entornos
 
-### Aplicación profesional — LEURET Pro
+| Componente | URL o distribución | Alcance |
+| --- | --- | --- |
+| Aplicación web de LEURET | [app.leurettech.com](https://app.leurettech.com/) | Registro, empresas, clientes, catálogo, calculadoras, presupuestos, agenda, proyectos y facturación |
+| LEURET Admin | [admin.leurettech.com](https://admin.leurettech.com/) | Usuarios, empresas, catálogo, soporte y cumplimiento |
+| LEURET API | [api.leurettech.com](https://api.leurettech.com/health) | Autenticación, operaciones, PostgreSQL e integraciones |
+| Aplicación nativa | Expo/EAS | Android e iOS con código compartido con la aplicación web |
+| Sitio corporativo | [leurettech.com](https://leurettech.com/) | Presencia institucional y comercial de LEURET TECH |
 
-**URL:** https://app.leurettech.com
-
-Funciones principales:
-
-- Registro y autenticación.
-- Gestión de perfiles y empresas.
-- Administración de clientes.
-- Catálogos de materiales y servicios.
-- Calculadoras técnicas.
-- Presupuestos y cotizaciones.
-- Gestión de proyectos.
-- Agenda y actividades.
-- Facturación y cobros.
-- Reportes y documentos.
-
-### Administración — LEURET Admin
-
-**URL:** https://admin.leurettech.com
-
-Funciones previstas:
-
-- Gestión de usuarios y empresas.
-- Administración de roles y permisos.
-- Planes comerciales y suscripciones.
-- Configuración global.
-- Monitoreo de actividad.
-- Gestión de incidencias.
-- Administración de cumplimiento legal.
-- Analítica operativa.
-
-### Backend — LEURET API
-
-**URL:** https://api.leurettech.com
-
-Responsabilidades:
-
-- Procesamiento de operaciones.
-- Autenticación y autorización.
-- Conectividad con bases de datos.
-- Seguridad multiempresa.
-- Gestión de información.
-- Integración de servicios externos.
-- Control de solicitudes y errores.
-- Auditoría y monitoreo.
-
-### Aplicación móvil — LEURET
-
-Tecnologías: React Native y Expo.
-
-La aplicación móvil deberá mantener una experiencia consistente con la versión web y sincronizar información mediante la API.
-
-### Sitio corporativo
-
-**URL:** https://leurettech.com
-
-Responsable de la presencia institucional y comercial de LEURET TECH.
+Consulta la [arquitectura](architecture.md), el [contrato HTTP](api.md) y el [flujo de despliegue](deployment.md).
 
 ---
 
-## 4. ROADMAP DE DESARROLLO
+## 4. Hitos de desarrollo
 
-| Hito | Objetivo | Estado de planificación |
-|---|---|---|
-| M1 | Autenticación, seguridad y API | Validación pendiente |
-| M2 | Integración completa de módulos web | Validación pendiente |
-| M3 | Administración y cumplimiento legal | Validación pendiente |
-| M4 | Infraestructura e integraciones de producción | Validación pendiente |
-| M5 | Aplicación móvil funcional | Validación pendiente |
-| M6 | Lanzamiento comercial en Panamá | Condicionado a P0/P1 |
-| M7 | Ampliación funcional, comenzando por APU | Planificado |
+| Hito | Objetivo | Estado al revisar el repositorio | Evidencia para cerrar |
+| --- | --- | --- | --- |
+| M1 | Autenticación, seguridad y API | Implementación registrada | Comprobar acceso, recuperación, revocación y aislamiento entre empresas con los roles previstos |
+| M2 | Integración de módulos web | Implementación registrada | Ejecutar flujos completos de presupuestos, obras, agenda, clientes y pagos con datos de prueba persistentes |
+| M3 | Administración y cumplimiento legal | Implementación registrada | Verificar aprobación, constancias versionadas, exportación, eliminación y tratamiento de datos retenidos |
+| M4 | Infraestructura e integraciones | Workflows y runbooks registrados | Verificar el despliegue del SHA, las alertas, las integraciones y una restauración aislada con copia operativa |
+| M5 | Aplicación móvil | Perfiles EAS y comprobación de builds registrados | Registrar instalación, sesión, sincronización y actualización en dispositivos físicos por plataforma |
+| M6 | Lanzamiento comercial en Panamá | Condicionado a P0/P1 | Adjuntar evidencia de aceptación y aprobación de LEURET TECH |
+| M7 | Ampliación funcional, comenzando por APU | Planificado | Definir y aprobar la especificación cuando se cumplan las condiciones de estabilización |
 
-Los estados operativos deberán actualizarse utilizando evidencia del repositorio, pruebas y despliegues.
+La revisión toma como base [`bb8241f`](https://github.com/eteruel21/leuret-app/commit/bb8241f440fe8fc2179a625f49a35a7a1365c0c2). El [PR de autorización y sesiones](https://github.com/eteruel21/leuret-app/pull/292), el [PR de aceptación legal](https://github.com/eteruel21/leuret-app/pull/295), la [auditoría de módulos](https://github.com/eteruel21/leuret-app/pull/302) y la [recuperación de sesión](https://github.com/eteruel21/leuret-app/pull/303) registran avances de M1 a M3. Para M4, los PR de [respaldos](https://github.com/eteruel21/leuret-app/pull/297) y [monitoreo](https://github.com/eteruel21/leuret-app/pull/300) registran la implementación. El [PR de preparación de compilaciones nativas](https://github.com/eteruel21/leuret-app/pull/304) registra los avances de M5.
 
-No se declarará completado ningún hito únicamente por la existencia de código o documentación.
+Para actualizar un estado, vincula el PR o issue, el commit, el resultado de la prueba y el entorno evaluado. Si el criterio depende de producción, incluye el despliegue o la ejecución operativa correspondiente.
 
 ---
 
-## 5. PRIORIDADES P0 — REQUISITOS CRÍTICOS
+## 5. P0 — Requisitos críticos
 
 ### P0-01 — Integración frontend–API
 Garantizar que todos los módulos críticos utilicen datos reales y persistentes.
@@ -185,26 +132,24 @@ Resolver errores que impidan ejecutar procesos críticos.
 
 ---
 
-## 6. PRIORIDADES P1 — PREPARACIÓN COMERCIAL
+## 6. P1 — Preparación comercial
 
-- Validación de políticas RLS.
-- Protección CAPTCHA mediante Cloudflare Turnstile.
-- Correos transaccionales.
-- Almacenamiento seguro de documentos.
-- Notificaciones mediante Expo Push.
-- Respaldos y restauración.
-- Monitoreo y alertas.
-- Automatización CI/CD.
-- Pruebas end-to-end.
-- Rendimiento y optimización.
-- Accesibilidad y experiencia de usuario.
-- Gestión segura de variables y secretos.
+| Frente | Evidencia de aceptación |
+| --- | --- |
+| RLS y aislamiento | Pruebas con usuarios de distintas empresas, membresías revocadas y roles limitados |
+| CAPTCHA, correo y Expo Push | Flujos de autenticación, entrega de correo y recepción en dispositivo con el entorno correspondiente |
+| Documentos privados | Carga y lectura autorizadas. Verificación de enlaces firmados y limpieza conforme a retención |
+| Respaldos y restauración | Copia cifrada íntegra de PostgreSQL y R2 y simulacro aislado con evidencia funcional |
+| Monitoreo y alertas | Registro de incidentes de prueba y recepción de una alerta por el canal operativo |
+| CI/CD y pruebas end-to-end | Validación del commit y ejecución de los flujos críticos en los clientes que se van a publicar |
+| Rendimiento, accesibilidad y experiencia | Mediciones de los flujos críticos y prueba de navegación, carga, errores y recuperación de sesión |
+| Variables y secretos | Configuración revisada por entorno y verificación de variables públicas en las compilaciones |
 
 Todos los elementos P0/P1 deberán contar con criterios de aceptación y evidencia de cumplimiento antes del lanzamiento público.
 
 ---
 
-## 7. PRIMERA AMPLIACIÓN — ANÁLISIS DE PRECIOS UNITARIOS (APU)
+## 7. Primera ampliación — Análisis de Precios Unitarios (APU)
 
 ### Objetivo
 
@@ -263,7 +208,7 @@ Desarrollar un módulo especializado que permita calcular y gestionar costos uni
 
 ---
 
-## 8. EVOLUCIÓN FUNCIONAL FUTURA
+## 8. Evolución funcional
 
 ### Gestión empresarial
 - CRM.
@@ -311,7 +256,7 @@ Estas funciones constituyen oportunidades de evolución y no compromisos de lanz
 
 ---
 
-## 9. EXPANSIÓN INTERNACIONAL
+## 9. Expansión internacional
 
 La expansión se realizará después de validar la operación comercial en Panamá.
 
@@ -330,7 +275,7 @@ La arquitectura buscará permitir configuraciones regionales sin duplicar innece
 
 ---
 
-## 10. CONTROL DE CALIDAD Y PUBLICACIÓN
+## 10. Control de calidad y publicación
 
 Se establece el siguiente flujo:
 
@@ -351,7 +296,7 @@ Un Pull Request fusionado no constituye por sí mismo evidencia de funcionamient
 
 ---
 
-## 11. AUDITORÍA Y SEGUIMIENTO CONTINUO
+## 11. Auditoría y seguimiento continuo
 
 ### Informe diario
 
@@ -393,7 +338,7 @@ Revisar:
 
 ---
 
-## 12. CRITERIOS DE EVIDENCIA
+## 12. Criterios de evidencia
 
 Las auditorías clasificarán los hallazgos como:
 
@@ -406,7 +351,7 @@ Los hitos se marcarán como completados solamente cuando sus criterios de acepta
 
 ---
 
-## 13. OBJETIVOS ESTRATÉGICOS
+## 13. Objetivos estratégicos
 
 **Corto plazo**
 
@@ -422,7 +367,7 @@ Consolidar LEURET como un ecosistema tecnológico SaaS escalable, con funciones 
 
 ---
 
-## 14. CONTROL DE DECISIONES
+## 14. Control de decisiones
 
 | Código | Decisión | Estado |
 |---|---|---|
@@ -433,9 +378,7 @@ Consolidar LEURET como un ecosistema tecnológico SaaS escalable, con funciones 
 
 **Responsable estratégico:** Dirección de LEURET TECH.
 
-**Repositorio técnico actual:** `eteruel21/contractor-app`
-
-El identificador técnico del repositorio podrá renombrarse posteriormente mediante un proceso controlado, sin afectar innecesariamente las integraciones existentes.
+**Repositorio técnico actual:** [eteruel21/leuret-app](https://github.com/eteruel21/leuret-app).
 
 ---
 
