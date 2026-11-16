@@ -24,6 +24,8 @@ export const CAPABILITIES = {
   // Ventas consulta (seguimiento, respuesta del cliente y facturación) sin editar.
   "budgets.view": ["owner", "admin", "estimator", "sales"],
   "budgets.edit": ["owner", "admin", "estimator"],
+  // Enviar al cliente un borrador ya preparado — budgets/routes.ts (/send).
+  "budgets.send": ["owner", "admin", "estimator", "sales"],
   // Registrar la respuesta del cliente (aprobó o rechazó fuera de Leuret).
   "budgets.respond": ["owner", "admin", "estimator", "sales"],
 
@@ -50,10 +52,14 @@ export const CAPABILITIES = {
   "progress.delete": ["owner", "admin", "supervisor"],
 
   // Facturas — invoices/routes.ts
-  "invoices.view": ALL_ROLES,
+  // Propietario y administrador ven todas; ventas, solo las que generó (RLS, migración 050).
+  "invoices.view": ["owner", "admin", "sales"],
   "invoices.create": ["owner", "admin", "sales"],
   "invoices.payments.record": ["owner", "admin", "sales"],
   "invoices.manageFinancial": MANAGERS,
+
+  // Informe de ventas — sales/routes.ts (ventas solo ve el suyo).
+  "sales.report": ["owner", "admin", "sales"],
 
   // Clientes — clients/routes.ts
   "clients.view": ALL_ROLES,

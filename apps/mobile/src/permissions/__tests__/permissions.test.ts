@@ -49,9 +49,13 @@ describe("permisos por rol (deben coincidir con la API)", () => {
     expect(ROLES.filter((role) => can(role, "progress.record"))).toEqual(["owner", "admin", "supervisor"]);
   });
 
-  it("facturas, clientes y catálogo se consultan con cualquier rol", () => {
+  it("facturas: solo propietario, administrador y ventas", () => {
+    expect(ROLES.filter((role) => can(role, "invoices.view"))).toEqual(["owner", "admin", "sales"]);
+    expect(ROLES.filter((role) => can(role, "invoices.create"))).toEqual(["owner", "admin", "sales"]);
+  });
+
+  it("clientes y catálogo se consultan con cualquier rol", () => {
     for (const role of ROLES) {
-      expect(can(role, "invoices.view")).toBe(true);
       expect(can(role, "clients.view")).toBe(true);
       expect(can(role, "catalog.view")).toBe(true);
     }

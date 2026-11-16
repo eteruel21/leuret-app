@@ -81,5 +81,21 @@ export function formatShortDate(date: string | Date, timezone?: string): string 
     options.timeZone = timezone;
   }
   
-  return new Intl.DateTimeFormat("es-PA", options).format(d);
+  // Día/mes/año. «es-PA» de Intl usa mes/día (11/16/2026), que en Panamá se lee al revés.
+  const parts = new Intl.DateTimeFormat("es-PA", options).formatToParts(d);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("day")}/${part("month")}/${part("year")}`;
+}
+
+/** Fecha y hora legibles sin ambigüedad: «16 nov 2026, 5:37 p. m.». */
+export function formatDateTime(date: string | Date, timezone?: string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return new Intl.DateTimeFormat("es-PA", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    ...(timezone ? { timeZone: timezone } : {}),
+  }).format(d);
 }

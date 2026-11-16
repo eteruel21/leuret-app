@@ -176,6 +176,83 @@ test("cliente y empresa: vinculación, presupuesto, aprobación, factura solicit
   await ownerContext.close();
 });
 
+test("ventas: envía un presupuesto, genera su factura y lo ve en su informe; solo ve sus facturas", async ({ browser }) => {
+  test.setTimeout(180_000);
+  const owner = state.owner;
+  const companyId = state.companyId;
+  const buyer = apiAs(api, await apiLogin(api, accounts.buyer));
+  const sales = apiAs(api, await apiLogin(api, accounts.sales));
+  const supervisor = apiAs(api, await apiLogin(api, accounts.supervisor));
+  const year = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Panama", year: "numeric" }).format(new Date()));
+  const money = (value) => new Intl.NumberFormat("es-PA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+
+  // El presupuestista (aquí la propietaria) prepara el borrador; ventas lo envía.
+  const { body: project } = await owner.post("/projects", { companyId, clientId: state.buyerClientId, name: "Portón eléctrico QA" }, 201);
+  const { body: budget } = await owner.post("/budgets/from-project", { companyId, projectId: project.project.id, title: "Motor de portón" }, 201);
+  await owner.post(`/budgets/${budget.budgetId}/items`, { companyId, description: "Motor para portón corredizo", quantity: 1, unitPrice: 150, taxable: false }, 201);
+
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  const issues = watchPage(page);
+  acceptDialogs(page);
+  await signInApp(page, accounts.sales);
+  await enterCompany(page, flowCompanies.main);
+
+  await test.step("ventas envía el borrador al cliente", async () => {
+    await page.goto(`/presupuestos/${budget.budgetId}`);
+    await page.getByRole("button", { name: "Enviar al cliente" }).click();
+    await page.getByRole("button", { name: "Enviar", exact: true }).click();
+    await expect(page.getByText("Enviado", { exact: true }).filter({ visible: true }).first()).toBeVisible();
+  });
+
+  await buyer.post(`/budgets/${budget.budgetId}/approve`, {}, 200);
+
+  await test.step("ventas genera la factura del presupuesto aprobado", async () => {
+    await page.goto(`/presupuestos/${budget.budgetId}`);
+    await page.getByText("Generar factura", { exact: true }).filter({ visible: true }).first().click();
+    await expect(page).toHaveURL(/\/facturas\/[0-9a-f-]{36}/);
+    await expect(page.getByText("Saldo pendiente").filter({ visible: true }).first()).toBeVisible();
+  });
+
+  await test.step("ventas solo ve las facturas que generó; supervisor, ninguna", async () => {
+    const { body } = await sales.get(`/invoices?companyId=${companyId}`);
+    const invoices = body.invoices ?? body;
+    expect(invoices.length).toBeGreaterThan(0);
+    const { body: ownerList } = await owner.get(`/invoices?companyId=${companyId}`);
+    const ownerInvoices = ownerList.invoices ?? ownerList;
+    expect(ownerInvoices.length).toBeGreaterThan(invoices.length);
+    const others = ownerInvoices.filter((invoice) => !invoices.some((own) => own.id === invoice.id));
+    await sales.get(`/invoices/${others[0].id}?companyId=${companyId}`, 404);
+    await supervisor.get(`/invoices?companyId=${companyId}`, 403);
+  });
+
+  await test.step("su informe muestra lo cotizado y lo ejecutado", async () => {
+    const { body } = await sales.get(`/companies/${companyId}/sales-performance?year=${year}`);
+    expect(body.people).toHaveLength(1);
+    const totals = body.people[0].totals;
+    expect(totals.quotedTotal).toBeGreaterThanOrEqual(150);
+    expect(totals.invoicedTotal).toBeGreaterThanOrEqual(150);
+    await page.goto("/ventas");
+    await expect(page.getByLabel(new RegExp(`^Cotizado: USD\\s${money(totals.quotedTotal).replace(/[.,]/g, "\\$&")}`))).toBeVisible();
+    await expect(page.getByLabel(new RegExp(`^Ejecutado \\(facturado\\): USD\\s${money(totals.invoicedTotal).replace(/[.,]/g, "\\$&")}`))).toBeVisible();
+    await capture(page, "flujos", "ventas-informe-propio");
+  });
+
+  await test.step("la propietaria ve el informe de ventas", async () => {
+    const ownerPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    acceptDialogs(ownerPage);
+    await signInApp(ownerPage, accounts.owner);
+    await enterCompany(ownerPage, flowCompanies.main);
+    await ownerPage.goto("/ventas");
+    await expect(ownerPage.getByText(new RegExp(`${accounts.sales.fullName} · ${year}`))).toBeVisible();
+    await capture(ownerPage, "flujos", "ventas-informe-propietaria");
+    await ownerPage.close();
+  });
+
+  expectNoServerErrors(issues);
+  await context.close();
+});
+
 test("petición de trabajo: publicar, conversar, cotizar y adjudicar", async ({ browser }) => {
   test.setTimeout(240_000);
   const title = "Instalar 4 lámparas LED en la sala";

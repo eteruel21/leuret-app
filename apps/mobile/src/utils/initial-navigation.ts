@@ -30,7 +30,9 @@ export function initialRouteFor(state: InitialNavigationState): InitialRoute | n
   if (state.role === "contractor") {
     if (state.hasActiveCompany) return "/(tabs)";
     if (!state.hasContractorApproval) return "/espacios";
-    return state.primaryCategory ? "/empresa" : "/perfil-profesional";
+    // Sin categoría (cuentas anteriores a la 043): primero los espacios, donde ve
+    // sus invitaciones de equipo y puede elegir «Trabajar por mi cuenta».
+    return state.primaryCategory ? "/empresa" : "/espacios";
   }
 
   // Cuentas administrativas u otros roles sin espacio móvil.

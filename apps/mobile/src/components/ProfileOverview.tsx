@@ -12,6 +12,7 @@ import {
 
 import { colors, layout, radius } from "@/constants/theme";
 import { ROLE_LABELS } from "@/permissions/permissions";
+import { formatDateTime } from "@/utils/format";
 import {
   absoluteProfileResourceUrl,
   type UserProfileDetails
@@ -57,10 +58,7 @@ function formatDate(value: string | null): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "No indicado";
 
-  return new Intl.DateTimeFormat("es-PA", {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(date);
+  return formatDateTime(date);
 }
 
 function formatBytes(value: number): string {

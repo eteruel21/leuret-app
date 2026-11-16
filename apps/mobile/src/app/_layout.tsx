@@ -240,6 +240,7 @@ function RootNavigator() {
           <Stack.Screen name="equipo" />
           <Stack.Screen name="catalogo" />
           <Stack.Screen name="peticiones" />
+          <Stack.Screen name="ventas" />
         </Stack.Protected>
 
         <Stack.Protected guard={isClientAuthenticated}>

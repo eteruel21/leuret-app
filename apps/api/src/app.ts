@@ -20,6 +20,7 @@ import { registerProfileRoutes } from "./profile/routes.js";
 import { registerProfileDocumentRoutes } from "./profile/document-routes.js";
 import { registerActivityRoutes } from "./activities/routes.js";
 import { registerDashboardRoutes } from "./dashboard/routes.js";
+import { registerSalesRoutes } from "./sales/routes.js";
 import { registerProjectTaskRoutes } from "./projects/tasks/routes.js";
 import { registerProjectProgressRoutes } from "./projects/progress/routes.js";
 import { registerStorageRoutes } from "./storage/routes.js";
@@ -166,6 +167,7 @@ export async function buildApp() {
   app.register(registerNotificationRoutes);
   app.register(registerAccountLegalRoutes);
   app.register(registerDashboardRoutes);
+  app.register(registerSalesRoutes);
   app.register(registerClientPortalRoutes);
   app.register(registerClientConnectionRoutes);
   app.register(registerJobRequestRoutes);

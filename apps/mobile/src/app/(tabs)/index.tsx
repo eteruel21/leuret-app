@@ -353,12 +353,16 @@ export default function HomeScreen() {
                 <Text style={styles.metricLabel}>Clientes</Text>
               </View>
 
-              <View style={styles.metricDivider} />
+              {can("invoices.view") ? (
+                <>
+                  <View style={styles.metricDivider} />
 
-              <View style={styles.metric}>
-                <Text style={styles.metricValue}>{dashboard?.invoiceCount ?? "—"}</Text>
-                <Text style={styles.metricLabel}>Facturas</Text>
-              </View>
+                  <View style={styles.metric}>
+                    <Text style={styles.metricValue}>{dashboard?.invoiceCount ?? "—"}</Text>
+                    <Text style={styles.metricLabel}>Facturas</Text>
+                  </View>
+                </>
+              ) : null}
             </View>
             </Pressable>
           </Animated.View>
