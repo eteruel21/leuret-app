@@ -1,4 +1,5 @@
 import { withUserTransaction } from "../db/with-user-transaction.js";
+import { inSequence } from "../db/in-sequence.js";
 
 /**
  * Centro de control del superadministrador: lectura de obras, presupuestos,
@@ -144,8 +145,8 @@ export async function findAdminProjectDetailRepo(userId: string, projectId: stri
     );
     if (!project.rows[0]) return null;
 
-    const [tasks, progress, budgets, invoices, activities] = await Promise.all([
-      client.query(
+    const [tasks, progress, budgets, invoices, activities] = await inSequence([
+      () => client.query(
         `
           SELECT
             task.id, task.title, task.description, task.status, task.priority,
@@ -160,7 +161,7 @@ export async function findAdminProjectDetailRepo(userId: string, projectId: stri
         `,
         [projectId]
       ),
-      client.query(
+      () => client.query(
         `
           SELECT
             history.id,
@@ -178,7 +179,7 @@ export async function findAdminProjectDetailRepo(userId: string, projectId: stri
         `,
         [projectId]
       ),
-      client.query(
+      () => client.query(
         `
           SELECT id, budget_number, title, status, total::double precision AS total, currency_code, updated_at
           FROM public.budgets
@@ -187,7 +188,7 @@ export async function findAdminProjectDetailRepo(userId: string, projectId: stri
         `,
         [projectId]
       ),
-      client.query(
+      () => client.query(
         `
           SELECT
             invoice.id, invoice.invoice_number, invoice.status, invoice.issue_date, invoice.due_date,
@@ -201,7 +202,7 @@ export async function findAdminProjectDetailRepo(userId: string, projectId: stri
         `,
         [projectId]
       ),
-      client.query(
+      () => client.query(
         `
           SELECT id, title, type, status, date, start_time, end_time
           FROM public.activities
@@ -299,8 +300,8 @@ export async function findAdminBudgetDetailRepo(userId: string, budgetId: string
     );
     if (!budget.rows[0]) return null;
 
-    const [items, versions, invoices] = await Promise.all([
-      client.query(
+    const [items, versions, invoices] = await inSequence([
+      () => client.query(
         `
           SELECT
             item.id, item.item_type, item.description, item.unit_name,
@@ -319,7 +320,7 @@ export async function findAdminBudgetDetailRepo(userId: string, budgetId: string
         `,
         [budgetId]
       ),
-      client.query(
+      () => client.query(
         `
           SELECT
             version.id, version.version_number, version.created_at,
@@ -332,7 +333,7 @@ export async function findAdminBudgetDetailRepo(userId: string, budgetId: string
         `,
         [budgetId]
       ),
-      client.query(
+      () => client.query(
         `
           SELECT
             invoice.id, invoice.invoice_number, invoice.status, invoice.issue_date, invoice.due_date,
@@ -434,8 +435,8 @@ export async function findAdminInvoiceDetailRepo(userId: string, invoiceId: stri
     );
     if (!invoice.rows[0]) return null;
 
-    const [payments, creditNotes, history, reminders] = await Promise.all([
-      client.query(
+    const [payments, creditNotes, history, reminders] = await inSequence([
+      () => client.query(
         `
           SELECT
             id, payment_number, receipt_number, status, method,
@@ -447,7 +448,7 @@ export async function findAdminInvoiceDetailRepo(userId: string, invoiceId: stri
         `,
         [invoiceId]
       ),
-      client.query(
+      () => client.query(
         `
           SELECT id, credit_note_number, status, amount::double precision AS amount, reason, issued_at, cancelled_at
           FROM public.invoice_credit_notes
@@ -456,7 +457,7 @@ export async function findAdminInvoiceDetailRepo(userId: string, invoiceId: stri
         `,
         [invoiceId]
       ),
-      client.query(
+      () => client.query(
         `
           SELECT
             history.id, history.event_type, history.from_status, history.to_status, history.created_at,
@@ -470,7 +471,7 @@ export async function findAdminInvoiceDetailRepo(userId: string, invoiceId: stri
         `,
         [invoiceId]
       ),
-      client.query(
+      () => client.query(
         `
           SELECT id, kind, sent_to, claimed_at
           FROM public.invoice_payment_reminders

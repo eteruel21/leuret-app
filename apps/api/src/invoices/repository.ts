@@ -9,6 +9,7 @@ import type {
   invoiceStatusSchema,
   reverseInvoicePaymentSchema
 } from "./schemas.js";
+import { inSequence } from "../db/in-sequence.js";
 
 export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
 export type TransitionInvoiceStatusInput = z.infer<typeof invoiceStatusSchema>;
@@ -340,8 +341,8 @@ export async function recordInvoicePaymentRepo(
     const paymentId = createResult.rows[0]?.id;
     if (!paymentId) return null;
 
-    const [paymentResult, invoiceResult] = await Promise.all([
-      client.query(
+    const [paymentResult, invoiceResult] = await inSequence([
+      () => client.query(
         `
           ${paymentDetailsSql}
           WHERE payment.id = $1
@@ -351,7 +352,7 @@ export async function recordInvoicePaymentRepo(
         `,
         [paymentId, invoiceId, input.companyId]
       ),
-      client.query(
+      () => client.query(
         `
           ${invoiceDetailsSql}
           WHERE invoice.id = $1 AND invoice.company_id = $2
@@ -390,8 +391,8 @@ export async function reverseInvoicePaymentRepo(
     const reversedPaymentId = reverseResult.rows[0]?.id;
     if (!reversedPaymentId) return null;
 
-    const [paymentResult, invoiceResult] = await Promise.all([
-      client.query(
+    const [paymentResult, invoiceResult] = await inSequence([
+      () => client.query(
         `
           ${paymentDetailsSql}
           WHERE payment.id = $1
@@ -401,7 +402,7 @@ export async function reverseInvoicePaymentRepo(
         `,
         [reversedPaymentId, invoiceId, input.companyId]
       ),
-      client.query(
+      () => client.query(
         `
           ${invoiceDetailsSql}
           WHERE invoice.id = $1 AND invoice.company_id = $2
@@ -466,8 +467,8 @@ export async function issueInvoiceCreditNoteRepo(
     const creditNoteId = createResult.rows[0]?.id;
     if (!creditNoteId) return null;
 
-    const [creditNoteResult, invoiceResult] = await Promise.all([
-      client.query(
+    const [creditNoteResult, invoiceResult] = await inSequence([
+      () => client.query(
         `
           ${creditNoteDetailsSql}
           WHERE credit_note.id = $1
@@ -477,7 +478,7 @@ export async function issueInvoiceCreditNoteRepo(
         `,
         [creditNoteId, invoiceId, input.companyId]
       ),
-      client.query(
+      () => client.query(
         `
           ${invoiceDetailsSql}
           WHERE invoice.id = $1 AND invoice.company_id = $2
@@ -516,8 +517,8 @@ export async function cancelInvoiceCreditNoteRepo(
     const cancelledCreditNoteId = cancelResult.rows[0]?.id;
     if (!cancelledCreditNoteId) return null;
 
-    const [creditNoteResult, invoiceResult] = await Promise.all([
-      client.query(
+    const [creditNoteResult, invoiceResult] = await inSequence([
+      () => client.query(
         `
           ${creditNoteDetailsSql}
           WHERE credit_note.id = $1
@@ -527,7 +528,7 @@ export async function cancelInvoiceCreditNoteRepo(
         `,
         [cancelledCreditNoteId, invoiceId, input.companyId]
       ),
-      client.query(
+      () => client.query(
         `
           ${invoiceDetailsSql}
           WHERE invoice.id = $1 AND invoice.company_id = $2

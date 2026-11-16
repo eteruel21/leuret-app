@@ -108,7 +108,7 @@ test("cliente y empresa: vinculación, presupuesto, aprobación, factura solicit
 
     await ownerPage.getByRole("button", { name: "Enviar al cliente" }).click();
     await ownerPage.getByRole("button", { name: "Enviar", exact: true }).click();
-    await expect(ownerPage.getByText("Enviado", { exact: true }).first()).toBeVisible();
+    await expect(ownerPage.getByText("Enviado", { exact: true }).filter({ visible: true }).first()).toBeVisible();
     await capture(ownerPage, "flujos", "empresa-presupuesto-enviado");
   });
 
@@ -124,7 +124,7 @@ test("cliente y empresa: vinculación, presupuesto, aprobación, factura solicit
     await expect(buyerPage).toHaveURL(new RegExp(`/cliente-presupuestos/${state.buyerBudgetId}`));
     await expect(buyerPage.getByText("Cambio de inodoro y lavamanos")).toBeVisible();
     await buyerPage.getByRole("button", { name: "Aprobar", exact: true }).click();
-    await expect(buyerPage.getByText(/Aprobado/).first()).toBeVisible();
+    await expect(buyerPage.getByText("Presupuesto aprobado", { exact: true })).toBeVisible();
     await capture(buyerPage, "flujos", "cliente-presupuesto-aprobado");
   });
 
@@ -160,13 +160,13 @@ test("cliente y empresa: vinculación, presupuesto, aprobación, factura solicit
     await ownerPage.getByPlaceholder("0.00").fill("200");
     await ownerPage.getByPlaceholder("Transferencia, cheque o comprobante").fill("ACH 12345");
     await ownerPage.getByText("Confirmar y generar recibo", { exact: true }).click();
-    await expect(ownerPage.getByText("Parcialmente pagada").first()).toBeVisible();
+    await expect(ownerPage.getByText("Parcialmente pagada").filter({ visible: true }).first()).toBeVisible();
     await capture(ownerPage, "flujos", "empresa-factura-con-abono");
   });
 
   await test.step("el cliente ve la factura con el abono y el saldo", async () => {
     await buyerPage.goto(`/cliente-facturas/${state.buyerInvoiceId}`);
-    await expect(buyerPage.getByText(/281\.50/).first()).toBeVisible();
+    await expect(buyerPage.getByText(/281\.50/).filter({ visible: true }).first()).toBeVisible();
     await capture(buyerPage, "flujos", "cliente-factura-saldo");
   });
 
@@ -243,7 +243,7 @@ test("petición de trabajo: publicar, conversar, cotizar y adjudicar", async ({ 
     await expect(rivalPage.getByText("Instalación de lámpara LED")).toBeVisible();
     await rivalPage.getByRole("button", { name: "Enviar al cliente" }).click();
     await rivalPage.getByRole("button", { name: "Enviar", exact: true }).click();
-    await expect(rivalPage.getByText("Enviado", { exact: true }).first()).toBeVisible();
+    await expect(rivalPage.getByText("Enviado", { exact: true }).filter({ visible: true }).first()).toBeVisible();
   });
 
   await test.step("la empresa ya ve la dirección exacta", async () => {
@@ -255,9 +255,9 @@ test("petición de trabajo: publicar, conversar, cotizar y adjudicar", async ({ 
     await clientPage.goto(`/cliente-presupuestos/${state.jobBudgetId}`);
     await expect(clientPage.getByText("Instalación de lámpara LED")).toBeVisible();
     await clientPage.getByRole("button", { name: "Aprobar", exact: true }).click();
-    await expect(clientPage.getByText(/Aprobado/).first()).toBeVisible();
+    await expect(clientPage.getByText("Presupuesto aprobado", { exact: true })).toBeVisible();
     await clientPage.goto(`/cliente-peticiones/${state.jobRequestId}`);
-    await expect(clientPage.getByText(/Adjudicada/).first()).toBeVisible();
+    await expect(clientPage.getByText(/Adjudicada/).filter({ visible: true }).first()).toBeVisible();
     await capture(clientPage, "flujos", "cliente-peticion-adjudicada");
   });
 
