@@ -94,7 +94,7 @@ test.beforeAll(async () => {
     addressLine: "Calle 5, casa 12",
     timing: "this_week"
   }, 201);
-  data.jobRequestId = jobRequest.request?.id ?? jobRequest.id;
+  data.jobRequestId = jobRequest.requestId;
   await owner.post(`/job-requests/${data.jobRequestId}/conversations/${companyId}/messages`, {
     body: "¿Puede enviarnos una foto del lavamanos?"
   }, [200, 201]);
