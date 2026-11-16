@@ -9,7 +9,7 @@ import { registerClientRoutes } from "./clients/routes.js";
 import { registerCompanyRoutes } from "./companies/routes.js";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
-import Fastify, { type FastifyBaseLogger } from "fastify";
+import Fastify, { LogController, type FastifyBaseLogger } from "fastify";
 import fastifyCookie from "@fastify/cookie";
 
 import { registerAuthRoutes } from "./auth/routes.js";
@@ -29,29 +29,35 @@ import { registerClientPortalRoutes } from "./client-portal/routes.js";
 import { registerClientConnectionRoutes } from "./client-connections/routes.js";
 import { registerJobRequestRoutes } from "./job-requests/routes.js";
 import { registerUserSettingsRoutes } from "./settings/routes.js";
-import { safeErrorDetails } from "./security/redaction.js";
-import { createAppLogger, defaultLogLevel } from "./observability/logger.js";
+import {
+  recordHttpRequest,
+  recordInfrastructureFailure,
+  serviceLogger,
+  withRequestLogger
+} from "./observability/events.js";
 import { getClientIp } from "./security/client-ip.js";
+
+const loggedErrorTypes = new Set([
+  "DatabaseError", "Error", "RangeError", "ReferenceError", "SyntaxError", "TypeError"
+]);
 
 export async function buildApp() {
   // No usamos `loggerInstance`: en Cloudflare Workers Fastify intenta leer
   // `pino.symbols`, que no existe en el paquete del Worker, y la API no
   // arranca (error 1101). Fastify queda con logger: false y cada petición
   // recibe nuestro logger propio en el primer hook.
-  const appLogger = createAppLogger({
-    level: defaultLogLevel(env.NODE_ENV, env.LOG_LEVEL)
-  });
-
   const app = Fastify({
     logger: false,
-    genReqId: (request) => {
-      const ray = request.headers["cf-ray"];
-      return typeof ray === "string" && ray ? ray : crypto.randomUUID();
-    }
+    logController: new LogController({ disableRequestLogging: true }),
+    requestIdHeader: false,
+    genReqId: () => crypto.randomUUID()
   });
 
-  app.addHook("onRequest", async (request) => {
-    request.log = appLogger.child({ reqId: request.id }) as unknown as FastifyBaseLogger;
+  app.addHook("onRequest", (request, reply, done) => {
+    const log = serviceLogger.child({ reqId: request.id });
+    request.log = log as unknown as FastifyBaseLogger;
+    reply.header("X-Request-ID", request.id);
+    withRequestLogger(log, done);
   });
 
   app.decorateRequest("authenticatedUser", null);
@@ -69,12 +75,13 @@ export async function buildApp() {
       errorStatusCode < 500
         ? errorStatusCode
         : 500;
+    const errorType = error instanceof Error && loggedErrorTypes.has(error.name) ? error.name : "Error";
     const context = {
-      ...safeErrorDetails(error),
+      event: "api_error",
       method: request.method,
-      route: request.routeOptions?.url ?? request.url.split("?")[0],
+      route: request.routeOptions.url ?? "unmatched",
       statusCode,
-      userId: request.authenticatedUser?.id ?? null
+      errorType
     };
     if (statusCode >= 500) {
       request.log.error(context, "Error no controlado en la API.");
@@ -92,6 +99,7 @@ export async function buildApp() {
   app.register(cors, {
     origin: corsOrigins,
     credentials: true,
+    exposedHeaders: ["X-Request-ID"],
     methods: [
       "GET",
       "HEAD",
@@ -108,19 +116,13 @@ export async function buildApp() {
     hook: "onRequest"
   });
 
-  // Peticiones lentas: ayudan a detectar consultas pesadas en producción.
   app.addHook("onResponse", async (request, reply) => {
-    if (reply.elapsedTime > 3000) {
-      request.log.warn(
-        {
-          method: request.method,
-          route: request.routeOptions?.url ?? request.url.split("?")[0],
-          statusCode: reply.statusCode,
-          durationMs: Math.round(reply.elapsedTime)
-        },
-        "Petición lenta."
-      );
-    }
+    recordHttpRequest(request.log, {
+      method: request.method,
+      route: request.routeOptions.url ?? "unmatched",
+      statusCode: reply.statusCode,
+      durationMs: Math.round(reply.elapsedTime)
+    });
   });
 
   app.addHook("onRequest", async (request, reply) => {
@@ -178,33 +180,19 @@ export async function buildApp() {
   });
 
   app.get("/health/database", async (_request, reply) => {
+    const start = performance.now();
     try {
-      const result = await pool.query<{
-        database_name: string;
-        database_user: string;
-        server_time: Date;
-      }>(`
-        SELECT
-          current_database() AS database_name,
-          current_user AS database_user,
-          now() AS server_time
-      `);
-
-      const row = result.rows[0];
-      if (!row) {
-        throw new Error("No se pudo obtener información de la base de datos.");
+      // NOW() evita una lectura cacheada por Hyperdrive.
+      const result = await pool.query("SELECT NOW()");
+      if (result.rowCount !== 1) {
+        throw new Error("La comprobación de PostgreSQL no devolvió una fila.");
       }
-
-      return {
-        status: "ok",
-        database: row
-      };
-    } catch (error) {
-      app.log.error(safeErrorDetails(error), "Falló la comprobación de PostgreSQL.");
-      return reply.status(503).send({
-        status: "error",
-        message: "No se pudo conectar con PostgreSQL."
+      return { status: "ok" };
+    } catch {
+      recordInfrastructureFailure("postgresql", "health_check", "operation_failed", {
+        durationMs: Math.round(performance.now() - start)
       });
+      return reply.status(503).send({ status: "error" });
     }
   });
 

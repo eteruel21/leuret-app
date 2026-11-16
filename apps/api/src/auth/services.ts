@@ -1,10 +1,12 @@
 import bcrypt from "bcryptjs";
 import type { FastifyRequest } from "fastify";
 import { env } from "../config/env.js";
+import { recordIntegrationFailure } from "../observability/events.js";
 
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const TURNSTILE_ALWAYS_PASS_TEST_SECRET = "1x0000000000000000000000000000000AA";
 const TURNSTILE_DUMMY_TOKEN = "XXXX.DUMMY.TOKEN.XXXX";
+const TURNSTILE_SERVICE_ERRORS = new Set(["internal-error", "missing-input-secret", "invalid-input-secret"]);
 
 type TurnstileResponse = {
   success: boolean;
@@ -25,6 +27,7 @@ export async function verifyCaptcha(token: string, ip: string, expectedAction: s
   const allowedHostnames = allowedTurnstileHostnames();
 
   if (!secret || allowedHostnames.length === 0) {
+    recordIntegrationFailure("turnstile", "verify_captcha", "not_configured");
     return false;
   }
 
@@ -45,12 +48,21 @@ export async function verifyCaptcha(token: string, ip: string, expectedAction: s
     });
 
     if (!response.ok) {
+      recordIntegrationFailure("turnstile", "verify_captcha", "http_error", { upstreamStatus: response.status });
       return false;
     }
 
     const data = (await response.json()) as TurnstileResponse;
 
+    if (typeof data?.success !== "boolean") {
+      recordIntegrationFailure("turnstile", "verify_captcha", "invalid_response");
+      return false;
+    }
+
     if (!data.success) {
+      if (Array.isArray(data["error-codes"]) && data["error-codes"].some((code) => TURNSTILE_SERVICE_ERRORS.has(code))) {
+        recordIntegrationFailure("turnstile", "verify_captcha", "provider_error");
+      }
       return false;
     }
 
@@ -72,7 +84,9 @@ export async function verifyCaptcha(token: string, ip: string, expectedAction: s
     }
 
     return true;
-  } catch {
+  } catch (error) {
+    const reason = error instanceof SyntaxError ? "invalid_response" : "request_failed";
+    recordIntegrationFailure("turnstile", "verify_captcha", reason);
     return false;
   }
 }

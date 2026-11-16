@@ -20,12 +20,13 @@ const LEVEL_VALUE: Record<LogLevel, number> = {
   silent: Number.POSITIVE_INFINITY
 };
 
-export type LogWriter = (level: Exclude<LogLevel, "silent">, line: string) => void;
+export type LogWriter = (level: Exclude<LogLevel, "silent">, entry: Record<string, unknown>) => void;
 
-const consoleWriter: LogWriter = (level, line) => {
-  if (level === "error" || level === "fatal") console.error(line);
-  else if (level === "warn") console.warn(line);
-  else console.log(line);
+const consoleWriter: LogWriter = (level, entry) => {
+  const value = globalThis.navigator?.userAgent === "Cloudflare-Workers" ? entry : JSON.stringify(entry);
+  if (level === "error" || level === "fatal") console.error(value);
+  else if (level === "warn") console.warn(value);
+  else console.log(value);
 };
 
 type LogFn = (objOrMsg?: unknown, msg?: string, ...args: unknown[]) => void;
@@ -86,16 +87,15 @@ export function createAppLogger(options: {
       payload = objOrMsg as Record<string, unknown>;
     }
 
-    const entry = redactSensitiveValue({
-      level: eventLevel,
-      time: now().toISOString(),
-      ...bindings,
-      ...payload,
-      msg: message ? redactSensitiveText(message) : undefined
-    });
-
     try {
-      write(eventLevel, JSON.stringify(entry));
+      const entry = redactSensitiveValue({
+        level: eventLevel,
+        time: now().toISOString(),
+        ...bindings,
+        ...payload,
+        msg: message ? redactSensitiveText(message) : undefined
+      }) as Record<string, unknown>;
+      write(eventLevel, entry);
     } catch {
       // Nunca dejar que un fallo al registrar tumbe una petición.
     }

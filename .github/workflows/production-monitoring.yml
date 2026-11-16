@@ -1,0 +1,41 @@
+name: Monitoreo de disponibilidad de Leuret
+
+on:
+  schedule:
+    - cron: '2-59/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: Simular una caída para comprobar el aviso de GitHub Actions
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  availability:
+    name: Verificar API, PostgreSQL y aplicaciones web
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    concurrency:
+      group: leuret-production-monitoring
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Comprobar disponibilidad y latencia
+        env:
+          SIMULATE_FAILURE: ${{ inputs.simulate_failure }}
+        run: |
+          if [ "$SIMULATE_FAILURE" = true ]; then
+            node scripts/monitor-production.mjs --simulate-failure
+          else
+            node scripts/monitor-production.mjs
+          fi

@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { env } from "../config/env.js";
+import { recordIntegrationFailure } from "../observability/events.js";
 import { generateSignedPhotoUrl } from "./signed-url.js";
 
 type UploadInput = {
@@ -154,6 +155,15 @@ export function buildSecureStorageKey(
   return `projects/${companyId}/${projectId}/${fileUuid}${safeExt}`;
 }
 
+async function withR2Monitoring<T>(operation: "upload" | "download" | "delete", run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    recordIntegrationFailure("r2", operation, "operation_failed");
+    throw error;
+  }
+}
+
 export async function uploadStorageFile({
   storagePath,
   buffer,
@@ -161,17 +171,11 @@ export async function uploadStorageFile({
 }: UploadInput): Promise<void> {
   const normalizedKey = normalizeStorageKey(storagePath);
 
-  if (r2Bucket) {
-    await r2Bucket.put(
-      normalizedKey,
-      buffer,
-      {
-        httpMetadata: {
-          contentType: mimeType
-        }
-      }
+  const bucket = r2Bucket;
+  if (bucket) {
+    await withR2Monitoring("upload", () =>
+      bucket.put(normalizedKey, buffer, { httpMetadata: { contentType: mimeType } })
     );
-
     return;
   }
 
@@ -198,8 +202,9 @@ export async function downloadStorageFile(
 }> {
   const normalizedKey = normalizeStorageKey(storagePath);
 
-  if (r2Bucket) {
-    const object = await r2Bucket.get(normalizedKey);
+  const bucket = r2Bucket;
+  if (bucket) {
+    const object = await withR2Monitoring("download", () => bucket.get(normalizedKey));
 
     if (!object) {
       throw new Error(
@@ -207,8 +212,7 @@ export async function downloadStorageFile(
       );
     }
 
-    const arrayBuffer =
-      await object.arrayBuffer();
+    const arrayBuffer = await withR2Monitoring("download", () => object.arrayBuffer());
 
     return {
       buffer: Buffer.from(arrayBuffer),
@@ -231,8 +235,9 @@ export async function deleteStorageFile(
 ): Promise<void> {
   const normalizedKey = normalizeStorageKey(storagePath);
 
-  if (r2Bucket) {
-    await r2Bucket.delete(normalizedKey);
+  const bucket = r2Bucket;
+  if (bucket) {
+    await withR2Monitoring("delete", () => bucket.delete(normalizedKey));
     return;
   }
 

@@ -1,4 +1,5 @@
 import { env } from "../config/env.js";
+import { recordIntegrationFailure } from "../observability/events.js";
 
 export type MailboxName = "privacy" | "legal";
 export type MailFolderName = "inbox" | "sent" | "trash";
@@ -21,6 +22,7 @@ function configuration(mailbox: MailboxName): { apiKey: string; inbox: MailboxCo
     : env.RESEND_LEGAL_INBOX_ID;
 
   if (!env.RESEND_ADMIN_MAIL_API_KEY || !id) {
+    recordIntegrationFailure("resend", "admin_mail", "not_configured");
     throw new MailProviderError(
       "El buzón todavía no está configurado en el servidor. Comprueba la clave administrativa de Resend y el identificador de la bandeja."
     );
@@ -57,10 +59,14 @@ async function requestResend(
       signal: AbortSignal.timeout(12000)
     });
   } catch {
+    recordIntegrationFailure("resend", "admin_mail", "request_failed");
     throw new MailProviderError("No fue posible comunicarse con el servicio de correo.");
   }
 
   if (!response.ok) {
+    if (response.status !== 404) {
+      recordIntegrationFailure("resend", "admin_mail", "http_error", { upstreamStatus: response.status });
+    }
     if (response.status === 401 || response.status === 403) {
       throw new MailProviderError(
         "La clave de Resend no tiene acceso a las bandejas. Se requiere una clave con acceso completo para leer correos."
@@ -79,6 +85,7 @@ async function requestResend(
   try {
     return await response.json();
   } catch {
+    recordIntegrationFailure("resend", "admin_mail", "invalid_response");
     throw new MailProviderError("El proveedor devolvió una respuesta no válida.");
   }
 }

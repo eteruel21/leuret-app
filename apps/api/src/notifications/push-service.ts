@@ -3,6 +3,7 @@ import {
   findUserPushTokensRepo
 } from "./repository.js";
 import { safeErrorDetails } from "../security/redaction.js";
+import { recordIntegrationFailure } from "../observability/events.js";
 
 export type PushPayload = {
   title: string;
@@ -89,16 +90,22 @@ export async function sendPushNotificationToUser(
         });
 
         if (!response.ok) {
+          recordIntegrationFailure("expo_push", "send_batch", "http_error", {
+            upstreamStatus: response.status,
+            failedCount: messages.length
+          });
           failed += messages.length;
           continue;
         }
 
         const tickets = ticketList(await response.json());
         if (!tickets) {
+          recordIntegrationFailure("expo_push", "send_batch", "invalid_response", { failedCount: messages.length });
           failed += messages.length;
           continue;
         }
 
+        let unexpectedFailures = 0;
         for (let index = 0; index < messages.length; index += 1) {
           const ticket = tickets[index];
 
@@ -114,14 +121,18 @@ export async function sendPushNotificationToUser(
             if (token) {
               tokensToDelete.add(token.expo_push_token);
             }
+          } else {
+            unexpectedFailures += 1;
           }
+        }
+
+        if (unexpectedFailures > 0) {
+          recordIntegrationFailure("expo_push", "send_batch", "provider_error", { failedCount: unexpectedFailures });
         }
       } catch (error) {
         failed += messages.length;
-        console.error(
-          "Error al despachar lote de notificaciones push:",
-          safeErrorDetails(error)
-        );
+        const reason = error instanceof SyntaxError ? "invalid_response" : "request_failed";
+        recordIntegrationFailure("expo_push", "send_batch", reason, { failedCount: messages.length });
       }
     }
 
