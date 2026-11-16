@@ -1,6 +1,7 @@
 # LEURET APP — Procedimiento de rollback de producción
 
-**Última revisión:** 9 de noviembre de 2026  
+**Última revisión:** 16 de noviembre de 2026
+
 **Sistemas:** Cloudflare Workers (`leuret-api-worker`), Pages (`leuret-admin-web` y `leuret-pro-web`), PostgreSQL en Supabase, Cloudflare R2.
 
 > **Regla central:** volver a una versión anterior de Workers o Pages **no restaura el contenido de PostgreSQL ni los objetos de R2**. Esta guía describe acciones sujetas a autorización operacional; no se ha ejecutado ningún rollback.
@@ -13,7 +14,7 @@ Antes de revertir:
 
 1. Registrar incidente, fecha/hora UTC, commit de GitHub, versión de Worker, IDs de despliegues Pages, síntomas e impacto.
 2. Revisar GitHub Actions, **Workers & Pages > Deployments** y logs de Workers. Identificar si falla API, Admin, usuarios, base de datos o R2.
-3. Pausar nuevos despliegues de manera coordinada: el workflow `.github/workflows/deploy.yml` se ejecuta con cada push a `main` y **puede reemplazar un rollback realizado en Cloudflare**.
+3. Pausar nuevos despliegues de manera coordinada: [Validate](../.github/workflows/validate.yml) vuelve a llamar al despliegue cuando pasa la validación de un push a `main`. Una nueva publicación puede reemplazar la versión restaurada en Cloudflare.
 4. Validar compatibilidad entre la versión previa de código y el esquema PostgreSQL actual. Conservar evidencia sin publicar secretos, tokens, contraseñas ni datos privados.
 
 ## 2. API: rollback de Cloudflare Workers
@@ -61,14 +62,14 @@ Si se sospecha daño de datos:
 4. Estimar la pérdida de datos (RPO), tiempo de recuperación (RTO) y sincronización con los objetos de R2.
 5. Cualquier restauración productiva requiere **autorización independiente**, respaldo previo actualizado, ventana de mantenimiento y plan de reversión de la propia restauración.
 
-La última revisión del documento de backups indica que el primer respaldo operativo cifrado y el simulacro con un dump real de producción estaban pendientes. **No asumir que existe respaldo productivo recuperable o recuperación punto en el tiempo sin verificación actual.**
+Comprueba la fecha y la integridad de la última copia operativa y la evidencia del último simulacro. Consulta el estado de PITR en el proyecto de Supabase si forma parte del plan de recuperación.
 
 ## 5. Cloudflare R2 y limpieza de cuentas
 
 - El binding `R2_STORAGE` apunta al bucket operativo privado `contractor-private-storage`; el nombre heredado no implica que se deba renombrar.
 - Revertir código no recupera objetos borrados en R2. Restaurarlos exige un respaldo independiente y verificado.
 - **Migración 029:** conservar `private.account_deletion_storage_queue`. No eliminar la tabla ni sus funciones mientras haya trabajos de limpieza pendientes.
-- **Migración 045:** conservar `private.account_deletion_records` (evidencia de cumplimiento) y la ampliación de `object_kind` de la cola. Para revertir el código, basta con desplegar la API anterior: las funciones nuevas quedan sin uso.
+- **`045_account_deletion_completion.sql`:** conservar `private.account_deletion_records` (evidencia de cumplimiento) y la ampliación de `object_kind` de la cola. Verifica la compatibilidad de una versión anterior de la API con el esquema actual antes de reactivarla.
 - Al restablecer el Worker, revisar cron `*/5 * * * *`, errores y reintentos de la cola. No ejecutar manualmente claves de almacenamiento ni registrarlas en logs.
 
 ## 6. Verificación posterior y cierre

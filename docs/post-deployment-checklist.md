@@ -1,39 +1,29 @@
-# Lista de Comprobación Posterior al Despliegue — Contractor Pro
+# Lista de comprobación posterior al despliegue de LEURET
 
-**Fecha de ejecución:** 21 de julio de 2026  
-**Alcance:** Producción (API, Base de Datos, Admin Web, Mobile Web)
+Registra el entorno, el SHA publicado, la hora UTC y los IDs del Worker y de cada proyecto Pages. Usa cuentas de prueba autorizadas para los flujos con sesión.
 
----
+## Disponibilidad y configuración
 
-## 1. Verificación de Migración de Esquema a Producción (T-144)
+| Comprobación | Resultado esperado |
+| --- | --- |
+| `GET https://api.leurettech.com/health` | HTTP 200, `status: "ok"` y `environment: "production"` |
+| `GET https://api.leurettech.com/health/database` | HTTP 200 y `status: "ok"` |
+| `GET /legal/terms` y `GET /legal/privacy` en la API | HTTP 200, documento vigente en JSON y campo `version` |
+| [Administración](https://admin.leurettech.com/) | Carga el panel y muestra su formulario de acceso |
+| [Aplicación web](https://app.leurettech.com/) | Carga la aplicación y apunta a la API del entorno correcto |
+| Job de publicación | Validación del mismo SHA, controles de historial y esquema y verificación HTTP final en verde |
 
-- [x] Conexión establecida como `DB_MIGRATOR_USER` a la base de datos de producción.
-- [x] Ejecución de `npm run db:status` confirmó que las 19 migraciones base están aplicadas y con checksums SHA-256 válidos.
-- [x] Verificación de los permisos `GRANT` y políticas RLS para `contractor_api`.
+~~~bash
+curl --fail --show-error --silent https://api.leurettech.com/health
+curl --fail --show-error --silent https://api.leurettech.com/health/database
+~~~
 
----
+## Flujos con sesión
 
-## 2. Verificación de Despliegue de API y Frontends (T-145)
+- [ ] Iniciar sesión con Turnstile en las dos interfaces. Recargar y cerrar sesión en cada una.
+- [ ] Abrir los módulos afectados y comprobar que los datos del usuario y de la empresa sean los esperados.
+- [ ] Cuando el cambio afecte archivos, comprobar la lectura de un documento privado de prueba mediante su enlace firmado.
+- [ ] Cuando el cambio afecte correo o push, comprobar la entrega a la cuenta o dispositivo de prueba.
+- [ ] Revisar logs y métricas del Worker durante la comprobación. Registrar `X-Request-ID` para las peticiones que fallen.
 
-- [x] **API Fastify:** Desplegada y respondiendo HTTP 200 en endpoint `/health`.
-- [x] **Admin Web:** Desplegada en Cloudflare Pages (`admin.leurettech.com`).
-- [x] **Mobile Web:** Desplegada en Cloudflare Pages (`app.leurettech.com`).
-
----
-
-## 3. Smoke Test Posterior al Despliegue (T-146)
-
-| Prueba de Humo | Método | Criterio de Éxito | Estado |
-|---|---|---|---|
-| **Health Check API** | `GET /health` | Retorna `{ status: "ok" }` | PASÓ |
-| **Health Check DB** | `GET /health/database` | Retorna respuesta de PostgreSQL | PASÓ |
-| **Legal Terms API** | `GET /legal/terms` | Carga markdown de Términos | PASÓ |
-| **Legal Privacy API** | `GET /legal/privacy` | Carga markdown de Privacidad | PASÓ |
-| **Carga de Admin Web** | HTTPS request | Retorna HTTP 200 y renderiza React SPA | PASÓ |
-| **Carga de Mobile Web** | HTTPS request | Retorna HTTP 200 y carga Expo Router | PASÓ |
-
----
-
-## 4. Resultado Final
-
-Todas las comprobaciones posteriores al despliegue fueron superadas sin advertencias ni bloqueos. El sistema se encuentra 100% operativo en producción.
+Si falla un componente, conserva el resultado y consulta el [procedimiento de rollback](rollback-procedure.md). Para fallos de historial o esquema, sigue el [proceso de cambios de base de datos](database-change-process.md).

@@ -1,73 +1,43 @@
-# Arquitectura del Sistema - Contractor Pro
+# Arquitectura de LEURET
 
-Este documento describe la arquitectura global, patrones de diseño y decisiones tecnológicas de **Contractor Pro**, una plataforma monorepo orientada a la industria de la construcción en Panamá.
+LEURET reúne la API, la administración y la aplicación de usuarios en un monorepo npm. GitHub Actions usa Node.js 22 para validar y compilar los tres workspaces.
 
----
+## Componentes y responsabilidades
 
-## 1. Visión General y Monorepo
+| Componente | Responsabilidad | Código y configuración |
+| --- | --- | --- |
+| API | Fastify y TypeScript. Registra rutas, valida entradas con Zod y ejecuta la lógica de negocio. Usa `pg` para PostgreSQL | [Rutas registradas](../apps/api/src/app.ts), [entrada local Node.js](../apps/api/src/server.ts), [entrada Worker](../apps/api/src/worker.ts) |
+| Administración | SPA React 19 y Vite. Gestiona usuarios, empresas, catálogo, soporte y bandejas legales | [Workspace](../apps/admin-web), [cliente HTTP](../apps/admin-web/src/api.ts) |
+| Aplicación de usuarios | Expo SDK 57, React Native y Expo Router. Comparte pantallas entre web, Android e iOS. Opera presupuestos, clientes, equipos, obras, agenda y facturación | [Pantallas](../apps/mobile/src/app), [servicios de acceso a la API](../apps/mobile/src/services), [configuración Expo](../apps/mobile/app.json) y [variables de compilación nativa](../apps/mobile/app.config.js) |
+| Base de datos | PostgreSQL 17 en Supabase. Persiste cuentas, sesiones y operaciones comerciales | [Migraciones](../database/migrations), [semillas](../database/seeds), [herramientas de base de datos](../database/scripts) |
+| Infraestructura | Worker Fastify con `nodejs_compat`, dos proyectos Cloudflare Pages, Hyperdrive, R2 y Analytics Engine | [Configuración Worker](../apps/api/wrangler.worker.jsonc), [despliegue](deployment.md), [monitoreo](monitoring-and-alerts.md) |
 
-Contractor Pro utiliza un enfoque de **Monorepo npm** (`workspaces`), centralizando la API backend, el panel de administración web y la aplicación móvil cliente/contratista en un mismo repositorio.
+## Flujo de solicitudes en producción
 
-```
-CONTRACTOR-APP/
-├── apps/
-│   ├── api/          # Backend REST (Node.js 22, Fastify, TypeScript)
-│   ├── admin-web/    # Panel web administrativo (React 19, Vite, TypeScript)
-│   └── mobile/       # Aplicación móvil/web contratistas (Expo 52, React Native, Expo Router)
-├── database/
-│   ├── migrations/   # 19+ migraciones SQL estructuradas por orden correlativo
-│   ├── seeds/        # Catálogo oficial (Contraloría / precios de referencia Panamá)
-│   └── scripts/      # Scripts de control de esquemas, bootstrap, baseline, checksums y despliegue
-└── docs/             # Especificaciones técnicas, privacidad, retención y guías operativas
-```
+~~~mermaid
+flowchart TD
+    App["Aplicación web y nativa"] --> API["API Fastify en Cloudflare Workers"]
+    Admin["Panel en Cloudflare Pages"] --> API
+    API --> H["Hyperdrive"]
+    H --> DB[("PostgreSQL en Supabase")]
+    API --> R2[("Cloudflare R2")]
+    API --> Servicios["Turnstile, Resend y Expo Push"]
+~~~
 
----
+- La API emite JWT de acceso y administra sus propias cuentas y sesiones en PostgreSQL. El contrato HTTP, la renovación y las cookies se describen en la [referencia de API](api.md).
+- Las rutas protegidas validan la sesión y, según el recurso, exigen aprobación de la cuenta, pertenencia y rol en la empresa o el rol de superadministrador. Para las consultas con identidad, [`withUserTransaction`](../apps/api/src/db/with-user-transaction.ts) configura `app.user_id` dentro de la transacción. Las políticas RLS consultan esa identidad mediante `app.current_user_id()`.
+- El Worker usa la conexión de `HYPERDRIVE` con el rol operativo `contractor_api`. La administración del esquema usa credenciales de migrador separadas. Consulta [migraciones y semillas](migrations-and-seeds.md).
+- `R2_STORAGE` da acceso a los archivos. La API sirve las fotos privadas y los documentos mediante enlaces firmados. Los avatares y logotipos publicados usan rutas de lectura específicas.
+- Turnstile verifica los desafíos de autenticación, Resend envía correos y la API envía solicitudes de notificación a Expo Push. El cron del Worker procesa la cola de limpieza de cuentas eliminadas y los recordatorios de facturación cada cinco minutos.
 
-## 2. Tecnologías Principales
+## Esquemas PostgreSQL
 
-| Capa | Tecnología | Descripción |
-| :--- | :--- | :--- |
-| **Backend API** | Node.js 22 + Fastify | API REST de alto rendimiento con TypeScript, Fastify CORS, Rate-Limit y Cookie Cifrada |
-| **Base de Datos** | PostgreSQL 18 | Motor de base de datos relacional con RLS, triggers y funciones almacenadas |
-| **Panel Admin** | Vite + React 19 + TypeScript | SPA para administración, catálogo global, auditoría y privacidad ARCO |
-| **Cliente Móvil / Web** | Expo 52 + React Native + Expo Router | Aplicación multiplataforma (iOS, Android, Web) |
-| **Almacenamiento** | Cloudflare R2 / Storage | Almacenamiento privado de adjuntos y fotos con URLs firmadas |
-| **Despliegue Web** | Cloudflare Pages | Hosting estático/SPA para `admin-web` y `mobile-web` |
-| **Despliegue API** | Render / Web Service | Alojamiento administrado para la API Fastify |
+| Esquema | Contenido |
+| --- | --- |
+| `app` | Funciones de contexto de usuario, entre ellas `app.current_user_id()` |
+| `app_auth` | Cuentas, identidades, credenciales, sesiones y constancias legales |
+| `public` | Perfiles y datos comerciales, incluyendo empresas, clientes, presupuestos, proyectos, facturas y catálogo |
+| `private` | Funciones internas, colas y registros operativos |
+| `app_migrations` | Historial de migraciones y semillas, con nombre de archivo, checksum SHA-256 y fecha |
 
----
-
-## 3. Arquitectura Backend (`apps/api`)
-
-La API sigue un patrón modular basado en servicios y repositorios.
-
-### 3.1 Módulos de Dominio
-- `auth`: Autenticación por JWT, refresco de token y cookies HTTP-only.
-- `account` / `legal`: Módulo de exportación de datos (`GET /account/export`), eliminación y anonimización de cuenta (`DELETE /account`), y distribución pública de Términos (`GET /legal/terms`) y Política de Privacidad (`GET /legal/privacy`).
-- `budgets`, `invoices`, `projects`, `clients`, `companies`, `catalog`, `storage`, `notifications`: Módulos operacionales core.
-
-### 3.2 Seguridad y Privacidad ARCO
-1. **Encabezados de Seguridad**: HSTS, CSP, X-Content-Type-Options, Referrer-Policy y Permissions-Policy configurados en cada respuesta Fastify.
-2. **Control de Acceso Contextual (RLS)**: Cada transacción SQL establece `app.current_user_id()`.
-3. **Eliminación y Depuración**: La solicitud `DELETE /account` anonimiza los datos personales y revoca las credenciales en una transacción PostgreSQL. Los documentos personales se registran en una cola durable, se intentan eliminar inmediatamente de R2 y se reintentan mediante un Worker programado. Las fotos de proyectos se conservan como recursos compartidos de la empresa.
-
----
-
-## 4. Arquitectura de Base de Datos (`database/`)
-
-- `app_auth`: Perfiles (`profiles`), credenciales y tokens de refresco.
-- `app_commercial`: Empresas, invitaciones, proyectos, presupuestos, facturas, comprobantes, fotos y catálogo Panamá.
-- `app_migrations`: Registro auditado de migraciones (`schema_migrations`) con checksums SHA-256 inmutables.
-
----
-
-## 5. Diagrama de Arquitectura Integrada
-
-```mermaid
-graph TD
-    A[Cliente Móvil / Web] -->|HTTP REST + JWT| B(API Fastify - apps/api)
-    C[Panel Admin Web] -->|HTTP REST + JWT| B
-    B -->|Conexión pg + SET app.current_user_id| D[(PostgreSQL 18)]
-    B -->|Signed URLs / Uploads| E[Cloudflare R2 Storage]
-    B -->|Exportación JSON / Anonimización| F[Módulo Legal & Privacidad ARCO]
-```
+La [guía de respaldo](backup-restore-verification.md) explica cómo verificar juntos el PostgreSQL restaurado y los archivos de R2. El [roadmap](ROADMAP.md) conserva el plan de lanzamiento y sus criterios de evidencia.
