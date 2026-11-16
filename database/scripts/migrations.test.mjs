@@ -21,16 +21,17 @@ if (process.env.NODE_ENV !== "test") {
 const adminUrl = validateLocalAdminUrl(
   requireEnv("DATABASE_ADMIN_URL"),
 );
-const migratorPassword = requireEnv("CONTRACTOR_MIGRATOR_PASSWORD");
-const migratorUrl = new URL(adminUrl);
-const validationUrl = new URL(adminUrl);
+// bootstrap.mjs necesita la contraseña del migrador para crear los roles.
+requireEnv("CONTRACTOR_MIGRATOR_PASSWORD");
 
-migratorUrl.username = "contractor_migrator";
-migratorUrl.password = migratorPassword;
-migratorUrl.pathname = `/${testDbName}`;
-migratorUrl.hash = "";
-validationUrl.pathname = `/${testDbName}`;
-validationUrl.hash = "";
+// La migración histórica 024 no hace SET ROLE contractor_owner, y en
+// PostgreSQL 15+ contractor_migrator (NOINHERIT) no puede crear objetos en
+// public sin ese cambio de rol. Igual que el paso 8 del CI, la base efímera
+// se migra con el administrador local para reproducir el esquema completo.
+// No se puede editar la 024: ya está aplicada y su checksum está registrado.
+const scratchUrl = new URL(adminUrl);
+scratchUrl.pathname = `/${testDbName}`;
+scratchUrl.hash = "";
 
 test("T-055: Ejecutar migraciones automáticamente desde cero", async () => {
   const adminClient = new Client({ connectionString: adminUrl });
@@ -48,18 +49,18 @@ test("T-055: Ejecutar migraciones automáticamente desde cero", async () => {
 
     // 3. Ejecutar migraciones (migrate.mjs) desde cero
     execSync("node --env-file-if-exists=database/.env database/scripts/migrate.mjs", {
-      env: { ...process.env, MIGRATOR_DATABASE_URL: migratorUrl.toString() },
+      env: { ...process.env, MIGRATOR_DATABASE_URL: scratchUrl.toString() },
       stdio: "pipe"
     });
 
     // 4. Confirmar que el modo CI no detecta deriva tras migrar.
     execSync("node --env-file-if-exists=database/.env database/scripts/migrate.mjs --check", {
-      env: { ...process.env, MIGRATOR_DATABASE_URL: migratorUrl.toString() },
+      env: { ...process.env, MIGRATOR_DATABASE_URL: scratchUrl.toString() },
       stdio: "pipe"
     });
 
     // 5. Verificar historial de migraciones
-    const migratorClient = new Client({ connectionString: migratorUrl.toString() });
+    const migratorClient = new Client({ connectionString: scratchUrl.toString() });
     await migratorClient.connect();
 
     try {
@@ -79,7 +80,7 @@ test("T-055: Ejecutar migraciones automáticamente desde cero", async () => {
       if (fs.existsSync(validateFkSqlPath)) {
         const validateSql = fs.readFileSync(validateFkSqlPath, "utf8");
         const validationClient = new Client({
-          connectionString: validationUrl.toString()
+          connectionString: scratchUrl.toString()
         });
         await validationClient.connect();
         try {
