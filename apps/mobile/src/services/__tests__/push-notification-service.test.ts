@@ -12,6 +12,8 @@ import {
   unregisterPushTokenAsync
 } from "../push-notification-service";
 
+import * as Notifications from "expo-notifications";
+
 import { storeSession } from "../api";
 
 const storageMap =
@@ -85,7 +87,11 @@ vi.mock(
     ),
     setNotificationChannelAsync:
       vi.fn(async () => {}),
-    AndroidImportance: { MAX: 5 }
+    addPushTokenListener: vi.fn(() => ({ remove: vi.fn() })),
+    cancelAllScheduledNotificationsAsync: vi.fn(async () => {}),
+    dismissAllNotificationsAsync: vi.fn(async () => {}),
+    setBadgeCountAsync: vi.fn(async () => true),
+    AndroidImportance: { MAX: 5, HIGH: 4 }
   })
 );
 
@@ -227,5 +233,40 @@ test(
     expect(request.method).toBe(
       "DELETE"
     );
+  }
+);
+
+test(
+  "crea el canal de Android antes de pedir el permiso",
+  async () => {
+    const channel = vi.mocked(Notifications.setNotificationChannelAsync);
+    const request = vi.mocked(Notifications.getPermissionsAsync);
+    channel.mockClear();
+    request.mockClear();
+
+    await registerForPushNotificationsAsync();
+
+    expect(channel).toHaveBeenCalledWith("default", expect.objectContaining({ name: "Avisos de Leuret" }));
+    expect(channel.mock.invocationCallOrder[0]).toBeLessThan(request.mock.invocationCallOrder[0]);
+  }
+);
+
+test(
+  "al cerrar sesión retira el último token aunque se haya quitado el permiso",
+  async () => {
+    await registerForPushNotificationsAsync();
+    fetchMock.mockClear();
+    vi.mocked(Notifications.getPermissionsAsync).mockResolvedValueOnce(
+      { status: "denied" } as Awaited<ReturnType<typeof Notifications.getPermissionsAsync>>
+    );
+
+    const result = await unregisterCurrentPushTokenAsync();
+
+    expect(result).toBe(true);
+    const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(request.method).toBe("DELETE");
+    expect(JSON.parse(String(request.body))).toEqual({
+      expoPushToken: "ExponentPushToken[mock-client-token]"
+    });
   }
 );

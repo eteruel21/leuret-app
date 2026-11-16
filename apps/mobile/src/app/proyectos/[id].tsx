@@ -448,6 +448,10 @@ function ProjectDetailScreenContent() {
 
       <ScrollView
         contentContainerStyle={styles.content}
+        // Los campos de avance, tareas y fotos quedan visibles sobre el teclado.
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

@@ -54,6 +54,7 @@
     "test": "vitest run",
     "build:web": "expo export -p web && node scripts/prepare-cloudflare-web.mjs",
     "prebuild": "expo prebuild",
+    "check:native": "node scripts/check-native-config.mjs && expo config --type prebuild > /dev/null && expo export --platform android --platform ios --output-dir .native-check && node -e \"require('node:fs').rmSync('.native-check',{recursive:true,force:true})\"",
     "build:android:preview": "eas build -p android --profile preview",
     "build:ios:preview": "eas build -p ios --profile preview",
     "build:android:pilot": "eas build -p android --profile pilot",

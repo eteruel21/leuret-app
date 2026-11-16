@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Linking, StyleSheet, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
 
 import {
@@ -14,6 +14,12 @@ type TurnstileMessage = {
   token?: string;
 };
 
+function originOf(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const match = /^(https?:\/\/[^/?#]+)/i.exec(url);
+  return match ? match[1].toLowerCase() : null;
+}
+
 export default function TurnstileChallenge({
   action,
   onToken,
@@ -23,6 +29,7 @@ export default function TurnstileChallenge({
     () => buildTurnstileChallengeUrl(action, resetKey),
     [action, resetKey],
   );
+  const challengeOrigin = useMemo(() => originOf(challengeUrl), [challengeUrl]);
 
   if (!challengeUrl) {
     return (
@@ -46,7 +53,17 @@ export default function TurnstileChallenge({
         showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
         style={styles.webView}
+        // La página de verificación no navega fuera de su dominio; los enlaces
+        // (privacidad, términos de Cloudflare) se abren en el navegador.
+        onShouldStartLoadWithRequest={(request) => {
+          if (request.isTopFrame === false || request.url.startsWith("about:")) return true;
+          if (originOf(request.url) === challengeOrigin) return true;
+          if (/^https:\/\//i.test(request.url)) void Linking.openURL(request.url);
+          return false;
+        }}
         onMessage={(event) => {
+          // Solo se aceptan mensajes de la página de verificación propia.
+          if (originOf(event.nativeEvent.url) !== challengeOrigin) return;
           try {
             const payload = JSON.parse(
               event.nativeEvent.data,

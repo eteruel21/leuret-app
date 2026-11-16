@@ -148,6 +148,9 @@ jobs:
       - name: Test mobile app
         run: npm run test -w apps/mobile
 
+      - name: Check native app config and Android/iOS bundles
+        run: npm run check:native -w apps/mobile
+
       - name: Build API, Admin Web and Pro Web
         run: |
           npm run build:api

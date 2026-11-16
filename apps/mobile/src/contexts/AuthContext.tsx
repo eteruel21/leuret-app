@@ -28,6 +28,7 @@ import {
 } from "@/services/api";
 
 import {
+  clearDeviceNotificationsAsync,
   unregisterCurrentPushTokenAsync
 } from "@/services/push-notification-service";
 
@@ -349,6 +350,8 @@ export function AuthProvider({
     async (): Promise<AuthResult> => {
       try {
         await unregisterCurrentPushTokenAsync();
+        // Los recordatorios y avisos de esta cuenta no deben quedar en el teléfono.
+        await clearDeviceNotificationsAsync().catch(() => undefined);
         await logout();
         applySession(null);
 

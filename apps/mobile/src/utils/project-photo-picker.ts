@@ -1,6 +1,7 @@
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
-import { Platform } from "react-native";
+
+import { ensurePhotoPermission } from "./media-permissions";
 
 export type ProjectPhotoSource = "camera" | "library";
 
@@ -20,14 +21,8 @@ function base64Size(base64: string): number {
   return Math.floor((base64.length * 3) / 4) - padding;
 }
 
-async function ensurePermission(source: ProjectPhotoSource): Promise<void> {
-  if (Platform.OS === "web") return;
-  const permission = source === "camera" ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) throw new Error(source === "camera" ? "Se necesita permiso para usar la cámara." : "Se necesita permiso para acceder a la galería.");
-}
-
 export async function prepareProjectPhoto(source: ProjectPhotoSource): Promise<PreparedProjectPhoto | null> {
-  await ensurePermission(source);
+  if (!(await ensurePhotoPermission(source))) return null;
   const options: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], allowsEditing: false, quality: 1 };
   const result = source === "camera" ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
   if (result.canceled || !result.assets?.length) return null;

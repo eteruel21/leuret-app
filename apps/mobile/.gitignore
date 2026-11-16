@@ -50,3 +50,4 @@ example
 
 # temporary PowerShell scripts
 *.ps1
+.native-check/

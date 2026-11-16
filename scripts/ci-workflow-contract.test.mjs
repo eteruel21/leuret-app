@@ -51,6 +51,7 @@ test("CI es obligatorio, reproducible y ejecuta las pruebas críticas", () => {
     "npm run test:invoice-db",
     "npm run test:integration -w apps/api",
     "npm run test -w apps/mobile",
+    "npm run check:native -w apps/mobile",
     "npm run build:api",
     "npm run build:admin",
     "npm run build:mobile",

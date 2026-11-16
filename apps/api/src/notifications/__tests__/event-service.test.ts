@@ -5,7 +5,9 @@ import {
   notifyClientConnectionRequest,
   notifyInvoiceIssued,
   notifyInvoicePaymentRegistered,
-  notifyJobRequestCreated
+  notifyJobRequestCreated,
+  notifyJobRequestMessage,
+  pushSpaceData
 } from "../event-service.js";
 import * as pushService from "../push-service.js";
 import * as notificationRepository from "../repository.js";
@@ -48,6 +50,38 @@ describe("notificaciones push de eventos de negocio", () => {
 
     expect(recordSpy).toHaveBeenCalledWith("client-1", expect.objectContaining({ space: "client", companyId: "company-1", type: "invoice.issued" }));
     expect(recordSpy).toHaveBeenCalledWith("contractor-2", expect.objectContaining({ space: "company", companyId: null, type: "job_request.created" }));
+  });
+
+  it("el push indica el espacio y la empresa del aviso para abrirlo en el lugar correcto", async () => {
+    vi.spyOn(notificationRepository, "findCompanyManagerIdsRepo").mockResolvedValue([]);
+    const sendSpy = vi.spyOn(pushService, "sendPushNotificationToUser").mockResolvedValue({ sent: 0, failed: 0 });
+
+    await notifyBudgetDecision({ id: "b-1", company_id: "company-1", created_by: "contractor-1" }, "approved");
+    await notifyInvoiceIssued({ id: "i-3", company_id: "company-1", client: { user_id: "client-1" } });
+
+    expect(sendSpy).toHaveBeenCalledWith("contractor-1", expect.objectContaining({
+      data: expect.objectContaining({ space: "company", spaceCompanyId: "company-1" })
+    }));
+    const clientCall = sendSpy.mock.calls.find((call) => call[0] === "client-1");
+    expect(clientCall?.[1].data).toMatchObject({ space: "client" });
+    expect(clientCall?.[1].data).not.toHaveProperty("spaceCompanyId");
+    // El espacio no se guarda en los datos de la bandeja.
+    expect(recordSpy).toHaveBeenCalledWith("client-1", expect.objectContaining({
+      data: expect.not.objectContaining({ space: expect.anything() })
+    }));
+  });
+
+  it("los mensajes de peticiones van al espacio del otro lado de la conversación", async () => {
+    const sendSpy = vi.spyOn(pushService, "sendPushNotificationToUser").mockResolvedValue({ sent: 0, failed: 0 });
+    const base = { requestId: "r-1", companyId: "company-1", companyName: "Obras SA", requesterFirstName: "Ana", title: "Pintar", body: "Hola" };
+
+    await notifyJobRequestMessage(["client-1"], { ...base, senderSide: "company" });
+    await notifyJobRequestMessage(["owner-1"], { ...base, senderSide: "client" });
+
+    expect(sendSpy.mock.calls.find((call) => call[0] === "client-1")?.[1].data).toMatchObject({ space: "client", companyId: "company-1" });
+    expect(sendSpy.mock.calls.find((call) => call[0] === "owner-1")?.[1].data).toMatchObject({ space: "company", spaceCompanyId: "company-1" });
+    expect(pushSpaceData(null)).toBeNull();
+    expect(pushSpaceData({ space: null, companyId: "company-1" })).toBeNull();
   });
 
   it("no duplica en la bandeja lo que ya se muestra en la campana (solicitudes de vinculación)", async () => {

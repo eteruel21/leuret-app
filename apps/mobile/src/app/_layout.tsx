@@ -1,4 +1,5 @@
 import { type ErrorBoundaryProps, Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -18,9 +19,10 @@ import {
 } from "@/contexts/CompanyContext";
 import { ScreenResumeContext, useScreenResume } from "@/contexts/screen-resume-context";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import {
   registerForPushNotificationsAsync,
+  subscribeToPushTokenChanges,
   unregisterCurrentPushTokenAsync,
 } from "@/services/push-notification-service";
 import { useBackgroundSync } from "@/hooks/useBackgroundSync";
@@ -34,6 +36,8 @@ installWebAlert();
 function StartupScreen({ title, message, onRetry }: { title?: string; message?: string; onRetry?: () => void }) {
   return (
     <SafeAreaView style={styles.startup}>
+      {/* Fondo claro: barra de estado oscura. */}
+      <StatusBar style="dark" />
       <View style={styles.startupContent}>
         <LeuretBrand width={120} />
         {title && onRetry ? (
@@ -75,10 +79,17 @@ function RootNavigator() {
 
   const {
     activeCompany,
+    memberships,
     loading: companyLoading,
     initialError: companyError,
     refreshCompanies,
+    setActiveCompanyId,
+    useClientSpace: switchToClientSpace,
   } = useCompany();
+  const memberCompanyIds = useMemo(
+    () => memberships.filter((membership) => membership.active).map((membership) => membership.company_id),
+    [memberships],
+  );
 
   const isAuthenticated = Boolean(session);
   const isContractor = isAuthenticated && profile?.role === "contractor";
@@ -103,6 +114,13 @@ function RootNavigator() {
     profile?.id,
     profile?.notifications_opt_in,
   ]);
+
+  // Si el sistema rota el token push, se vuelve a registrar.
+  const pushEnabled = isApproved && Boolean(profile?.notifications_opt_in);
+  useEffect(() => {
+    if (!pushEnabled) return;
+    return subscribeToPushTokenChanges();
+  }, [pushEnabled]);
   useBackgroundSync(isApproved, profile?.id ?? null);
   const isPendingApproval = isAuthenticated && !profile?.active && !needsProfileSetup;
 
@@ -140,9 +158,15 @@ function RootNavigator() {
   const navigationReady = !loading && !startupError && resume.ready;
 
   // Tocar un aviso abre su solicitud o documento, incluso en arranque en frío.
+  // Si el aviso es de otro espacio u otra empresa, primero cambia a ese espacio.
   useNotificationNavigation({
     enabled: navigationReady && canUseSpaces,
     isClient: isClientAuthenticated && !hasActiveCompany,
+    activeCompanyId: activeCompany?.id ?? null,
+    memberCompanyIds,
+    hasClientSpace: isClientAuthenticated,
+    switchToCompany: setActiveCompanyId,
+    switchToClientSpace,
   });
 
   if (startupError) {
@@ -161,6 +185,9 @@ function RootNavigator() {
 
   return (
     <ScreenResumeContext.Provider value={resume.takeStartupScreen}>
+      {/* La mayoría de las pantallas empiezan con un encabezado azul marino;
+          las de fondo claro usan <FocusAwareStatusBar style="dark" />. */}
+      <StatusBar style="light" />
       <Stack
         screenOptions={{
           headerShown: false,

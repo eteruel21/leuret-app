@@ -25,7 +25,7 @@ import {
   type ProfileDocumentType,
 } from "@/services/profile-document-service";
 import { uploadProfileMedia } from "@/services/media-upload-service";
-import { prepareProjectPhoto } from "@/utils/project-photo-picker";
+import { prepareProjectPhoto, type ProjectPhotoSource } from "@/utils/project-photo-picker";
 import { showAlert } from "@/utils/alert";
 
 type FormState = {
@@ -248,9 +248,38 @@ export default function ProfessionalProfileScreen() {
     title: string
   ) => {
     if (Platform.OS !== "web") {
+      // En el teléfono el documento se sube como foto (cámara o galería).
+      // Los PDF se cargan desde app.leurettech.com.
+      const uploadPhoto = async (source: ProjectPhotoSource) => {
+        try {
+          const photo = await prepareProjectPhoto(source);
+          if (!photo) return;
+          setUploadingDocument(documentType);
+          const uploaded = await uploadProfileDocument({
+            documentType,
+            fileName: photo.fileName,
+            mimeType: photo.mimeType,
+            fileData: photo.fileData,
+          });
+          setField(field)(uploaded.storagePath);
+        } catch (error: unknown) {
+          showAlert(
+            "No se pudo subir el documento",
+            error instanceof Error ? error.message : "Inténtalo nuevamente."
+          );
+        } finally {
+          setUploadingDocument(null);
+        }
+      };
+
       showAlert(
-        "Cargar Documento",
-        `Para subir "${title}", abre esta pantalla desde app.leurettech.com en el navegador.`
+        title,
+        "Toma una foto clara del documento o elígela de tu galería. Para subir un PDF, usa app.leurettech.com.",
+        [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Galería", onPress: () => void uploadPhoto("library") },
+          { text: "Cámara", onPress: () => void uploadPhoto("camera") },
+        ]
       );
       return;
     }
