@@ -27,16 +27,17 @@ on:
         type: string
         default: ""
 
-permissions:
-  contents: read
-
 concurrency:
   group: production-database
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   migrate:
     name: Migraciones de producción
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 20
@@ -65,10 +66,10 @@ jobs:
           persist-credentials: false
 
       - name: 2. Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
-          cache: npm
+          package-manager-cache: false
 
       - name: 3. Install dependencies
         run: npm ci

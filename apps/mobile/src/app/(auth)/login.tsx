@@ -518,6 +518,8 @@ export default function LoginScreen() {
                 </Pressable>
 
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Iniciar sesión"
                   onPress={() => void handleSignIn()}
                   disabled={submitting || !loginCaptchaToken}
                   style={({ pressed }) => [

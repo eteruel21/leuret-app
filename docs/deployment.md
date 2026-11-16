@@ -1,6 +1,7 @@
 # LEURET APP — Guía de despliegue
 
-**Última revisión:** 9 de noviembre de 2026  
+**Última revisión:** 15 de noviembre de 2026
+
 **Alcance:** API, panel administrativo y aplicación web en Cloudflare. Las compilaciones nativas de Expo/EAS no forman parte de este flujo.
 
 > **Fuente de verdad:** `.github/workflows/deploy.yml`, `.github/workflows/validate.yml`, `apps/api/wrangler.worker.jsonc` y `package.json`. Este documento no sustituye la configuración real ni autoriza una publicación.
@@ -22,8 +23,8 @@ La API ejecuta Fastify en Cloudflare Workers, usa PostgreSQL en Supabase mediant
 flowchart TD
     A[PR a main] --> B[GitHub Actions: Validate]
     B --> C[Merge autorizado a main]
-    C --> D[GitHub Actions: Deploy to Cloudflare]
-    D --> E[Verificación de migraciones, tipos y builds]
+    C --> D[Validate del commit en main]
+    D --> E[Verificación de migraciones y despliegue Cloudflare]
     E --> F[Worker: leuret-api-worker]
     F --> G[Pages: leuret-admin-web]
     G --> H[Pages: leuret-pro-web]
@@ -33,10 +34,9 @@ flowchart TD
 
 ## 2. Cómo se ejecuta CI/CD
 
-- **Pull Request hacia `main`:** `validate.yml` ejecuta pruebas, validación de tipos, builds y pruebas de respaldo/restauración en una base **aislada**, sin restaurar datos de producción.
-- **Push a `main`:** `deploy.yml` comprueba configuración de certificado, ausencia de deriva en migraciones, tipos, runtime Worker, compilaciones y configuración cliente. Después publica, en orden, API → Admin Web → Pro Web.
-- Si el paso de API o Admin falla, los pasos siguientes pueden omitirse.
-- **Un push solo documental también dispara el despliegue**, salvo que se omita de forma controlada. No saltarse validaciones para cambios funcionales.
+- **Pull request hacia `main`.** `Validate` ejecuta las suites de API, móvil y navegador, comprueba los avisos nuevos de dependencias y prueba migraciones, permisos y restauración en PostgreSQL aislado.
+- **Push a `main`.** `Validate` prueba el commit antes de llamar a `deploy.yml` para ese mismo SHA. El despliegue comprueba el certificado, la deriva de migraciones y esquema, así como las compilaciones de producción.
+- La publicación sigue el orden API → Admin Web → Pro Web. Al terminar, el workflow comprueba la respuesta de la API, PostgreSQL y ambas webs. Revisa el [procedimiento de rollback](./rollback-procedure.md) si falla una comprobación posterior a la publicación.
 
 El paso `npm run db:check:supabase` inspecciona migraciones pendientes, checksums y registros inesperados **sin aplicar migraciones**. Si encuentra deriva, bloquea la publicación. El comando `npm run db:migrate:supabase` sí puede cambiar la base: solo se ejecuta por procedimiento separado, con autorización y respaldo.
 
@@ -67,7 +67,7 @@ npm run build:mobile
 
 1. Abrir PR; comprobar `Validate` y revisar impacto de API, interfaces, base y almacenamiento.
 2. Antes de la fusión, registrar el commit y preparar un plan de rollback.
-3. Fusionar a `main` solo con aprobación. Comprobar el workflow **Deploy to Cloudflare** y sus tres pasos de publicación.
+3. Fusionar a `main` solo con aprobación. En la ejecución de **Validate** del commit fusionado, comprueba el resultado de **Build & Deploy to Cloudflare** y de la verificación posterior.
 4. Verificar los dominios y las funciones críticas; un workflow exitoso no garantiza que el producto esté funcional.
 
 **Publicaciones manuales:** `npm run deploy:api`, `npm run deploy:admin`, `npm run deploy:mobile` o `npm run deploy:all` **modifican producción**. Requieren validación y autorización separadas.

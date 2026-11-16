@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { execSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import pg from "pg";
@@ -12,7 +13,7 @@ import {
 } from "./db-utils.mjs";
 
 const { Client } = pg;
-const testDbName = `test_contractor_scratch_${Math.floor(Math.random() * 1000000)}`;
+const testDbName = `test_leuret_${randomUUID().replaceAll("-", "")}`;
 
 if (process.env.NODE_ENV !== "test") {
   throw new Error("Las pruebas destructivas de migraciones requieren NODE_ENV=test.");
@@ -21,77 +22,62 @@ if (process.env.NODE_ENV !== "test") {
 const adminUrl = validateLocalAdminUrl(
   requireEnv("DATABASE_ADMIN_URL"),
 );
-// bootstrap.mjs necesita la contraseña del migrador para crear los roles.
-requireEnv("CONTRACTOR_MIGRATOR_PASSWORD");
+// La migración histórica 024 necesita el administrador en la base descartable.
+const testUrl = new URL(adminUrl);
+testUrl.pathname = `/${testDbName}`;
+const migrationOptions = {
+  env: { ...process.env, MIGRATOR_DATABASE_URL: testUrl.toString() },
+  encoding: "utf8"
+};
 
-// La migración histórica 024 no hace SET ROLE contractor_owner, y en
-// PostgreSQL 15+ contractor_migrator (NOINHERIT) no puede crear objetos en
-// public sin ese cambio de rol. Igual que el paso 8 del CI, la base efímera
-// se migra con el administrador local para reproducir el esquema completo.
-// No se puede editar la 024: ya está aplicada y su checksum está registrado.
-const scratchUrl = new URL(adminUrl);
-scratchUrl.pathname = `/${testDbName}`;
-scratchUrl.hash = "";
+function migrate(...args) {
+  return execFileSync(process.execPath, ["database/scripts/migrate.mjs", ...args], migrationOptions);
+}
 
 test("T-055: Ejecutar migraciones automáticamente desde cero", async () => {
   const adminClient = new Client({ connectionString: adminUrl });
   await adminClient.connect();
 
   try {
-    // 1. Limpiar base de datos si existe
-    await adminClient.query(`DROP DATABASE IF EXISTS ${quoteIdentifier(testDbName)}`);
-
-    // 2. Ejecutar bootstrap desde cero
-    execSync("node --env-file-if-exists=database/.env database/scripts/bootstrap.mjs", {
+    execFileSync(process.execPath, ["database/scripts/bootstrap.mjs"], {
       env: { ...process.env, DATABASE_NAME: testDbName },
       stdio: "pipe"
     });
 
-    // 3. Ejecutar migraciones (migrate.mjs) desde cero
-    execSync("node --env-file-if-exists=database/.env database/scripts/migrate.mjs", {
-      env: { ...process.env, MIGRATOR_DATABASE_URL: scratchUrl.toString() },
-      stdio: "pipe"
-    });
+    migrate();
+    migrate("--check");
 
-    // 4. Confirmar que el modo CI no detecta deriva tras migrar.
-    execSync("node --env-file-if-exists=database/.env database/scripts/migrate.mjs --check", {
-      env: { ...process.env, MIGRATOR_DATABASE_URL: scratchUrl.toString() },
-      stdio: "pipe"
-    });
-
-    // 5. Verificar historial de migraciones
-    const migratorClient = new Client({ connectionString: scratchUrl.toString() });
-    await migratorClient.connect();
+    const testClient = new Client({ connectionString: testUrl.toString() });
+    await testClient.connect();
 
     try {
-      const res = await migratorClient.query(
-        "SELECT filename, checksum FROM app_migrations.schema_migrations ORDER BY filename"
-      );
-
-      assert.ok(res.rowCount > 0, "Se deben haber aplicado las migraciones en la base de datos limpia");
-      
+      const historySql = "SELECT filename, checksum, applied_at FROM app_migrations.schema_migrations ORDER BY filename";
+      const { rows: history } = await testClient.query(historySql);
       const filesInDir = fs.readdirSync(path.join(process.cwd(), "database", "migrations"))
-        .filter((f) => f.endsWith(".sql"));
+        .filter((file) => file.endsWith(".sql"));
+      assert.ok(filesInDir.length > 0);
+      assert.deepEqual(history.map(({ filename }) => filename).sort(), filesInDir.sort());
 
-      assert.equal(res.rowCount, filesInDir.length, `Se esperaban ${filesInDir.length} migraciones aplicadas`);
+      migrate();
+      assert.deepEqual((await testClient.query(historySql)).rows, history);
 
-      // 6. Validar llaves foráneas y estado del esquema
-      const validateFkSqlPath = path.join(process.cwd(), "database", "scripts", "validate_foreign_keys.sql");
-      if (fs.existsSync(validateFkSqlPath)) {
-        const validateSql = fs.readFileSync(validateFkSqlPath, "utf8");
-        const validationClient = new Client({
-          connectionString: scratchUrl.toString()
-        });
-        await validationClient.connect();
-        try {
-          const fkResult = await validationClient.query(validateSql);
-          assert.ok(fkResult, "La validación de llaves foráneas debe ejecutarse sin errores");
-        } finally {
-          await validationClient.end();
-        }
-      }
+      const validateSql = fs.readFileSync("database/scripts/validate_foreign_keys.sql", "utf8");
+      const results = await testClient.query(validateSql);
+      const [summary] = results.at(-1).rows;
+      assert.ok(Number(summary.foreign_keys_checked) > 0);
+      assert.equal(Number(summary.failed_foreign_keys), 0);
+      assert.equal(Number(summary.total_orphan_rows), 0);
+
+      await testClient.query(
+        "UPDATE app_migrations.schema_migrations SET checksum = $1 WHERE filename = $2",
+        ["0".repeat(64), history[0].filename]
+      );
+      const drift = spawnSync(process.execPath, ["database/scripts/migrate.mjs", "--check"], migrationOptions);
+      assert.ifError(drift.error);
+      assert.equal(drift.status, 1, "El check debe fallar si cambia un checksum aplicado.");
+      assert.match(drift.stderr, /1 checksum\(s\) distinto\(s\)/);
     } finally {
-      await migratorClient.end();
+      await testClient.end();
     }
   } finally {
     await adminClient.query(`DROP DATABASE IF EXISTS ${quoteIdentifier(testDbName)}`);

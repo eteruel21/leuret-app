@@ -1,6 +1,6 @@
 # Protección de la Rama Main y Flujo de Trabajo CI/CD
 
-Este documento establece las políticas de protección de ramas y las guías de integración para el proyecto **Contractor Pro**.
+Este documento describe el flujo de integración de **Leuret App** y la configuración necesaria para exigir validación en GitHub.
 
 ---
 
@@ -17,36 +17,22 @@ Para garantizar que el código enviado a producción sea siempre estable y segur
    - Se debe abrir un **Pull Request (PR)** hacia la rama `main`.
 
 3. **Verificación de CI (GitHub Actions)**:
-   - El workflow `.github/workflows/validate.yml` se ejecuta automáticamente en cada PR y push a `main`.
-   - Secuencia estricta de ejecución:
-     1. Iniciar contenedor de servicio `postgres:18.4-bookworm`.
-     2. Instalar dependencias con `npm ci`.
-     3. Verificar tipos en todos los workspaces (`npm run typecheck`).
-     4. Crear roles y base de datos de pruebas (`npm run db:bootstrap`).
-     5. Aplicar todas las migraciones SQL (`npm run db:migrate`).
-     6. Poblar datos de catálogo (`npm run db:seed`).
-     7. Ejecutar pruebas unitarias, RLS y autenticación de la API (`npm run test:api`).
-     8. Ejecutar pruebas de herramientas de base de datos (`npm run test:database-tools`).
-     9. Ejecutar pruebas de ciclo financiero (`npm run test:invoice-db`).
-     10. Compilar backend API (`npm run build:api`).
-     11. Ejecutar pruebas de app móvil (`npm run test -w apps/mobile`).
-     12. Compilar aplicación Admin Web (`npm run build:admin`).
-     13. Compilar aplicación Mobile Web (`npm run build:mobile`).
+   - `Validate` se ejecuta en PR hacia `main`, entradas a la cola de fusión y pushes a `main`.
+   - `Validate Codebase & Build` comprueba el YAML de Actions, instala con `npm ci` y verifica tipos, documentos legales y builds. En PR y cola de fusión compara los avisos altos y críticos de las dependencias de producción contra la rama base.
+   - Una base efímera PostgreSQL 17 permite probar migraciones, restauración, RLS y el ciclo de facturación. Las pruebas HTTP de integración usan el rol `contractor_api`.
+   - Playwright abre la compilación de Pro Web en Chrome y comprueba el inicio de sesión, la recarga y el cierre de sesión contra la API y PostgreSQL locales.
+   - El despliegue a Cloudflare depende de que `Validate Codebase & Build` pase en el mismo commit de `main`.
 
 ---
 
 ## 2. Configuración en GitHub (Branch Protection Rules)
 
-Para habilitar la protección en la interfaz de GitHub:
+Cuando el check aparezca en un PR reciente, abre **Settings → Branches** y edita la regla de `main`.
 
-1. Ir a **Settings** -> **Branches** en el repositorio de GitHub.
-2. Hacer clic en **Add branch protection rule**.
-3. En **Branch name pattern**, escribir: `main`.
-4. Marcar las siguientes opciones:
-   - ✅ **Require a pull request before merging**
-   - ✅ **Require status checks to pass before merging**
-     - Seleccionar el check obligatorio: `Validate Codebase & Build` (definido en `.github/workflows/validate.yml`).
-   - ✅ **Do not allow bypassing the above settings**
+1. Activa **Require a pull request before merging**.
+2. Activa **Require status checks to pass before merging** y selecciona **Validate Codebase & Build** de **GitHub Actions**.
+3. Activa **Require branches to be up to date before merging** y **Do not allow bypassing the above settings**. Guarda la regla.
+4. Comprueba en el PR que GitHub muestra el check como obligatorio.
 
 ---
 
