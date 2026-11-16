@@ -187,6 +187,7 @@ export function ConversationView({ requestId, companyId, emptyHint }: Conversati
             <Pressable
               onPress={attach}
               disabled={sending}
+              accessibilityRole="button"
               accessibilityLabel="Adjuntar foto"
               hitSlop={8}
               style={styles.iconButton}
@@ -206,6 +207,8 @@ export function ConversationView({ requestId, companyId, emptyHint }: Conversati
             <Pressable
               onPress={() => void send()}
               disabled={sending || !text.trim()}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: sending || !text.trim() }}
               accessibilityLabel="Enviar mensaje"
               style={[styles.sendButton, (sending || !text.trim()) && styles.sendDisabled]}
             >

@@ -94,7 +94,10 @@ async function publicRequest<T>(path: string, init: RequestInit = {}): Promise<T
 
     const errorBody = body as ErrorResponse | null;
     let message = typeof errorBody?.message === "string" ? errorBody.message : "No fue posible completar la solicitud.";
-    if (response.status >= 500) message = "Leuret no está disponible en este momento. Inténtalo de nuevo en unos minutos.";
+    // 502/503 con mensaje: un servicio externo (p. ej. el correo) no responde o no está
+    // configurado; la API ya explica qué pasa. Los demás 5xx no exponen detalles.
+    const explainedOutage = (response.status === 502 || response.status === 503) && typeof errorBody?.message === "string";
+    if (response.status >= 500 && !explainedOutage) message = "Leuret no está disponible en este momento. Inténtalo de nuevo en unos minutos.";
     if (response.status === 429) message = "Hubo demasiados intentos. Espera un momento y vuelve a intentarlo.";
     throw new ApiError(message, response.status);
   } catch (error) {

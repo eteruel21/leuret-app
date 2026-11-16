@@ -115,7 +115,7 @@ test("cliente y empresa: vinculación, presupuesto, aprobación, factura solicit
   const { body: sent } = await owner.get(`/budgets/${state.buyerBudgetId}?companyId=${companyId}`);
   const sentBudget = sent.budget ?? sent;
   state.buyerBudgetNumber = sentBudget.budget_number;
-  state.buyerBudgetTotal = Number(sentBudget.total_amount);
+  state.buyerBudgetTotal = Number(sentBudget.total);
   expect(state.buyerBudgetTotal).toBeCloseTo(481.5, 2);
 
   await test.step("el cliente ve el presupuesto y lo aprueba", async () => {
@@ -216,9 +216,7 @@ test("petición de trabajo: publicar, conversar, cotizar y adjudicar", async ({ 
     await expect(rivalPage.getByText("PH Vista Mar, apto 8B")).toHaveCount(0);
     await rivalPage.getByRole("button", { name: "Preguntar al cliente" }).click();
     await rivalPage.getByPlaceholder("Escribe un mensaje…").fill("¿Las lámparas ya están compradas?");
-    await rivalPage.getByPlaceholder("Escribe un mensaje…").press("Enter");
-    const sendButton = rivalPage.getByRole("button", { name: /Enviar/ });
-    if (await sendButton.count()) await sendButton.first().click();
+    await rivalPage.getByRole("button", { name: "Enviar mensaje" }).click();
     await expect(rivalPage.getByText("¿Las lámparas ya están compradas?")).toBeVisible();
   });
 
@@ -227,9 +225,7 @@ test("petición de trabajo: publicar, conversar, cotizar y adjudicar", async ({ 
     await clientPage.getByText(flowCompanies.rival).first().click();
     await expect(clientPage.getByText("¿Las lámparas ya están compradas?")).toBeVisible();
     await clientPage.getByPlaceholder("Escribe un mensaje…").fill("Sí, ya las tengo en casa.");
-    await clientPage.getByPlaceholder("Escribe un mensaje…").press("Enter");
-    const sendButton = clientPage.getByRole("button", { name: /Enviar/ });
-    if (await sendButton.count()) await sendButton.first().click();
+    await clientPage.getByRole("button", { name: "Enviar mensaje" }).click();
     await expect(clientPage.getByText("Sí, ya las tengo en casa.")).toBeVisible();
   });
 

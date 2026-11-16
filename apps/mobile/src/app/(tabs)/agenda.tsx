@@ -172,7 +172,7 @@ export default function AgendaScreen() {
               <Text style={styles.timeText}>
                 {item.time}
               </Text>
-              {item.endTime ? (
+              {item.endTime && item.endTime !== item.time ? (
                 <Text style={styles.endTimeText}>
                   {item.endTime}
                 </Text>
