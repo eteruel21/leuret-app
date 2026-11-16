@@ -20,7 +20,7 @@ const SCREEN_GROUPS: Record<ResumeScope, readonly string[]> = {
   "/(tabs)": [
     "(tabs)", "agenda", "calculos", "catalogo", "clientes", "equipo",
     "espacios", "facturas", "notificaciones", "perfil", "perfil-profesional", "peticiones",
-    "presupuestos", "proyectos", "solicitudes", "tareas",
+    "presupuestos", "proyectos", "solicitudes", "tareas", "ventas",
   ],
   "/(client-tabs)": [
     "(client-tabs)", "cliente-facturas", "cliente-peticiones", "cliente-presupuestos",

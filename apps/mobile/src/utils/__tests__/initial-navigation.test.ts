@@ -37,6 +37,10 @@ describe("navegación inicial de Leuret", () => {
     expect(initialRouteFor({ ...contractor, role: "client", primaryCategory: null, hasContractorApproval: false })).toBe("/(tabs)");
   });
 
+  it("un contratista aprobado sin categoría ve primero sus espacios e invitaciones", () => {
+    expect(initialRouteFor({ ...contractor, primaryCategory: null, hasActiveCompany: false })).toBe("/espacios");
+  });
+
   it("permite revisar los espacios si el invitado pierde acceso al equipo", () => {
     expect(initialRouteFor({ ...contractor, hasActiveCompany: false, hasContractorApproval: false })).toBe("/espacios");
   });

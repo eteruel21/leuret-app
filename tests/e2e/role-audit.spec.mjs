@@ -68,6 +68,16 @@ test.beforeAll(async () => {
   data.invoiceId = invoice.invoice.id;
   await owner.post(`/invoices/${data.invoiceId}/payments`, { companyId, amount: 100, method: "cash" }, 201);
 
+  // Factura generada por ventas: es la única que esa persona puede ver.
+  const sales = apiAs(context, await apiLogin(context, accounts.sales));
+  const { body: projectC } = await owner.post("/projects", { companyId, clientId: data.clientId, name: "Cerca perimetral QA" }, 201);
+  const { body: budgetC } = await owner.post("/budgets/from-project", { companyId, projectId: projectC.project.id, title: "Cerca de bloque" }, 201);
+  await owner.post(`/budgets/${budgetC.budgetId}/items`, { companyId, description: "Cerca de bloque 2 m", quantity: 20, unitPrice: 35, taxable: true }, 201);
+  await sales.post(`/budgets/${budgetC.budgetId}/send`, { companyId }, 200);
+  await client.post(`/budgets/${budgetC.budgetId}/approve`, {}, 200);
+  const { body: salesInvoice } = await sales.post("/invoices/from-budget", { companyId, budgetId: budgetC.budgetId, clientId: data.clientId }, 201);
+  data.salesInvoiceId = salesInvoice.invoice.id;
+
   const { body: task } = await owner.post(`/companies/${companyId}/projects/${data.projectId}/tasks`, {
     title: "Medir área de cocina",
     priority: "high",
@@ -126,7 +136,7 @@ async function visitAll(page, role, routes) {
   expect.soft(unexpected, `${role}: errores en pantallas`).toEqual([]);
 }
 
-function companyRoutes() {
+function companyRoutes(role) {
   return [
     ["inicio", "/"],
     ["agenda", "/agenda"],
@@ -145,7 +155,7 @@ function companyRoutes() {
     ["presupuesto-enviado", `/presupuestos/${data.sentBudgetId}`],
     ["presupuesto-aprobado", `/presupuestos/${data.approvedBudgetId}`],
     ["facturas", "/facturas"],
-    ["factura-detalle", `/facturas/${data.invoiceId}`],
+    ["factura-detalle", `/facturas/${role === "sales" ? data.salesInvoiceId : data.invoiceId}`],
     ["facturas-ajustes", "/facturas/settings"],
     ["catalogo", "/catalogo"],
     ["equipo", "/equipo"],
@@ -155,7 +165,8 @@ function companyRoutes() {
     ["peticion-detalle", `/peticiones/${data.jobRequestId}`],
     ["notificaciones", "/notificaciones"],
     ["solicitudes", "/solicitudes"],
-    ["perfil", "/perfil"]
+    ["perfil", "/perfil"],
+    ["informe-ventas", "/ventas"]
   ];
 }
 
@@ -165,7 +176,7 @@ for (const role of ["owner", ...flowStaffRoles]) {
     await page.setViewportSize({ width: 390, height: 844 });
     await signInApp(page, accounts[role]);
     await enterCompany(page, flowCompanies.main);
-    await visitAll(page, role, companyRoutes());
+    await visitAll(page, role, companyRoutes(role));
   });
 }
 

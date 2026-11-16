@@ -6,7 +6,6 @@ import type {
 
 import {
   authenticateRequest,
-  companyRoles,
   requireActiveUser,
   requireCompanyRole
 } from "../auth/authenticate.js";
@@ -62,6 +61,10 @@ function authenticatedUserId(
 
   return userId;
 }
+
+// Facturas: propietario y administrador ven todas; ventas, solo las que generó
+// (lo filtra RLS, migración 050). El resto del equipo no tiene acceso.
+const INVOICE_ROLES = ["owner", "admin", "sales"] as const;
 
 /**
  * Las funciones de facturación lanzan mensajes en español (RAISE EXCEPTION).
@@ -135,7 +138,7 @@ export async function registerInvoiceRoutes(
   app.get(
     "/invoices",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(INVOICE_ROLES, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -177,7 +180,7 @@ export async function registerInvoiceRoutes(
   app.get(
     "/invoices/:invoiceId",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(INVOICE_ROLES, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -235,7 +238,7 @@ export async function registerInvoiceRoutes(
   app.get(
     "/invoices/:invoiceId/history",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(INVOICE_ROLES, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -369,7 +372,7 @@ export async function registerInvoiceRoutes(
   app.get(
     "/invoices/:invoiceId/credit-notes",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(INVOICE_ROLES, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -474,7 +477,7 @@ export async function registerInvoiceRoutes(
   app.get(
     "/invoices/:invoiceId/payments",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(companyRoles, "query")]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(INVOICE_ROLES, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);

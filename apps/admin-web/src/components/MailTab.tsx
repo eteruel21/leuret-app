@@ -33,9 +33,13 @@ function dateTime(value: string | null | undefined): string {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
+  // Día, mes y año sin ambigüedad («16 nov 2026, 5:37 p. m.»): el estilo «medium» de es-PA usa mes/día.
   return new Intl.DateTimeFormat("es-PA", {
-    dateStyle: "medium",
-    timeStyle: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
     timeZone: "America/Panama"
   }).format(date);
 }

@@ -105,6 +105,8 @@ export default function BudgetDetailScreen() {
   const { can } = usePermissions();
   const canEditBudget = can("budgets.edit");
   const canRegisterResponse = can("budgets.respond");
+  // Ventas envía al cliente los borradores que prepara el presupuestista (cuenta como cotizado por ventas).
+  const canSendBudget = can("budgets.send");
   // Facturar desde el presupuesto: la API solo lo permite a owner, admin y sales.
   const canInvoiceBudget = can("invoices.create");
   const [editingItem, setEditingItem] = useState<BudgetItem | null>(null);
@@ -498,7 +500,7 @@ export default function BudgetDetailScreen() {
           onPress={() => setPriceUpdatesVisible(true)}
         />
 
-        {budget.status === "draft" && activeCompany && canEditBudget ? (
+        {budget.status === "draft" && activeCompany && canSendBudget ? (
           <View style={styles.sendPanel}>
             <SendBudgetPanel
               companyId={activeCompany.id}

@@ -102,6 +102,15 @@ const baseOptions: OptionItem[] = [
     capability: "invoices.view",
   },
   {
+    id: "sales-report",
+    title: "Informe de ventas",
+    description:
+      "Cotizado y ejecutado por mes y por año.",
+    icon: "trending-up-outline" as const,
+    onPress: () => router.push("/ventas" as Href),
+    capability: "sales.report",
+  },
+  {
     id: "catalog",
     title: "Catálogo",
     description:
