@@ -6,8 +6,11 @@ const chromiumPath = process.env.LEURET_CHROMIUM_PATH;
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  reporter: process.env.CI ? [["list"], ["json", { outputFile: "e2e-audit/results.json" }]] : "list",
   use: {
     baseURL: "http://127.0.0.1:8081",
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
     ...(chromiumPath ? { launchOptions: { executablePath: chromiumPath } } : { channel: "chrome" })
   },
   webServer: [

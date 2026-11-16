@@ -1,4 +1,13 @@
-import { browserAccount, browserAdmin, browserContractor, contractorCompanies, turnstileToken } from "../../../tests/e2e/fixtures.mjs";
+import {
+  browserAccount,
+  browserAdmin,
+  browserContractor,
+  contractorCompanies,
+  flowAccounts,
+  flowCompanies,
+  flowStaffRoles,
+  turnstileToken
+} from "../../../tests/e2e/fixtures.mjs";
 import { deriveTestDatabaseEnvironment } from "../src/db/test-database-env.ts";
 
 const database = deriveTestDatabaseEnvironment(process.env.TEST_DATABASE_URL, process.env.NODE_ENV);
@@ -44,7 +53,8 @@ async function seedAccount({ email, password, fullName }, role) {
   );
   await adminPool.query(
     `UPDATE public.profiles
-     SET role = $2::public.global_user_role, active = true, approved_at = now(), terms_accepted = true
+     SET role = $2::public.global_user_role, active = true, approved_at = now(), terms_accepted = true,
+         contractor_approved_at = CASE WHEN $2 = 'contractor' THEN now() END
      WHERE id = $1`,
     [user.id, role]
   );
@@ -66,6 +76,37 @@ try {
      SELECT id, $1, 'owner' FROM unnest($2::uuid[]) AS id`,
     [contractorId, companies.map(({ id }) => id)]
   );
+
+  // Recorridos por rol: una empresa con todo su equipo, otra empresa que compite
+  // por las peticiones, dos clientes, una persona por invitar y un superadministrador.
+  const flow = flowAccounts();
+  const ids = {};
+  for (const key of ["owner", ...flowStaffRoles, "invitee", "rival"]) {
+    ids[key] = await seedAccount(flow[key], "contractor");
+  }
+  ids.client = await seedAccount(flow.client, "client");
+  ids.client2 = await seedAccount(flow.client2, "client");
+  ids.superAdmin = await seedAccount(flow.superAdmin, "super_admin");
+
+  const seedCompany = async (name, ownerId) => {
+    const { rows: [company] } = await adminPool.query(
+      `INSERT INTO public.companies (name, created_by) VALUES ($1, $2) RETURNING id`,
+      [name, ownerId]
+    );
+    await adminPool.query(
+      `INSERT INTO public.company_members (company_id, user_id, role) VALUES ($1, $2, 'owner')`,
+      [company.id, ownerId]
+    );
+    return company.id;
+  };
+  const mainCompanyId = await seedCompany(flowCompanies.main, ids.owner);
+  await seedCompany(flowCompanies.rival, ids.rival);
+  for (const role of flowStaffRoles) {
+    await adminPool.query(
+      `INSERT INTO public.company_members (company_id, user_id, role) VALUES ($1, $2, $3::public.company_role)`,
+      [mainCompanyId, ids[role], role]
+    );
+  }
 } finally {
   await adminPool.end();
 }
