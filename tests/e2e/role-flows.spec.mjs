@@ -299,6 +299,10 @@ test("equipo: invitar, unirse con el código, cambiar el rol y salir", async ({ 
     await inviteePage.goto(`/invitacion?codigo=${encodeURIComponent(code)}`);
     await expect(inviteePage.getByText(flowCompanies.main).first()).toBeVisible();
     await inviteePage.getByRole("button", { name: "Unirme al equipo" }).click();
+    // Al entrar, completa su perfil para que el equipo lo identifique.
+    await expect(inviteePage.getByText("Completa tu perfil")).toBeVisible();
+    await inviteePage.getByPlaceholder("Ej. 6000-0000").fill("6000-1234");
+    await inviteePage.getByRole("button", { name: "Guardar y entrar al equipo" }).click();
     await expect(inviteePage.getByRole("button", { name: new RegExp(`Espacio activo: ${escapeRegExp(flowCompanies.main)}`) })).toBeVisible();
     await inviteePage.goto("/presupuestos");
     await expect(inviteePage).toHaveURL(/\/presupuestos$/);

@@ -193,10 +193,17 @@ export default function ProfileScreen() {
     phone.trim() !== (profile?.phone ?? "").trim() ||
     notificationsOptIn !== Boolean(profile?.notifications_opt_in);
 
+  // Al unirse a un equipo, quien ya tiene nombre y teléfono puede entrar sin cambiar nada.
+  const canSave = hasChanges || completingTeamProfile;
+
   const handleSave = async () => {
-    if (saving || !hasChanges) return;
+    if (saving || !canSave) return;
     if (completingTeamProfile && (fullName.trim().length < 2 || !/^\d{7,15}$/.test(phone.replace(/\D/g, "")))) {
       Alert.alert("Completa tus datos", "Escribe tu nombre completo y un teléfono válido.");
+      return;
+    }
+    if (completingTeamProfile && !hasChanges) {
+      router.replace("/(tabs)");
       return;
     }
 
@@ -481,11 +488,13 @@ export default function ProfileScreen() {
           </View>
 
           <Pressable
-            disabled={saving || !hasChanges}
+            disabled={saving || !canSave}
             onPress={handleSave}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: saving || !canSave }}
             style={({ pressed }) => [
               styles.saveButton,
-              (saving || !hasChanges) && styles.saveButtonDisabled,
+              (saving || !canSave) && styles.saveButtonDisabled,
               pressed && styles.saveButtonPressed,
             ]}
           >
