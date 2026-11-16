@@ -27,6 +27,14 @@ export type InboxTarget = {
   companyId: string | null;
 };
 
+/** Campos `space` / `spaceCompanyId` del push (no se guardan en la bandeja). */
+export function pushSpaceData(target: InboxTarget | null): Record<string, string> | null {
+  if (!target?.space) return null;
+  return target.space === "company" && target.companyId
+    ? { space: "company", spaceCompanyId: target.companyId }
+    : { space: target.space };
+}
+
 async function dispatchEventPush(
   recipientUserId: string | null,
   title: string,
@@ -56,6 +64,10 @@ async function dispatchEventPush(
       );
     }
   }
+
+  // La app usa el espacio para abrir el aviso en el espacio y la empresa correctos.
+  const spaceData = pushSpaceData(inbox);
+  if (spaceData) payloadData = { ...payloadData, ...spaceData };
 
   try {
     await sendPushNotificationToUser(recipientUserId, {
@@ -323,7 +335,11 @@ export async function notifyJobRequestMessage(
     {
       type: "job_request.message",
       requestId: message.requestId,
-      companyId: message.companyId
+      companyId: message.companyId,
+      // Quien recibe está del otro lado de la conversación.
+      ...(pushSpaceData(message.senderSide === "company"
+        ? { space: "client", companyId: null }
+        : { space: "company", companyId: message.companyId }) ?? {})
     }
   );
 }

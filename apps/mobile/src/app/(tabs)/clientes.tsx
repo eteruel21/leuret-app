@@ -52,6 +52,7 @@ import type {
 } from "@/types/client";
 import { getClientDisplayName } from "@/types/client";
 import { validateClientAddress, validateClientIdentity } from "@/utils/client-validation";
+import { FocusAwareStatusBar } from "@/components/FocusAwareStatusBar";
 
 export default function ClientsScreen() {
   const { activeCompany } = useCompany();
@@ -145,6 +146,7 @@ export default function ClientsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
+      <FocusAwareStatusBar style="dark" />
       <FlatList
         data={filteredClients}
         keyExtractor={(item) => item.id}

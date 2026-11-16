@@ -39,6 +39,9 @@ describe("Push Notifications Service", () => {
     const payload = JSON.parse(init.body as string);
     expect(payload[0].to).toBe("ExponentPushToken[mock-token-abc]");
     expect(payload[0].title).toBe("Presupuesto Aprobado");
+    // Canal creado por la app y prioridad alta para Android.
+    expect(payload[0].channelId).toBe("default");
+    expect(payload[0].priority).toBe("high");
 
   });
 

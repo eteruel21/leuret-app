@@ -178,6 +178,9 @@ export function notificationRoute(
       const requestId = id(data.requestId);
       return requestId && !isClient ? { pathname: "/peticiones/[id]", params: { id: requestId } } : null;
     }
+    case "appointment.reminder":
+      // Recordatorio local de la agenda (solo existe en el espacio de empresa).
+      return isClient ? null : { pathname: "/(tabs)/agenda", params: {} };
     case "job_request.message": {
       const requestId = id(data.requestId);
       const companyId = id(data.companyId);

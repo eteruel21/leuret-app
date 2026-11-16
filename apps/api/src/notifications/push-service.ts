@@ -20,6 +20,7 @@ type ExpoPushTicket = {
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_MAX_MESSAGES_PER_REQUEST = 100;
+export const EXPO_ANDROID_CHANNEL_ID = "default";
 
 function ticketList(value: unknown): ExpoPushTicket[] | null {
   if (!value || typeof value !== "object") return null;
@@ -73,6 +74,10 @@ export async function sendPushNotificationToUser(
       const messages = tokenBatch.map((token) => ({
         to: token.expo_push_token,
         sound: "default",
+        // Canal que crea la app (push-notification-service.ts) y alta prioridad
+        // para que Android lo muestre aunque el teléfono esté en reposo.
+        channelId: EXPO_ANDROID_CHANNEL_ID,
+        priority: "high",
         title: payload.title,
         body: payload.body,
         data: payload.data ?? {}

@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": ">= 15.0.0",
+    "version": ">= 16.0.0",
     "appVersionSource": "remote"
   },
   "build": {
@@ -10,7 +10,8 @@
       "channel": "development",
       "env": {
         "EXPO_PUBLIC_API_URL": "http://10.0.2.2:3001"
-      }
+      },
+      "environment": "development"
     },
     "preview": {
       "distribution": "internal",
@@ -25,7 +26,8 @@
         "EXPO_PUBLIC_API_URL": "https://api.leurettech.com",
         "EXPO_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAESG10HX8vzKwIUe",
         "EXPO_PUBLIC_TURNSTILE_CHALLENGE_URL": "https://app.leurettech.com/turnstile"
-      }
+      },
+      "environment": "preview"
     },
     "production": {
       "distribution": "store",
@@ -37,7 +39,9 @@
         "EXPO_PUBLIC_API_URL": "https://api.leurettech.com",
         "EXPO_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAESG10HX8vzKwIUe",
         "EXPO_PUBLIC_TURNSTILE_CHALLENGE_URL": "https://app.leurettech.com/turnstile"
-      }
+      },
+      "environment": "production",
+      "autoIncrement": true
     },
     "pilot": {
       "distribution": "internal",
@@ -52,7 +56,8 @@
         "EXPO_PUBLIC_API_URL": "https://api.leurettech.com",
         "EXPO_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAESG10HX8vzKwIUe",
         "EXPO_PUBLIC_TURNSTILE_CHALLENGE_URL": "https://app.leurettech.com/turnstile"
-      }
+      },
+      "environment": "preview"
     }
   },
   "submit": {

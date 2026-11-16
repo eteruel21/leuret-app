@@ -1,29 +1,15 @@
 import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+import {
+  APPOINTMENTS_CHANNEL_ID,
+  ensureNotificationChannels,
+  ensureNotificationPermission,
+} from "@/services/push-notification-service";
 
+/** Prepara los canales de Android (el manejador de avisos vive en push-notification-service). */
 export async function configureLocalNotifications(): Promise<void> {
-  if (Platform.OS === "web") return;
-
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync(
-      "appointments",
-      {
-        name: "Citas y trabajos",
-        importance:
-          Notifications.AndroidImportance.HIGH,
-        sound: "default",
-      },
-    );
-  }
+  await ensureNotificationChannels();
 }
 
 export async function scheduleAppointmentNotification({
@@ -39,20 +25,9 @@ export async function scheduleAppointmentNotification({
 }): Promise<string> {
   if (Platform.OS === "web") return "";
 
-  const permission =
-    await Notifications.getPermissionsAsync();
-
-  let granted = permission.granted;
-
-  if (!granted) {
-    const requested =
-      await Notifications.requestPermissionsAsync();
-    granted = requested.granted;
-  }
-
+  // En Android 13+ el canal debe existir antes de pedir el permiso.
+  const granted = await ensureNotificationPermission();
   if (!granted) return "";
-
-  await configureLocalNotifications();
 
   const triggerDate = new Date(
     date.getTime() - reminderMinutes * 60_000,
@@ -66,6 +41,7 @@ export async function scheduleAppointmentNotification({
       body,
       sound: "default",
       data: {
+        type: "appointment.reminder",
         url: "/agenda",
       },
     },
@@ -74,7 +50,7 @@ export async function scheduleAppointmentNotification({
       date: triggerDate,
       channelId:
         Platform.OS === "android"
-          ? "appointments"
+          ? APPOINTMENTS_CHANNEL_ID
           : undefined,
     },
   });

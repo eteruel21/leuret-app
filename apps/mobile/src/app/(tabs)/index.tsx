@@ -48,6 +48,7 @@ import { listClients } from "@/services/client-service";
 import { listInvoices } from "@/services/invoice-service";
 import { listProjectsByCompany } from "@/services/project-service";
 import type { Appointment } from "@/utils/appointment-storage";
+import { FocusAwareStatusBar } from "@/components/FocusAwareStatusBar";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -259,6 +260,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <FocusAwareStatusBar style="dark" />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}

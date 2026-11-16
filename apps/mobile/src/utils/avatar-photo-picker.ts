@@ -2,6 +2,8 @@ import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { Platform } from "react-native";
 
+import { ensurePhotoPermission } from "./media-permissions";
+
 export type AvatarPhotoSource = "camera" | "library";
 
 export type PreparedAvatarPhoto = {
@@ -12,24 +14,12 @@ export type PreparedAvatarPhoto = {
 
 const AVATAR_SIZE = 512;
 
-async function ensurePermission(source: AvatarPhotoSource): Promise<void> {
-  if (Platform.OS === "web") return;
-  const permission = source === "camera"
-    ? await ImagePicker.requestCameraPermissionsAsync()
-    : await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    throw new Error(source === "camera"
-      ? "Se necesita permiso para usar la cámara."
-      : "Se necesita permiso para acceder a la galería.");
-  }
-}
-
 /**
  * Selecciona una foto de perfil, la recorta en cuadrado (centrada)
  * y la reduce a 512 px para que cargue rápido en el avatar.
  */
 export async function prepareAvatarPhoto(source: AvatarPhotoSource): Promise<PreparedAvatarPhoto | null> {
-  await ensurePermission(source);
+  if (!(await ensurePhotoPermission(source))) return null;
   const options: ImagePicker.ImagePickerOptions = {
     mediaTypes: ["images"],
     allowsEditing: Platform.OS !== "web",

@@ -32,6 +32,7 @@ import {
   updateOwnAvatar,
 } from "@/services/api";
 import { uploadProfileMedia } from "@/services/media-upload-service";
+import { ensureNotificationPermission } from "@/services/push-notification-service";
 import { confirmAction, showAlert } from "@/utils/alert";
 import {
   blockedDeletionMessage,
@@ -208,12 +209,28 @@ export default function ProfileScreen() {
       return;
     }
 
+    // Al activar los avisos se pide el permiso del teléfono aquí, con contexto.
+    const enablingNotifications = notificationsOptIn && !profile?.notifications_opt_in && Platform.OS !== "web";
+    const notificationsAllowed = enablingNotifications ? await ensureNotificationPermission() : true;
+
     if (completingTeamProfile) {
       router.replace("/(tabs)");
       return;
     }
 
     await loadDetails();
+
+    if (!notificationsAllowed) {
+      Alert.alert(
+        "Avisos bloqueados en el teléfono",
+        "Guardamos tu preferencia, pero el teléfono no permite que Leuret muestre avisos. Actívalos en los ajustes del sistema.",
+        [
+          { text: "Ahora no", style: "cancel" },
+          { text: "Abrir ajustes", onPress: () => void Linking.openSettings() },
+        ],
+      );
+      return;
+    }
 
     Alert.alert("Perfil actualizado", "Tus datos se guardaron correctamente.");
   };
