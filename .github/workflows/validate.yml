@@ -176,6 +176,13 @@ jobs:
           PGPASSWORD: ci_api_password
         run: npm run test:e2e
 
+      - name: Print browser audit report
+        if: ${{ !cancelled() }}
+        run: |
+          [ -d e2e-audit ] || exit 0
+          for f in e2e-audit/*.json; do [ "$f" = e2e-audit/results.json ] || { echo "=== $f"; cat "$f"; }; done
+          find e2e-audit -name '*.aria.yml' | sort | while read -r f; do echo "=== $f"; cat "$f"; echo; done
+
       - name: Upload browser test evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
