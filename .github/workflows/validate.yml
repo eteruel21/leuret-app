@@ -182,6 +182,7 @@ jobs:
           [ -d e2e-audit ] || exit 0
           for f in e2e-audit/*.json; do [ "$f" = e2e-audit/results.json ] || { echo "=== $f"; cat "$f"; }; done
           find e2e-audit -name '*.aria.yml' | sort | while read -r f; do echo "=== $f"; cat "$f"; echo; done
+          find test-results -name 'error-context.md' 2>/dev/null | sort | while read -r f; do echo "=== $f"; cat "$f"; echo; done
 
       - name: Upload browser test evidence
         if: ${{ !cancelled() }}

@@ -105,6 +105,8 @@ export default function BudgetDetailScreen() {
   const { can } = usePermissions();
   const canEditBudget = can("budgets.edit");
   const canRegisterResponse = can("budgets.respond");
+  // Facturar desde el presupuesto: la API solo lo permite a owner, admin y sales.
+  const canInvoiceBudget = can("invoices.create");
   const [editingItem, setEditingItem] = useState<BudgetItem | null>(null);
   const [detailsVisible, setDetailsVisible] = useState(false);
   const [responseVisible, setResponseVisible] = useState(false);
@@ -164,7 +166,7 @@ export default function BudgetDetailScreen() {
         );
       } else {
         setBudget(loadedBudget);
-        if (loadedBudget?.status === "draft") {
+        if (loadedBudget?.status === "draft" && canEditBudget) {
           const { updates } = await getBudgetPriceUpdates({
             companyId: activeCompany.id,
             budgetId,
@@ -173,16 +175,18 @@ export default function BudgetDetailScreen() {
         } else {
           setPriceUpdates([]);
         }
-        try {
-          const { invoice } = await getInvoiceByBudgetId(
-            activeCompany.id,
-            budgetId,
-          );
-          setAssociatedInvoice(invoice);
-        } catch {
-          // Ignore
+        if (canInvoiceBudget) {
+          try {
+            const { invoice } = await getInvoiceByBudgetId(
+              activeCompany.id,
+              budgetId,
+            );
+            setAssociatedInvoice(invoice);
+          } catch {
+            // Ignore
+          }
         }
-        if (loadedBudget?.status === "approved") {
+        if (loadedBudget?.status === "approved" && canInvoiceBudget) {
           const { requests } = await listInvoiceRequests(activeCompany.id);
           setInvoiceRequest(pendingRequestForBudget(requests, budgetId));
         } else {
@@ -193,7 +197,7 @@ export default function BudgetDetailScreen() {
       setLoading(false);
       setRefreshing(false);
     },
-    [activeCompany, budgetId],
+    [activeCompany, budgetId, canEditBudget, canInvoiceBudget],
   );
 
   useRefreshOnFocus(loadBudget);
@@ -581,7 +585,7 @@ export default function BudgetDetailScreen() {
             )}
           </Pressable>
 
-          {budget.status === "approved" && (
+          {budget.status === "approved" && canInvoiceBudget && (
             <Pressable
               onPress={() => void handleCreateInvoice()}
               disabled={generatingInvoice}

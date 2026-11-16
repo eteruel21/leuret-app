@@ -51,6 +51,10 @@ import { BudgetDecisionError, BudgetLockedError, BudgetNotDraftError, BudgetReop
 
 import { getCalculationDetailService } from "../calculations/services.js";
 
+// Ventas consulta los presupuestos (para dar seguimiento, registrar la respuesta
+// del cliente y facturar), pero no los edita.
+const BUDGET_VIEW_ROLES = ["owner", "admin", "estimator", "sales"] as const;
+
 function authenticatedUserId(
   request: FastifyRequest,
   reply: FastifyReply
@@ -114,7 +118,7 @@ export async function registerBudgetRoutes(
   app.get(
     "/budgets",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"], "query")]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(BUDGET_VIEW_ROLES, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);
@@ -165,7 +169,7 @@ export async function registerBudgetRoutes(
   app.get(
     "/budgets/:budgetId",
     {
-      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"], "query")]
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(BUDGET_VIEW_ROLES, "query")]
     },
     async (request, reply) => {
       const userId = authenticatedUserId(request, reply);

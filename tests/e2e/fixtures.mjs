@@ -52,6 +52,7 @@ export function flowAccounts() {
     rival: account("rival", "Ramiro Rival QA"),
     client: account("client", "Carla Cliente QA"),
     client2: account("client2", "Diego Cliente QA"),
+    buyer: account("buyer", "Beatriz Compradora QA"),
     superAdmin: account("superadmin", "Sofía Superadmin QA")
   };
 }

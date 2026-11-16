@@ -116,7 +116,11 @@ async function visitAll(page, role, routes) {
     report[role][name] = { path, finalUrl: new URL(page.url()).pathname, issues: issues.slice(before) };
   }
   writeReport("screens", report);
-  const fatal = issues.filter((issue) => issue.type === "pageerror" || (issue.type === "http" && issue.status >= 500));
+  // En CI el correo de Resend no está configurado: /admin/mail responde 503 a propósito.
+  const expectedOutage = (issue) => issue.status === 503 && issue.path.startsWith("/admin/mail/");
+  const fatal = issues.filter((issue) =>
+    issue.type === "pageerror" || (issue.type === "http" && issue.status >= 500 && !expectedOutage(issue))
+  );
   expect.soft(fatal, `${role}: errores graves`).toEqual([]);
 }
 

@@ -21,7 +21,8 @@ const MANAGERS: readonly CompanyRole[] = ["owner", "admin"];
 
 export const CAPABILITIES = {
   // Presupuestos — budgets/routes.ts
-  "budgets.view": ["owner", "admin", "estimator"],
+  // Ventas consulta (seguimiento, respuesta del cliente y facturación) sin editar.
+  "budgets.view": ["owner", "admin", "estimator", "sales"],
   "budgets.edit": ["owner", "admin", "estimator"],
   // Registrar la respuesta del cliente (aprobó o rechazó fuera de Leuret).
   "budgets.respond": ["owner", "admin", "estimator", "sales"],
