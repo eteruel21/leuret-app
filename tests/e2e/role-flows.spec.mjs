@@ -370,7 +370,8 @@ test("superadministrador: corrige el estado de una obra y anula una factura sin 
   await test.step("la acción queda en la auditoría", async () => {
     await page.goto(`${adminUrl}/#/audit`);
     await settle(page);
-    await expect(page.getByText(/ADMIN_INVOICE_CANCELLED|Factura anulada|Anuló/).first()).toBeVisible();
+    await expect(page.getByRole("row", { name: /Factura anulada por admin.*Factura duplicada, pedido del cliente/ })).toBeVisible();
+    await expect(page.getByRole("row", { name: /Estado de obra cambiado por admin.*Pedido de la empresa por soporte QA/ })).toBeVisible();
     await capture(page, "flujos", "admin-auditoria");
   });
 
