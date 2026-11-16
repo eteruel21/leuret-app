@@ -18,7 +18,7 @@ import {
 /**
  * Recorrido de auditoría: prepara datos reales por la API (como la app) y
  * visita cada pantalla con cada rol. Guarda captura y árbol de accesibilidad
- * y falla si una pantalla lanza un error de JavaScript o la API responde 5xx.
+ * y falla si una pantalla lanza un error de JavaScript o la API responde 4xx/5xx.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -118,10 +118,12 @@ async function visitAll(page, role, routes) {
   writeReport("screens", report);
   // En CI el correo de Resend no está configurado: /admin/mail responde 503 a propósito.
   const expectedOutage = (issue) => issue.status === 503 && issue.path.startsWith("/admin/mail/");
-  const fatal = issues.filter((issue) =>
-    issue.type === "pageerror" || (issue.type === "http" && issue.status >= 500 && !expectedOutage(issue))
+  // Una pantalla que el rol puede abrir no debe pedir nada que la API le niegue
+  // (403), ni fallar (5xx), ni lanzar errores de JavaScript.
+  const unexpected = issues.filter((issue) =>
+    issue.type === "pageerror" || (issue.type === "http" && issue.status >= 400 && !expectedOutage(issue))
   );
-  expect.soft(fatal, `${role}: errores graves`).toEqual([]);
+  expect.soft(unexpected, `${role}: errores en pantallas`).toEqual([]);
 }
 
 function companyRoutes() {

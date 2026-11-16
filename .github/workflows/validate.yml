@@ -177,7 +177,7 @@ jobs:
         run: npm run test:e2e
 
       - name: Print browser audit report
-        if: ${{ !cancelled() }}
+        if: ${{ failure() }}
         run: |
           [ -d e2e-audit ] || exit 0
           for f in e2e-audit/*.json; do [ "$f" = e2e-audit/results.json ] || { echo "=== $f"; cat "$f"; }; done
