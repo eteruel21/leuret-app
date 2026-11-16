@@ -62,8 +62,10 @@ try {
     `
       UPDATE public.profiles
       SET
+        role = 'contractor',
         active = true,
         approved_at = now(),
+        contractor_approved_at = now(),
         terms_accepted = true
       WHERE id = $1
     `,

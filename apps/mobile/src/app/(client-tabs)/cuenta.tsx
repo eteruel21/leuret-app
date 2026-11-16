@@ -105,6 +105,8 @@ export default function ClientAccountScreen() {
         </View>
 
         <LeuretButton
+          accessibilityRole="button"
+          accessibilityLabel="Cerrar sesión"
           label="Cerrar sesión"
           icon="log-out-outline"
           variant="danger"

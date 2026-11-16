@@ -4,18 +4,25 @@ on:
   pull_request:
     branches:
       - main
+  merge_group:
+    types:
+      - checks_requested
   push:
     branches:
       - main
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
   validate:
     name: Validate Codebase & Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
 
     services:
       postgres:
@@ -32,148 +39,143 @@ jobs:
 
     env:
       NODE_ENV: test
-      JWT_SECRET: "ci_jwt_secret_key_at_least_43_characters_long_for_testing_purposes"
-      VITE_API_URL: https://api.leurettech.com
-      EXPO_PUBLIC_API_URL: https://api.leurettech.com
+      JWT_SECRET: ci_jwt_secret_key_at_least_43_characters_long_for_testing_purposes
+      VITE_API_URL: http://127.0.0.1:3001
+      EXPO_PUBLIC_API_URL: http://127.0.0.1:3001
       VITE_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
-      VITE_TURNSTILE_CHALLENGE_URL: /turnstile.html
+      VITE_TURNSTILE_CHALLENGE_URL: /turnstile
       EXPO_PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
-      EXPO_PUBLIC_TURNSTILE_CHALLENGE_URL: https://app.leurettech.com/turnstile
+      EXPO_PUBLIC_TURNSTILE_CHALLENGE_URL: http://127.0.0.1:8081/turnstile
 
     steps:
-      - name: 1. Checkout repository
-        uses: actions/checkout@v7
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: 2. Setup Node.js
-        uses: actions/setup-node@v7
+      - name: Lint GitHub Actions workflows
+        shell: bash
+        run: |
+          install -d "$RUNNER_TEMP/actionlint"
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.11/actionlint_1.7.11_linux_amd64.tar.gz \
+            --output "$RUNNER_TEMP/actionlint/release.tar.gz"
+          printf '%s  %s\n' '900919a84f2229bac68ca9cd4103ea297abc35e9689ebb842c6e34a3d1b01b0a' \
+            "$RUNNER_TEMP/actionlint/release.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/actionlint/release.tar.gz" -C "$RUNNER_TEMP/actionlint" actionlint
+          "$RUNNER_TEMP/actionlint/actionlint" -color
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
 
-      - name: 3. Install dependencies
-        run: |
-          npm ci || npm install
-          npm install @rollup/rollup-linux-x64-gnu -w apps/admin-web --no-save
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
 
-      - name: 4. Typecheck all workspaces
-        run: npm run typecheck
-
-      - name: 5. Test database migration tooling
-        run: npm run test:database-unit
-
-      - name: 6. Smoke test API Worker runtime
-        run: npm run test:worker-runtime -w apps/api
-
-      # Arranca el Worker real en workerd (runtime de Cloudflare). La prueba
-      # anterior corre en Node y no detecta incompatibilidades de Workers.
-      - name: 6b. Boot API Worker in workerd (Cloudflare runtime)
-        run: npm run test:workerd -w apps/api
-
-      - name: 7. Run non-destructive API tests
+      - name: Block new high and critical advisories in deployed dependencies
+        if: github.event_name != 'push'
+        shell: bash
         env:
-          DATABASE_MODE: hyperdrive
-        # Corre todos los tests de la API salvo los que necesitan la base
-        # aislada (TEST_DATABASE_URL); esos se ejecutan en el paso 10.
-        # Así un test nuevo entra al CI sin agregarlo a una lista.
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: |
-          npm --workspace apps/api run test -- \
-            --exclude src/auth/__tests__/auth.test.ts \
-            --exclude src/auth/__tests__/authorization_rls.test.ts \
-            --exclude src/admin/__tests__/admin-session-revocation.test.ts \
-            --exclude src/admin/__tests__/admin-support-actions.test.ts \
-            --exclude src/admin/__tests__/admin-price-contributions.test.ts \
-            --exclude src/db/__tests__/with-user-transaction.test.ts \
-            --exclude src/budgets/__tests__/budgets.test.ts \
-            --exclude src/invoices/__tests__/document_numbering.test.ts \
-            --exclude src/client-portal/__tests__/client-portal.test.ts \
-            --exclude src/client-connections/__tests__/client-connections.test.ts \
-            --exclude src/companies/__tests__/team-relationships.test.ts \
-            --exclude src/job-requests/__tests__/job-requests.test.ts \
-            --exclude src/account/__tests__/account-deletion.test.ts \
-            --exclude src/settings/__tests__/user-settings-inbox.test.ts
+          baseline=$(mktemp -d)
+          git archive "$BASE_SHA" package.json package-lock.json \
+            apps/api/package.json apps/admin-web/package.json apps/mobile/package.json | tar -x -C "$baseline"
+          (cd "$baseline" && npm audit --omit=dev --package-lock-only --audit-level=none --json) > "$baseline/base.json"
+          npm audit --omit=dev --package-lock-only --audit-level=none --json > "$baseline/head.json"
+          node scripts/check-dependency-advisories.mjs "$baseline/base.json" "$baseline/head.json"
 
-      - name: 8. Prepare isolated authorization database
+      - name: Check types and generated legal documents
+        run: |
+          npm run typecheck
+          npm run legal:check
+
+      - name: Test API logic and security
+        run: npm run test:unit -w apps/api
+
+      - name: Smoke test API Worker runtime in Node and workerd
+        run: |
+          npm run test:worker-runtime -w apps/api
+          npm run test:workerd -w apps/api
+
+      - name: Prepare and lint isolated PostgreSQL database
         env:
           DATABASE_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
           DATABASE_NAME: test_leuret
           CONTRACTOR_MIGRATOR_PASSWORD: ci_migrator_password
           CONTRACTOR_API_PASSWORD: ci_api_password
-          # La migración histórica 024 no selecciona contractor_owner; la base
-          # efímera usa postgres solo para reproducir el esquema completo.
+          # La migración histórica 024 necesita postgres en el entorno descartable.
           MIGRATOR_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/test_leuret
         run: |
           node database/scripts/bootstrap.mjs
           node database/scripts/migrate.mjs
+          node database/scripts/schema-lint.mjs
 
-      # Reglas de esquema sobre la base recién migrada: FK sin índice, varias
-      # políticas permisivas por acción, llamadas por fila en RLS, índices
-      # redundantes, tablas sin RLS o sin PK, SECURITY DEFINER sin search_path.
-      - name: 8b. Lint database schema (indexes, RLS, security)
+      - name: Verify isolated backup and restore
         env:
-          MIGRATOR_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/test_leuret
-        run: node database/scripts/schema-lint.mjs
-
-      - name: 9. Verify isolated backup and restore
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: |
           docker exec -i \
             -e PGUSER=postgres \
             -e BACKUP_TEST_SOURCE_DATABASE=test_leuret \
             -e BACKUP_TEST_RESTORE_DATABASE=test_leuret_restore \
-            "${{ job.services.postgres.id }}" \
-            sh < database/scripts/verify-backup-restore.sh
+            "$POSTGRES_CONTAINER" sh < database/scripts/verify-backup-restore.sh
 
-      - name: 10. Test authentication and cross-company isolation
+      - name: Test migration history, database constraints and invoice lifecycle
         env:
-          DATABASE_MODE: postgres
+          DATABASE_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          CONTRACTOR_MIGRATOR_PASSWORD: ci_migrator_password
+          CONTRACTOR_API_PASSWORD: ci_api_password
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/test_leuret
-          PGHOST: 127.0.0.1
-          PGPORT: 5432
-          PGDATABASE: test_leuret
+        run: |
+          npm run test:database-tools
+          npm run test:invoice-db
+
+      - name: Test API with PostgreSQL and the restricted application role
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/test_leuret
           PGUSER: contractor_api
           PGPASSWORD: ci_api_password
           PGSSL: disable
-        run: |
-          npm --workspace apps/api run test -- \
-            src/auth/__tests__/auth.test.ts \
-            src/auth/__tests__/authorization_rls.test.ts \
-            src/admin/__tests__/admin-session-revocation.test.ts \
-            src/admin/__tests__/admin-support-actions.test.ts \
-            src/admin/__tests__/admin-price-contributions.test.ts \
-            src/db/__tests__/with-user-transaction.test.ts \
-            src/budgets/__tests__/budgets.test.ts \
-            src/invoices/__tests__/document_numbering.test.ts \
-            src/client-portal/__tests__/client-portal.test.ts \
-            src/client-connections/__tests__/client-connections.test.ts \
-            src/companies/__tests__/team-relationships.test.ts \
-            src/job-requests/__tests__/job-requests.test.ts \
-            src/account/__tests__/account-deletion.test.ts \
-            src/settings/__tests__/user-settings-inbox.test.ts
+        run: npm run test:integration -w apps/api
 
-      - name: 11. Test mobile app
+      - name: Test mobile app
         run: npm run test -w apps/mobile
 
-      - name: 12. Build API backend
-        run: npm run build:api
-
-      - name: 13. Build admin web application
-        run: npm run build:admin
-
-      - name: 14. Build mobile web application
-        run: npm run build:mobile
-
-      - name: 15. Verify production client configuration
+      - name: Build API, Admin Web and Pro Web
         run: |
-          test -n "$VITE_API_URL"
-          test -n "$EXPO_PUBLIC_API_URL"
-          test -n "$VITE_TURNSTILE_SITE_KEY"
-          test -n "$EXPO_PUBLIC_TURNSTILE_SITE_KEY"
+          npm run build:api
+          npm run build:admin
+          npm run build:mobile
 
+      - name: Verify test client configuration
+        run: |
           grep -R -F "$VITE_API_URL" apps/admin-web/dist > /dev/null
           grep -R -F "$EXPO_PUBLIC_API_URL" apps/mobile/dist > /dev/null
           grep -R -F "$VITE_TURNSTILE_SITE_KEY" apps/admin-web/dist > /dev/null
           grep -R -F "$EXPO_PUBLIC_TURNSTILE_SITE_KEY" apps/mobile/dist > /dev/null
 
-          if grep -R -F "https://api.contractor.com.pa" apps/admin-web/dist apps/mobile/dist; then
+          if grep -R -l -F 'https://api.contractor.com.pa' apps/admin-web/dist apps/mobile/dist; then
             echo "Legacy production API fallback found in client bundles."
             exit 1
           fi
+
+      - name: Test Pro Web sign-in and session in Chrome
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/test_leuret
+          PGUSER: contractor_api
+          PGPASSWORD: ci_api_password
+        run: npm run test:e2e
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    uses: ./.github/workflows/deploy.yml
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PRODUCTION_DATABASE_SSL_CA: ${{ secrets.PRODUCTION_DATABASE_SSL_CA }}
+      PRODUCTION_MIGRATOR_DATABASE_URL: ${{ secrets.PRODUCTION_MIGRATOR_DATABASE_URL }}
