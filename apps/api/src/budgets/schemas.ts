@@ -113,6 +113,38 @@ export const createBudgetItemSchema = z.object({
     .optional()
 });
 
+/** Cambios en una partida de un borrador. Solo se cambia lo que se envía. */
+export const updateBudgetItemSchema = z.object({
+  companyId: uuidSchema,
+  description: z.string().trim().min(2).max(1000).optional(),
+  unitName: z.string().trim().min(1).max(100).optional(),
+  quantity: z.number().positive().max(100_000_000).optional(),
+  unitPrice: z.number().min(0).max(100_000_000).optional(),
+  unitCost: z.number().min(0).max(100_000_000).optional(),
+  discountPercentage: z.number().min(0).max(100).optional(),
+  taxable: z.boolean().optional(),
+  notes: z.string().trim().max(2000).optional()
+});
+
+export const budgetDiscountTypeSchema = z.enum(["none", "percent", "fixed"]);
+
+/** Datos generales de un borrador: título, descuento, ITBMS y condiciones. */
+export const updateBudgetSchema = z
+  .object({
+    companyId: uuidSchema,
+    title: z.string().trim().min(2).max(250).optional(),
+    description: z.string().trim().max(3000).optional(),
+    discountType: budgetDiscountTypeSchema.optional(),
+    discountValue: z.number().min(0).max(100_000_000).optional(),
+    taxRate: z.number().min(0).max(100).optional(),
+    terms: z.string().trim().max(5000).optional(),
+    notes: z.string().trim().max(5000).optional()
+  })
+  .refine(
+    (input) => !(input.discountType === "percent" && (input.discountValue ?? 0) > 100),
+    { message: "El descuento porcentual no puede pasar de 100 %.", path: ["discountValue"] }
+  );
+
 export const approveBudgetSchema = z.object({
   companyId: uuidSchema.optional()
 });

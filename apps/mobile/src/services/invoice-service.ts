@@ -285,6 +285,8 @@ export async function recordInvoicePayment(
     invoiceId: string;
     amount: number;
     method: InvoicePaymentMethod;
+    /** Fecha y hora ISO en que se recibió el pago (por omisión, ahora). */
+    paidAt?: string | null;
     reference?: string | null;
     notes?: string | null;
   }
@@ -305,6 +307,7 @@ export async function recordInvoicePayment(
           companyId: input.companyId,
           amount: input.amount,
           method: input.method,
+          paidAt: input.paidAt ?? null,
           reference: input.reference?.trim() || null,
           notes: input.notes?.trim() || null
         })

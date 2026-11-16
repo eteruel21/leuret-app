@@ -369,8 +369,8 @@ export default function SpecialSystemsScreen() {
   }
 
   function compute(source: Form): SpecialSystemsResult | null {
-    if (!totalEquipment) {
-      setError("Introduce al menos un equipo o dispositivo.");
+    if (!totalEquipment && !(num(source.wiredPoints) > 0)) {
+      setError("Introduce al menos un equipo o un punto cableado.");
       return null;
     }
 
@@ -441,9 +441,13 @@ export default function SpecialSystemsScreen() {
 
     const c = (compute(withCatalogCosts(form, tracked)) ?? result);
 
+    const wiringOnly = result.totalEquipment === 0;
+
     return {
       itemType: "service",
-      description: `Instalación de ${config.title.toLowerCase()}`,
+      description: wiringOnly
+        ? `Cableado de ${config.title.toLowerCase()} (${result.wiredPoints} puntos)`
+        : `Instalación de ${config.title.toLowerCase()}`,
       unitName: "sistema",
       quantity: 1,
       unitCost: budgetUnitCost(
@@ -467,7 +471,7 @@ export default function SpecialSystemsScreen() {
         material("Caja", c.boxes, "und.", c.boxCost),
       ]),
       notes:
-        `${equipmentNotes}` +
+        `${equipmentNotes || "Sin equipos (solo cableado)"}` +
         (result.wiredPoints
           ? ` · ${result.wiredPoints} puntos cableados` +
             ` · ${result.cableRollsToBuy} rollos de cable` +

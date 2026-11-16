@@ -58,6 +58,9 @@ describe("permisos por rol (deben coincidir con la API)", () => {
 
   it("borrar direcciones/contactos y gestionar finanzas es solo de owner y admin", () => {
     expect(ROLES.filter((role) => can(role, "clients.delete"))).toEqual(["owner", "admin"]);
+    expect(ROLES.filter((role) => can(role, "budgets.respond"))).toEqual(["owner", "admin", "sales", "estimator"]);
+    expect(ROLES.filter((role) => can(role, "projects.edit"))).toEqual(["owner", "admin", "supervisor", "sales"]);
+    expect(ROLES.filter((role) => can(role, "calculations.update"))).toEqual(["owner", "admin", "sales", "estimator", "member"]);
     expect(ROLES.filter((role) => can(role, "jobRequests.view"))).toEqual(["owner", "admin", "sales", "estimator"]);
     expect(ROLES.filter((role) => can(role, "jobRequests.quote"))).toEqual(["owner", "admin", "estimator"]);
     expect(ROLES.filter((role) => can(role, "invoices.manageFinancial"))).toEqual(["owner", "admin"]);

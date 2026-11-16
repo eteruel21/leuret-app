@@ -40,6 +40,7 @@ import {
 
 import { LeuretLoading } from "@/components/LeuretLoading";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 
 import {
   addBudgetItem,
@@ -80,6 +81,12 @@ import { SendBudgetPanel } from "@/components/SendBudgetPanel";
 import { CalculatorPickerModal } from "@/components/CalculatorPickerModal";
 import { budgetAcceptsItems, budgetCanReopen } from "@/utils/budget-picker";
 import { confirmAction } from "@/utils/alert";
+import { usePermissions } from "@/hooks/usePermissions";
+import {
+  ClientResponseModal,
+  EditBudgetDetailsModal,
+  EditBudgetItemModal,
+} from "@/components/budget/BudgetEditModals";
 
 import { listCatalogItems } from "@/services/catalog-service";
 import type { CatalogItemWithDetails } from "@/types/catalog";
@@ -95,6 +102,12 @@ export default function BudgetDetailScreen() {
     : params.id;
 
   const { activeCompany } = useCompany();
+  const { can } = usePermissions();
+  const canEditBudget = can("budgets.edit");
+  const canRegisterResponse = can("budgets.respond");
+  const [editingItem, setEditingItem] = useState<BudgetItem | null>(null);
+  const [detailsVisible, setDetailsVisible] = useState(false);
+  const [responseVisible, setResponseVisible] = useState(false);
 
   const [budget, setBudget] =
     useState<BudgetWithDetails | null>(null);
@@ -183,17 +196,7 @@ export default function BudgetDetailScreen() {
     [activeCompany, budgetId],
   );
 
-  useEffect(() => {
-    let active = true;
-
-    void Promise.resolve().then(() => {
-      if (active) void loadBudget();
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [loadBudget]);
+  useRefreshOnFocus(loadBudget);
 
   async function handleDeleteItem(item: BudgetItem) {
     if (!activeCompany || !budget) return;
@@ -255,8 +258,9 @@ export default function BudgetDetailScreen() {
   }
 
   // Solo los borradores aceptan cambios en sus partidas (igual que la API).
-  const canEditItems = budgetAcceptsItems(budget.status);
-  const canReopen = budgetCanReopen(budget.status);
+  const canEditItems = canEditBudget && budgetAcceptsItems(budget.status);
+  const canReopen = canEditBudget && budgetCanReopen(budget.status);
+  const awaitingResponse = budget.status === "sent" || budget.status === "viewed";
 
   async function handleReopen() {
     if (!activeCompany || !budget || reopening) return;
@@ -429,7 +433,11 @@ export default function BudgetDetailScreen() {
           />
 
           <TotalRow
-            label="Descuento"
+            label={
+              budget.discount_type === "percent"
+                ? `Descuento ${budget.discount_value}%`
+                : "Descuento"
+            }
             value={formatMoney(
               budget.discount_amount,
             )}
@@ -451,13 +459,42 @@ export default function BudgetDetailScreen() {
           />
         </View>
 
+        {canEditItems ? (
+          <Pressable
+            onPress={() => setDetailsVisible(true)}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.shoppingButton, pressed && styles.pressed]}
+          >
+            <Ionicons name="create-outline" size={20} color={colors.primary} />
+            <Text style={styles.shoppingButtonText}>Título, descuento, ITBMS y condiciones</Text>
+          </Pressable>
+        ) : null}
+
+        {awaitingResponse && canRegisterResponse ? (
+          <View style={styles.reopenCard}>
+            <Text style={styles.reopenText}>
+              {budget.client?.user_id
+                ? "Esperando la respuesta del cliente en su portal. Si te respondió por otro medio, regístrala aquí."
+                : "Tu cliente no tiene cuenta en Leuret. Cuando te responda, registra si aprobó o rechazó el presupuesto."}
+            </Text>
+            <Pressable
+              onPress={() => setResponseVisible(true)}
+              style={({ pressed }) => [styles.reopenButton, pressed && styles.pressed]}
+              accessibilityRole="button"
+            >
+              <Ionicons name="checkmark-done-outline" size={18} color={colors.textLight} />
+              <Text style={styles.reopenButtonText}>Registrar respuesta del cliente</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         <PriceUpdatesBanner
           updates={priceUpdates}
           currencyCode={budget.currency_code}
           onPress={() => setPriceUpdatesVisible(true)}
         />
 
-        {budget.status === "draft" && activeCompany ? (
+        {budget.status === "draft" && activeCompany && canEditBudget ? (
           <View style={styles.sendPanel}>
             <SendBudgetPanel
               companyId={activeCompany.id}
@@ -677,6 +714,7 @@ export default function BudgetDetailScreen() {
               onDeleteItem={canEditItems ? (item) =>
                 void handleDeleteItem(item)
               : undefined}
+              onEditItem={canEditItems ? setEditingItem : undefined}
             />
           ))}
 
@@ -691,6 +729,7 @@ export default function BudgetDetailScreen() {
               onDeleteItem={canEditItems ? (item) =>
                 void handleDeleteItem(item)
               : undefined}
+              onEditItem={canEditItems ? setEditingItem : undefined}
             />
           ) : null}
         </View>
@@ -739,6 +778,45 @@ export default function BudgetDetailScreen() {
         onApply={(itemIds) => void handleApplyPrices(itemIds)}
       />
 
+      <EditBudgetItemModal
+        visible={editingItem !== null}
+        companyId={activeCompany.id}
+        budgetId={budget.id}
+        item={editingItem}
+        currencyCode={budget.currency_code}
+        onClose={() => setEditingItem(null)}
+        onSaved={() => {
+          setEditingItem(null);
+          void loadBudget(true);
+        }}
+      />
+
+      {detailsVisible ? (
+        <EditBudgetDetailsModal
+          visible
+          companyId={activeCompany.id}
+          budget={budget}
+          onClose={() => setDetailsVisible(false)}
+          onSaved={() => {
+            setDetailsVisible(false);
+            void loadBudget(true);
+          }}
+        />
+      ) : null}
+
+      {responseVisible ? (
+        <ClientResponseModal
+          visible
+          companyId={activeCompany.id}
+          budget={budget}
+          onClose={() => setResponseVisible(false)}
+          onSaved={() => {
+            setResponseVisible(false);
+            void loadBudget(true);
+          }}
+        />
+      ) : null}
+
       <AddCatalogItemModal
         visible={catalogModalVisible}
         companyId={activeCompany.id}
@@ -757,7 +835,9 @@ function BudgetSectionBlock({
   section,
   items,
   onDeleteItem,
+  onEditItem,
 }: {
+  onEditItem?: (item: BudgetItem) => void;
   section: BudgetSection | null;
   items: BudgetItem[];
   /** Sin esta función (presupuesto aprobado o cancelado) no se muestra la papelera. */
@@ -783,6 +863,22 @@ function BudgetSectionBlock({
               <Text style={styles.itemTitle}>
                 {item.description}
               </Text>
+
+              {onEditItem ? (
+                <Pressable
+                  onPress={() => onEditItem(item)}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Editar ${item.description}`}
+                  style={styles.itemAction}
+                >
+                  <Ionicons
+                    name="create-outline"
+                    size={19}
+                    color={colors.primary}
+                  />
+                </Pressable>
+              ) : null}
 
               {onDeleteItem ? (
                 <Pressable
@@ -1400,6 +1496,9 @@ function AddCatalogItemModal({
 }
 
 const styles = StyleSheet.create({
+  itemAction: {
+    marginRight: 12,
+  },
   invoiceRequestBanner: {
     flexDirection: "row",
     gap: 10,

@@ -12,6 +12,11 @@ import { safeErrorDetails } from "../security/redaction.js";
 
 const { Client, Pool } = pg;
 
+// Las columnas DATE (fin estimado, vencimiento, vigencia…) se devuelven tal
+// cual, "AAAA-MM-DD". Antes pg las convertía en Date a medianoche UTC y la app,
+// en Panamá (UTC-5), mostraba el día anterior.
+pg.types.setTypeParser(1082, (value: string) => value); // 1082 = DATE
+
 let hyperdriveConnectionString: string | null = null;
 
 export function configureHyperdriveDatabase(

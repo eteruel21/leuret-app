@@ -1,8 +1,10 @@
 import { withUserTransaction } from "../db/with-user-transaction.js";
 import type { z } from "zod";
-import type { createBudgetItemSchema } from "./schemas.js";
+import type { createBudgetItemSchema, updateBudgetItemSchema, updateBudgetSchema } from "./schemas.js";
 
 export type CreateBudgetItemInput = z.infer<typeof createBudgetItemSchema>;
+export type UpdateBudgetItemInput = z.infer<typeof updateBudgetItemSchema>;
+export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>;
 
 const clientBudgetColumns = `
   budget.id, budget.company_id, budget.client_id, budget.project_id, budget.budget_number,
@@ -406,48 +408,221 @@ export async function deleteBudgetItemRepo(userId: string, budgetId: string, ite
   return withUserTransaction(userId, async (client) => {
     await checkBudgetIsDraft(client, budgetId);
 
-    await client.query(
+    const deleted = await client.query<{ description: string }>(
       `
         DELETE FROM public.budget_items
         WHERE id = $1
           AND budget_id = $2
           AND company_id = $3
+        RETURNING description
       `,
       [itemId, budgetId, companyId]
+    );
+
+    if ((deleted.rowCount ?? 0) === 0) return false;
+
+    // La versión es la del presupuesto (antes quedaba siempre en 1).
+    await client.query(
+      `
+        INSERT INTO public.budget_change_history (company_id, budget_id, version, action, performed_by, notes)
+        SELECT company_id, id, version, 'item_deleted', app.current_user_id(), $3
+        FROM public.budgets WHERE id = $1 AND company_id = $2
+      `,
+      [budgetId, companyId, `Partida eliminada: ${deleted.rows[0]?.description ?? ""}`.trim()]
+    );
+    return true;
+  });
+}
+
+/**
+ * Edita una partida de un borrador. Los totales del presupuesto se recalculan
+ * con los disparadores de budget_items (subtotal y totales).
+ */
+export async function updateBudgetItemRepo(
+  userId: string,
+  budgetId: string,
+  itemId: string,
+  input: UpdateBudgetItemInput
+) {
+  return withUserTransaction(userId, async (client) => {
+    await checkBudgetIsDraft(client, budgetId);
+
+    const result = await client.query(
+      `
+        UPDATE public.budget_items
+        SET
+          description = COALESCE($4, description),
+          unit_name = COALESCE($5, unit_name),
+          quantity = COALESCE($6, quantity),
+          unit_price = COALESCE($7, unit_price),
+          unit_cost = COALESCE($8, unit_cost),
+          discount_percentage = COALESCE($9, discount_percentage),
+          taxable = COALESCE($10, taxable),
+          notes = CASE WHEN $11::text IS NULL THEN notes ELSE NULLIF($11::text, '') END,
+          updated_at = now()
+        WHERE id = $1
+          AND budget_id = $2
+          AND company_id = $3
+        RETURNING *
+      `,
+      [
+        itemId,
+        budgetId,
+        input.companyId,
+        input.description ?? null,
+        input.unitName ?? null,
+        input.quantity ?? null,
+        input.unitPrice ?? null,
+        input.unitCost ?? null,
+        input.discountPercentage ?? null,
+        input.taxable ?? null,
+        input.notes ?? null
+      ]
+    );
+
+    const item = result.rows[0] ?? null;
+    if (item) {
+      await client.query(
+        `
+          INSERT INTO public.budget_change_history (company_id, budget_id, version, action, performed_by, notes)
+          SELECT company_id, id, version, 'item_updated', app.current_user_id(), $3
+          FROM public.budgets WHERE id = $1 AND company_id = $2
+        `,
+        [budgetId, input.companyId, `Partida editada: ${item.description}`]
+      );
+    }
+    return item;
+  });
+}
+
+/**
+ * Datos generales de un borrador. Al cambiar el descuento o el ITBMS se
+ * recalculan los totales tocando las partidas: el disparador de budget_items
+ * llama a recalculate_budget_totals (que la API no puede ejecutar directo).
+ */
+export async function updateBudgetRepo(userId: string, budgetId: string, input: UpdateBudgetInput) {
+  return withUserTransaction(userId, async (client) => {
+    await checkBudgetIsDraft(client, budgetId);
+
+    const result = await client.query(
+      `
+        UPDATE public.budgets
+        SET
+          title = COALESCE($3, title),
+          description = CASE WHEN $4::text IS NULL THEN description ELSE NULLIF($4::text, '') END,
+          discount_type = COALESCE($5::public.budget_discount_type, discount_type),
+          discount_value = CASE
+            WHEN COALESCE($5::public.budget_discount_type, discount_type) = 'none'::public.budget_discount_type THEN 0
+            ELSE COALESCE($6::numeric, discount_value)
+          END,
+          tax_rate = COALESCE($7::numeric, tax_rate),
+          terms = CASE WHEN $8::text IS NULL THEN terms ELSE NULLIF($8::text, '') END,
+          notes = CASE WHEN $9::text IS NULL THEN notes ELSE NULLIF($9::text, '') END,
+          updated_at = now()
+        WHERE id = $1
+          AND company_id = $2
+        RETURNING id, version
+      `,
+      [
+        budgetId,
+        input.companyId,
+        input.title ?? null,
+        input.description ?? null,
+        input.discountType ?? null,
+        input.discountValue ?? null,
+        input.taxRate ?? null,
+        input.terms ?? null,
+        input.notes ?? null
+      ]
+    );
+
+    if ((result.rowCount ?? 0) === 0) return false;
+
+    await client.query(
+      `
+        UPDATE public.budget_items
+        SET updated_at = now()
+        WHERE budget_id = $1 AND company_id = $2
+      `,
+      [budgetId, input.companyId]
     );
 
     await client.query(
       `
         INSERT INTO public.budget_change_history (company_id, budget_id, version, action, performed_by, notes)
-        VALUES ($1, $2, 1, 'item_deleted', app.current_user_id(), 'Partida eliminada')
+        VALUES ($1, $2, $3, 'details_updated', app.current_user_id(), 'Datos del presupuesto actualizados')
       `,
-      [companyId, budgetId]
+      [input.companyId, budgetId, result.rows[0].version ?? 1]
     );
+    return true;
   });
 }
 
+/** Errores al registrar la respuesta del cliente desde el equipo. */
+export class BudgetDecisionError extends Error {
+  constructor(
+    readonly status: 400 | 403 | 404 | 409,
+    message: string
+  ) {
+    super(message);
+    this.name = "BudgetDecisionError";
+  }
+}
+
+const DECISION_ROLES = new Set(["owner", "admin", "estimator", "sales"]);
+
+/**
+ * Comprueba que quien registra la respuesta del cliente pueda hacerlo y que
+ * el presupuesto esté esperando respuesta (enviado o visto). Bloquea la fila.
+ */
+async function lockBudgetForTeamDecision(client: any, budgetId: string, companyId: string | undefined) {
+  if (!companyId) {
+    throw new BudgetDecisionError(400, "Indica la empresa del presupuesto.");
+  }
+
+  const role = await client.query(
+    `
+      SELECT role::text AS role
+      FROM public.company_members
+      WHERE company_id = $1 AND user_id = app.current_user_id() AND active = true
+      LIMIT 1
+    `,
+    [companyId]
+  );
+  if (!DECISION_ROLES.has(role.rows[0]?.role)) {
+    throw new BudgetDecisionError(403, "Tu rol no puede registrar la respuesta del cliente.");
+  }
+
+  const budgetRes = await client.query(
+    `SELECT * FROM public.budgets WHERE id = $1 AND company_id = $2 LIMIT 1 FOR UPDATE`,
+    [budgetId, companyId]
+  );
+  const budget = budgetRes.rows[0];
+  if (!budget) {
+    throw new BudgetDecisionError(404, "No se encontró el presupuesto.");
+  }
+  return budget;
+}
+
+/**
+ * El equipo registra que el cliente aprobó el presupuesto (por ejemplo, un
+ * cliente sin cuenta en Leuret que respondió por WhatsApp o en persona).
+ */
 export async function approveBudgetRepo(userId: string, budgetId: string, companyId?: string) {
   return withUserTransaction(userId, async (client) => {
-    let whereClause = `WHERE id = $1`;
-    const queryParams: any[] = [budgetId];
-
-    if (companyId) {
-      whereClause += ` AND company_id = $2`;
-      queryParams.push(companyId);
-    }
-
-    const budgetRes = await client.query(
-      `SELECT * FROM public.budgets ${whereClause} LIMIT 1`,
-      queryParams
-    );
-
-    const currentBudget = budgetRes.rows[0];
-    if (!currentBudget) {
-      throw new Error("No se encontró el presupuesto.");
-    }
+    const currentBudget = await lockBudgetForTeamDecision(client, budgetId, companyId);
 
     if (currentBudget.status === "approved") {
       return currentBudget;
+    }
+
+    if (currentBudget.status !== "sent" && currentBudget.status !== "viewed") {
+      throw new BudgetDecisionError(
+        409,
+        currentBudget.status === "draft"
+          ? "Envía el presupuesto antes de registrar la aprobación del cliente."
+          : "Este presupuesto ya no espera respuesta del cliente."
+      );
     }
 
     const updateRes = await client.query(
@@ -456,6 +631,7 @@ export async function approveBudgetRepo(userId: string, budgetId: string, compan
         SET status = 'approved',
             approved_at = NOW(),
             approved_by = app.current_user_id(),
+            rejection_reason = NULL,
             updated_at = NOW()
         WHERE id = $1
         RETURNING *
@@ -489,7 +665,7 @@ export async function approveBudgetRepo(userId: string, budgetId: string, compan
     await client.query(
       `
         INSERT INTO public.budget_change_history (company_id, budget_id, version, action, performed_by, notes, snapshot)
-        VALUES ($1, $2, $3, 'approved', app.current_user_id(), 'Presupuesto aprobado por el cliente', $4)
+        VALUES ($1, $2, $3, 'approved', app.current_user_id(), 'Aprobación del cliente registrada por la empresa', $4)
       `,
       [approvedBudget.company_id, budgetId, approvedBudget.version, JSON.stringify(snapshot)]
     );
@@ -500,26 +676,19 @@ export async function approveBudgetRepo(userId: string, budgetId: string, compan
 
 export async function rejectBudgetRepo(userId: string, budgetId: string, rejectionReason: string, companyId?: string) {
   return withUserTransaction(userId, async (client) => {
-    let whereClause = `WHERE id = $1`;
-    const queryParams: any[] = [budgetId];
-
-    if (companyId) {
-      whereClause += ` AND company_id = $2`;
-      queryParams.push(companyId);
-    }
-
-    const budgetRes = await client.query(
-      `SELECT * FROM public.budgets ${whereClause} LIMIT 1`,
-      queryParams
-    );
-
-    const currentBudget = budgetRes.rows[0];
-    if (!currentBudget) {
-      throw new Error("No se encontró el presupuesto.");
-    }
+    const currentBudget = await lockBudgetForTeamDecision(client, budgetId, companyId);
 
     if (currentBudget.status === "approved") {
-      throw new Error("El presupuesto ya ha sido aprobado y no puede ser rechazado.");
+      throw new BudgetDecisionError(409, "El presupuesto ya está aprobado y no se puede rechazar.");
+    }
+
+    if (currentBudget.status !== "sent" && currentBudget.status !== "viewed") {
+      throw new BudgetDecisionError(
+        409,
+        currentBudget.status === "draft"
+          ? "Envía el presupuesto antes de registrar la respuesta del cliente."
+          : "Este presupuesto ya no espera respuesta del cliente."
+      );
     }
 
     const updateRes = await client.query(
@@ -541,7 +710,7 @@ export async function rejectBudgetRepo(userId: string, budgetId: string, rejecti
         INSERT INTO public.budget_change_history (company_id, budget_id, version, action, performed_by, notes)
         VALUES ($1, $2, $3, 'rejected', app.current_user_id(), $4)
       `,
-      [rejectedBudget.company_id, budgetId, rejectedBudget.version, `Rechazado con motivo: ${rejectionReason}`]
+      [rejectedBudget.company_id, budgetId, rejectedBudget.version, `Rechazo del cliente registrado por la empresa. Motivo: ${rejectionReason}`]
     );
 
     return rejectedBudget;

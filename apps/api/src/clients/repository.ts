@@ -64,16 +64,16 @@ export async function findContractorCompaniesRepo(userId: string) {
   });
 }
 
-export async function findCompanyClientsRepo(userId: string, companyId: string) {
+export async function findCompanyClientsRepo(userId: string, companyId: string, archived = false) {
   return withUserTransaction(userId, async (client) => {
     const result = await client.query(
       `
         ${clientDetailsQuery}
         WHERE client.company_id = $1
-          AND client.active = true
-        ORDER BY client.created_at DESC
+          AND client.active = $2
+        ORDER BY ${archived ? "client.updated_at" : "client.created_at"} DESC
       `,
-      [companyId]
+      [companyId, !archived]
     );
     return result.rows;
   });
@@ -194,17 +194,26 @@ export async function updateClientRepo(userId: string, clientId: string, input: 
   });
 }
 
-export async function deactivateClientRepo(userId: string, clientId: string, companyId: string) {
+/**
+ * Archiva o restaura un cliente. Devuelve false si no existe o si RLS no deja
+ * cambiarlo (antes respondía «Listo» aunque no se tocara ninguna fila).
+ */
+export async function setClientActiveRepo(userId: string, clientId: string, companyId: string, active: boolean) {
   return withUserTransaction(userId, async (client) => {
-    await client.query(
+    const result = await client.query(
       `
         UPDATE public.clients
-        SET active = false, updated_at = now()
+        SET active = $3, updated_at = now()
         WHERE id = $1 AND company_id = $2
       `,
-      [clientId, companyId]
+      [clientId, companyId, active]
     );
+    return (result.rowCount ?? 0) > 0;
   });
+}
+
+export async function deactivateClientRepo(userId: string, clientId: string, companyId: string) {
+  return setClientActiveRepo(userId, clientId, companyId, false);
 }
 
 export async function addClientAddressRepo(userId: string, clientId: string, input: AddressInput) {
@@ -454,9 +463,9 @@ export async function updateClientContactRepo(
         UPDATE public.client_contacts
         SET
           name = COALESCE($1, name),
-          position = COALESCE($2, position),
-          email = COALESCE($3, email),
-          phone = COALESCE($4, phone),
+          position = CASE WHEN $2::text IS NULL THEN position ELSE NULLIF($2::text, '') END,
+          email = CASE WHEN $3::text IS NULL THEN email ELSE NULLIF($3::text, '') END,
+          phone = CASE WHEN $4::text IS NULL THEN phone ELSE NULLIF($4::text, '') END,
           is_primary = COALESCE($5, is_primary),
           updated_at = now()
         WHERE id = $6 AND client_id = $7 AND company_id = $8
@@ -465,7 +474,8 @@ export async function updateClientContactRepo(
       [
         input.name ?? null,
         input.position ?? null,
-        input.email ? input.email.toLowerCase() : null,
+        // "" borra el correo; undefined lo conserva.
+        input.email === undefined ? null : input.email.toLowerCase(),
         input.phone ?? null,
         input.isPrimary ?? null,
         contactId,

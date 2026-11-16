@@ -43,6 +43,7 @@ import {
   createClient,
   deactivateClient,
   listClients,
+  reactivateClient,
 } from "@/services/client-service";
 import type {
   ClientType,
@@ -55,6 +56,9 @@ export default function ClientsScreen() {
   const { activeCompany } = useCompany();
   const { can } = usePermissions();
   const canEditClients = can("clients.edit");
+  // Archivar y restaurar: propietario o administrador (igual que la API).
+  const canArchiveClients = can("clients.delete");
+  const [showArchived, setShowArchived] = useState(false);
 
   const [clients, setClients] = useState<
     ClientWithDetails[]
@@ -100,7 +104,7 @@ export default function ClientsScreen() {
       }
 
       const { clients: loadedClients, error } =
-        await listClients(activeCompany.id);
+        await listClients(activeCompany.id, { archived: showArchived });
 
       if (error) {
         Alert.alert(
@@ -114,7 +118,7 @@ export default function ClientsScreen() {
       setLoading(false);
       setRefreshing(false);
     },
-    [activeCompany],
+    [activeCompany, showArchived],
   );
 
   useFocusEffect(
@@ -129,15 +133,15 @@ export default function ClientsScreen() {
     if (!activeCompany) return;
 
     Alert.alert(
-      "Desactivar cliente",
-      `¿Deseas desactivar a ${getClientDisplayName(client)}?`,
+      "Archivar cliente",
+      `${getClientDisplayName(client)} saldrá de la lista y de los selectores. Sus obras, presupuestos y facturas se conservan, y puedes restaurarlo desde «Archivados».`,
       [
         {
           text: "Cancelar",
           style: "cancel",
         },
         {
-          text: "Desactivar",
+          text: "Archivar",
           style: "destructive",
           onPress: async () => {
             const { error } =
@@ -148,17 +152,30 @@ export default function ClientsScreen() {
 
             if (error) {
               Alert.alert(
-                "No fue posible desactivar el cliente",
+                "No fue posible archivar el cliente",
                 error,
               );
               return;
             }
 
-            await loadClients(true);
+            setClients((current) => current.filter((entry) => entry.id !== client.id));
           },
         },
       ],
     );
+  }
+
+  async function handleRestoreClient(client: ClientWithDetails) {
+    if (!activeCompany) return;
+
+    const { error } = await reactivateClient(activeCompany.id, client.id);
+    if (error) {
+      Alert.alert("No fue posible restaurar el cliente", error);
+      return;
+    }
+
+    setClients((current) => current.filter((entry) => entry.id !== client.id));
+    Alert.alert("Cliente restaurado", `${getClientDisplayName(client)} vuelve a estar en tu lista de clientes.`);
   }
 
   if (!activeCompany) {
@@ -195,9 +212,9 @@ export default function ClientsScreen() {
         ListEmptyComponent={
           <LeuretEmptyState
             icon={search.trim() ? "search-outline" : "people-outline"}
-            title={search.trim() ? "Sin coincidencias" : "No hay clientes"}
-            description={search.trim() ? "Prueba con otro nombre, teléfono, correo o documento." : "Crea tu primer cliente para iniciar proyectos, visitas y presupuestos."}
-            actionLabel={search.trim() ? "Limpiar búsqueda" : canEditClients ? "Agregar cliente" : undefined}
+            title={search.trim() ? "Sin coincidencias" : showArchived ? "No hay clientes archivados" : "No hay clientes"}
+            description={search.trim() ? "Prueba con otro nombre, teléfono, correo o documento." : showArchived ? "Los clientes que archives aparecerán aquí para restaurarlos." : "Crea tu primer cliente para iniciar proyectos, visitas y presupuestos."}
+            actionLabel={search.trim() ? "Limpiar búsqueda" : canEditClients && !showArchived ? "Agregar cliente" : undefined}
             actionIcon={search.trim() ? "close-outline" : "add"}
             onAction={() => search.trim() ? setSearch("") : setModalVisible(true)}
             style={styles.emptySpacing}
@@ -221,8 +238,16 @@ export default function ClientsScreen() {
                 },
               } as Href)
             }
-            onDeactivate={() =>
-              void handleDeactivateClient(item)
+            archived={showArchived}
+            onDeactivate={
+              canArchiveClients && !showArchived
+                ? () => void handleDeactivateClient(item)
+                : undefined
+            }
+            onRestore={
+              canArchiveClients && showArchived
+                ? () => void handleRestoreClient(item)
+                : undefined
             }
           />
         )}
@@ -282,11 +307,34 @@ export default function ClientsScreen() {
               />
             </View>
 
+            <View style={styles.segment} accessibilityRole="tablist">
+              {([
+                { value: false, label: "Activos" },
+                { value: true, label: "Archivados" },
+              ] as const).map((option) => {
+                const selected = showArchived === option.value;
+                return (
+                  <Pressable
+                    key={option.label}
+                    onPress={() => setShowArchived(option.value)}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected }}
+                    style={[styles.segmentOption, selected && styles.segmentOptionSelected]}
+                  >
+                    <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
             <Text style={styles.counter}>
               {filteredClients.length} cliente
               {filteredClients.length === 1
                 ? ""
                 : "s"}
+              {showArchived ? " archivado" + (filteredClients.length === 1 ? "" : "s") : ""}
             </Text>
           </View>
         }
@@ -305,15 +353,20 @@ export default function ClientsScreen() {
 type ClientCardProps = {
   client: ClientWithDetails;
   index: number;
+  archived: boolean;
   onPress: () => void;
-  onDeactivate: () => void;
+  /** Solo propietario o administrador pueden archivar. */
+  onDeactivate?: () => void;
+  onRestore?: () => void;
 };
 
 function ClientCard({
   client,
   index,
+  archived,
   onPress,
   onDeactivate,
+  onRestore,
 }: ClientCardProps) {
   const primaryAddress =
     client.addresses.find(
@@ -360,16 +413,34 @@ function ClientCard({
         ) : null}
       </View>
 
-      <Pressable
-        onPress={onDeactivate}
-        hitSlop={12}
-      >
-        <Ionicons
-          name="trash-outline"
-          size={20}
-          color={colors.danger}
-        />
-      </Pressable>
+      {onDeactivate ? (
+        <Pressable
+          onPress={onDeactivate}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={`Archivar a ${getClientDisplayName(client)}`}
+        >
+          <Ionicons
+            name="archive-outline"
+            size={20}
+            color={colors.danger}
+          />
+        </Pressable>
+      ) : null}
+      {onRestore ? (
+        <Pressable
+          onPress={onRestore}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={`Restaurar a ${getClientDisplayName(client)}`}
+          style={styles.restoreButton}
+        >
+          <Ionicons name="arrow-undo-outline" size={16} color={colors.primary} />
+          <Text style={styles.restoreText}>Restaurar</Text>
+        </Pressable>
+      ) : archived ? (
+        <Ionicons name="archive-outline" size={18} color={colors.textMuted} />
+      ) : null}
     </MotionPressable>
   );
 }
@@ -703,6 +774,48 @@ function FormField({
 }
 
 const styles = StyleSheet.create({
+  segment: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 14,
+  },
+  segmentOption: {
+    flex: 1,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  segmentOptionSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+  },
+  segmentText: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  segmentTextSelected: {
+    color: colors.textLight,
+  },
+  restoreButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  restoreText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: "800",
+  },
   flex: {
     flex: 1,
   },

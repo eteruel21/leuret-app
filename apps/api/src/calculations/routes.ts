@@ -10,7 +10,8 @@ import {
   saveCalculationService,
   getCompanyCalculationsService,
   getCalculationDetailService,
-  deleteCalculationService
+  deleteCalculationService,
+  updateCalculationService
 } from "./services.js";
 
 function authenticatedUserId(request: FastifyRequest, reply: FastifyReply): string | null {
@@ -91,6 +92,33 @@ export async function registerCalculationRoutes(app: FastifyInstance): Promise<v
         return reply.status(404).send({ message: "No se encontró el cálculo." });
       }
 
+      return { calculation };
+    }
+  );
+
+  app.put(
+    "/calculations/:calculationId",
+    {
+      // Mismos roles que la política UPDATE de saved_calculations.
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator", "member", "sales"], "body")]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedParams = calculationParamsSchema.safeParse(request.params);
+      const parsedBody = saveCalculationSchema.safeParse(request.body);
+      if (!parsedParams.success || !parsedBody.success) {
+        return reply.status(400).send({
+          message: "Los datos del cálculo no son válidos.",
+          fields: parsedBody.success ? undefined : parsedBody.error.flatten().fieldErrors
+        });
+      }
+
+      const calculation = await updateCalculationService(userId, parsedParams.data.calculationId, parsedBody.data);
+      if (!calculation) {
+        return reply.status(404).send({ message: "No se encontró el cálculo guardado." });
+      }
       return { calculation };
     }
   );

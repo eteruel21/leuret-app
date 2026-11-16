@@ -79,7 +79,7 @@ export function ProjectsTab({
         project.clientName,
         PROJECT_STATUS[project.status]?.label ?? project.status,
         Math.round(project.progressPercentage),
-        project.contractValue ?? project.budgetEstimate,
+        projectValue(project),
         project.startDate,
         project.estimatedEndDate,
         project.openTaskCount,
@@ -146,7 +146,7 @@ export function ProjectsTab({
                       <small>{project.taskCount} en total</small>
                     )}
                   </td>
-                  <td className="numeric">{project.contractValue ?? project.budgetEstimate ? money(project.contractValue ?? project.budgetEstimate) : "—"}</td>
+                  <td className="numeric">{projectValue(project) ? money(projectValue(project)) : "—"}</td>
                   <td>
                     <span className={isLate(project) ? "text-danger" : undefined}>{day(project.estimatedEndDate)}</span>
                   </td>
@@ -163,9 +163,23 @@ export function ProjectsTab({
   );
 }
 
+/**
+ * Valor de la obra: el contratado (presupuesto aprobado) o, si todavía no hay,
+ * el estimado inicial. Un contrato en 0 no es «sin valor» (antes con `??` el 0
+ * tapaba el estimado y la tabla mostraba «—»).
+ */
+function projectValue(project: AdminProject): number {
+  return project.contractValue || project.budgetEstimate || 0;
+}
+
+/** Hoy en Panamá (AAAA-MM-DD); en UTC, de noche ya sería mañana. */
+function panamaToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Panama", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
 function isLate(project: AdminProject): boolean {
   if (!project.estimatedEndDate || ["completed", "cancelled"].includes(project.status)) return false;
-  return project.estimatedEndDate < new Date().toISOString().slice(0, 10);
+  return project.estimatedEndDate < panamaToday();
 }
 
 function ProjectDrawer({

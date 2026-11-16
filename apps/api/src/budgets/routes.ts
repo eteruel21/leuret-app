@@ -18,6 +18,8 @@ import {
   companyQuerySchema,
   createBudgetSchema,
   createBudgetItemSchema,
+  updateBudgetItemSchema,
+  updateBudgetSchema,
   approveBudgetSchema,
   rejectBudgetSchema,
   sendBudgetSchema,
@@ -34,6 +36,8 @@ import {
   getBudgetDetailsService,
   addBudgetItemService,
   deleteBudgetItemService,
+  updateBudgetItemService,
+  updateBudgetService,
   approveBudgetService,
   clientBudgetResponseError,
   rejectBudgetService,
@@ -43,7 +47,7 @@ import {
   getBudgetPriceUpdatesService,
   applyBudgetPriceUpdatesService
 } from "./services.js";
-import { BudgetLockedError, BudgetNotDraftError, BudgetReopenError, BudgetSendError } from "./repository.js";
+import { BudgetDecisionError, BudgetLockedError, BudgetNotDraftError, BudgetReopenError, BudgetSendError } from "./repository.js";
 
 import { getCalculationDetailService } from "../calculations/services.js";
 
@@ -242,12 +246,15 @@ export async function registerBudgetRoutes(
       }
 
       try {
-        await deleteBudgetItemService(
+        const deleted = await deleteBudgetItemService(
           userId,
           parsedParams.data.budgetId,
           parsedParams.data.itemId,
           parsedQuery.data.companyId
         );
+        if (!deleted) {
+          return reply.status(404).send({ message: "No se encontró la partida." });
+        }
         return { success: true };
       } catch (error) {
         if (error instanceof BudgetLockedError) {
@@ -255,6 +262,83 @@ export async function registerBudgetRoutes(
         }
         request.log.error(safeErrorDetails(error), "No se pudo eliminar la partida.");
         return reply.status(400).send({ message: "Error al eliminar la partida." });
+      }
+    }
+  );
+
+  app.patch(
+    "/budgets/:budgetId/items/:itemId",
+    {
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"], "body")]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedParams = budgetItemParamsSchema.safeParse(request.params);
+      const parsedBody = updateBudgetItemSchema.safeParse(request.body);
+
+      if (!parsedParams.success || !parsedBody.success) {
+        return reply.status(400).send({
+          message: "Los datos de la partida no son válidos.",
+          fields: parsedBody.success ? undefined : parsedBody.error.flatten().fieldErrors
+        });
+      }
+
+      try {
+        const item = await updateBudgetItemService(
+          userId,
+          parsedParams.data.budgetId,
+          parsedParams.data.itemId,
+          parsedBody.data
+        );
+        if (!item) {
+          return reply.status(404).send({ message: "No se encontró la partida." });
+        }
+        return { item };
+      } catch (error) {
+        if (error instanceof BudgetLockedError) {
+          return reply.status(409).send({ message: error.message });
+        }
+        request.log.error(safeErrorDetails(error), "No se pudo editar la partida.");
+        return reply.status(400).send({ message: "Error al editar la partida." });
+      }
+    }
+  );
+
+  app.patch(
+    "/budgets/:budgetId",
+    {
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"], "body")]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedParams = budgetParamsSchema.safeParse(request.params);
+      const parsedBody = updateBudgetSchema.safeParse(request.body);
+
+      if (!parsedParams.success || !parsedBody.success) {
+        return reply.status(400).send({
+          message: parsedBody.success
+            ? "El presupuesto no es válido."
+            : parsedBody.error.issues[0]?.message ?? "Los datos del presupuesto no son válidos.",
+          fields: parsedBody.success ? undefined : parsedBody.error.flatten().fieldErrors
+        });
+      }
+
+      try {
+        const budget = await updateBudgetService(userId, parsedParams.data.budgetId, parsedBody.data);
+        if (!budget) {
+          return reply.status(404).send({ message: "No se encontró el presupuesto." });
+        }
+        return { budget };
+      } catch (error) {
+        if (error instanceof BudgetLockedError) {
+          return reply.status(409).send({ message: error.message });
+        }
+        request.log.error(safeErrorDetails(error), "No se pudo actualizar el presupuesto.");
+        return reply.status(400).send({ message: "Error al actualizar el presupuesto." });
       }
     }
   );
@@ -279,6 +363,9 @@ export async function registerBudgetRoutes(
         const budget = await approveBudgetService(userId, parsedParams.data.budgetId, parsedBody.data.companyId);
         return { budget };
       } catch (error) {
+        if (error instanceof BudgetDecisionError) {
+          return reply.status(error.status).send({ message: error.message });
+        }
         const known = clientBudgetResponseError(error);
         if (known) return reply.status(known.status).send({ message: known.message });
         request.log.error(safeErrorDetails(error), "No se pudo aprobar el presupuesto.");
@@ -387,6 +474,9 @@ export async function registerBudgetRoutes(
         );
         return { budget };
       } catch (error) {
+        if (error instanceof BudgetDecisionError) {
+          return reply.status(error.status).send({ message: error.message });
+        }
         const known = clientBudgetResponseError(error);
         if (known) return reply.status(known.status).send({ message: known.message });
         request.log.error(safeErrorDetails(error), "No se pudo rechazar el presupuesto.");

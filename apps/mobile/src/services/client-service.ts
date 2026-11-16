@@ -45,7 +45,8 @@ function errorMessage(
 }
 
 export async function listClients(
-  companyId: string
+  companyId: string,
+  options: { archived?: boolean } = {}
 ): Promise<{
   clients: ClientWithDetails[];
   error: string | null;
@@ -55,7 +56,7 @@ export async function listClients(
       await authenticatedRequest<{
         clients: ClientWithDetails[];
       }>(
-        `/clients?companyId=${encodeURIComponent(companyId)}`
+        `/clients?companyId=${encodeURIComponent(companyId)}${options.archived ? "&archived=true" : ""}`
       );
 
     return {
@@ -113,6 +114,34 @@ export async function deactivateClient(
   try {
     await authenticatedRequest(
       `/clients/${clientId}/deactivate`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          companyId
+        })
+      }
+    );
+
+    return {
+      error: null
+    };
+  } catch (error) {
+    return {
+      error: errorMessage(error)
+    };
+  }
+}
+
+/** Restaura un cliente archivado: vuelve a la lista y a los selectores. */
+export async function reactivateClient(
+  companyId: string,
+  clientId: string
+): Promise<{
+  error: string | null;
+}> {
+  try {
+    await authenticatedRequest(
+      `/clients/${clientId}/reactivate`,
       {
         method: "PATCH",
         body: JSON.stringify({

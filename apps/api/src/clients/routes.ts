@@ -14,6 +14,7 @@ import { findContractorClientProcesses } from "./processes.js";
 
 import {
   companyQuerySchema,
+  listClientsQuerySchema,
   clientParamsSchema,
   clientDetailsSchema,
   addressParamsSchema,
@@ -35,6 +36,7 @@ import {
   getClientDetailsService,
   updateClientService,
   deactivateClientService,
+  reactivateClientService,
   addClientAddressService,
   updateClientAddressService,
   setPrimaryClientAddressService,
@@ -87,14 +89,14 @@ export async function registerClientRoutes(
       const userId = authenticatedUserId(request, reply);
       if (!userId) return;
 
-      const parsedQuery = companyQuerySchema.safeParse(request.query);
+      const parsedQuery = listClientsQuerySchema.safeParse(request.query);
       if (!parsedQuery.success) {
         return reply.status(400).send({
           message: "La empresa no es válida."
         });
       }
 
-      const clients = await getCompanyClientsService(userId, parsedQuery.data.companyId);
+      const clients = await getCompanyClientsService(userId, parsedQuery.data.companyId, parsedQuery.data.archived);
       return { clients };
     }
   );
@@ -221,7 +223,36 @@ export async function registerClientRoutes(
         });
       }
 
-      await deactivateClientService(userId, parsedParams.data.clientId, parsedBody.data.companyId);
+      const changed = await deactivateClientService(userId, parsedParams.data.clientId, parsedBody.data.companyId);
+      if (!changed) {
+        return reply.status(404).send({ message: "No se encontró el cliente." });
+      }
+      return { success: true };
+    }
+  );
+
+  app.patch(
+    "/clients/:clientId/reactivate",
+    {
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin"], "body")]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedParams = clientParamsSchema.safeParse(request.params);
+      const parsedBody = deactivateClientSchema.safeParse(request.body);
+
+      if (!parsedParams.success || !parsedBody.success) {
+        return reply.status(400).send({
+          message: "El cliente no es válido."
+        });
+      }
+
+      const changed = await reactivateClientService(userId, parsedParams.data.clientId, parsedBody.data.companyId);
+      if (!changed) {
+        return reply.status(404).send({ message: "No se encontró el cliente." });
+      }
       return { success: true };
     }
   );

@@ -6,6 +6,8 @@ import {
   getBudgetDetailsRepo,
   addBudgetItemRepo,
   deleteBudgetItemRepo,
+  updateBudgetItemRepo,
+  updateBudgetRepo,
   approveBudgetRepo,
   isLinkedClientForBudgetRepo,
   respondToBudgetAsClientRepo,
@@ -15,7 +17,9 @@ import {
   applyBudgetPriceUpdatesRepo,
   sendBudgetRepo,
   reopenBudgetRepo,
-  type CreateBudgetItemInput
+  type CreateBudgetItemInput,
+  type UpdateBudgetItemInput,
+  type UpdateBudgetInput
 } from "./repository.js";
 import { notifyBudgetDecision, notifyBudgetSent } from "../notifications/event-service.js";
 
@@ -45,6 +49,15 @@ export async function addBudgetItemService(userId: string, budgetId: string, inp
 
 export async function deleteBudgetItemService(userId: string, budgetId: string, itemId: string, companyId: string) {
   return deleteBudgetItemRepo(userId, budgetId, itemId, companyId);
+}
+
+export async function updateBudgetItemService(userId: string, budgetId: string, itemId: string, input: UpdateBudgetItemInput) {
+  return updateBudgetItemRepo(userId, budgetId, itemId, input);
+}
+
+export async function updateBudgetService(userId: string, budgetId: string, input: UpdateBudgetInput) {
+  const updated = await updateBudgetRepo(userId, budgetId, input);
+  return updated ? getBudgetDetailsRepo(userId, budgetId, input.companyId) : null;
 }
 
 export async function approveBudgetService(userId: string, budgetId: string, companyId?: string) {
