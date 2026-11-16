@@ -5,7 +5,8 @@ import { type SavedScreen, resumableScreen, startupScreen } from "../screen-resu
 const paths = new Set([
   "/", "/(tabs)", "/(tabs)/calculos", "/(client-tabs)/facturas",
   "/calculos/concreto", "/facturas", "/facturas/[id]",
-  "/contratistas/[id]", "/solicitudes",
+  "/contratistas/[id]", "/solicitudes", "/peticiones/[id]",
+  "/peticiones/conversacion", "/cliente-peticiones/conversacion",
   "/empresa", "/empresa/unirme", "/invitacion", "/(auth)/reset-password",
 ]);
 
@@ -49,6 +50,18 @@ describe("retomar la última pantalla de Leuret", () => {
     const params = { id: "item-123" };
     expect(resumableScreen("/(client-tabs)", paths, "/contratistas/[id]", params)).toEqual({ pathname: "/contratistas/[id]", params });
     expect(resumableScreen(scope, paths, "/solicitudes", params)).toEqual({ pathname: "/solicitudes", params });
+  });
+
+  it("retoma peticiones y conversaciones con sus identificadores", () => {
+    const thread = { requestId: "job-123", companyId: "company-456" };
+    expect(resumableScreen(scope, paths, "/peticiones/[id]", { id: thread.requestId })).toEqual({
+      pathname: "/peticiones/[id]", params: { id: thread.requestId },
+    });
+    expect(resumableScreen("/(client-tabs)", paths, "/cliente-peticiones/conversacion", { ...thread, token: "ignore" })).toEqual({
+      pathname: "/cliente-peticiones/conversacion", params: thread,
+    });
+    expect(resumableScreen("/(client-tabs)", paths, "/cliente-peticiones/conversacion", { requestId: thread.requestId })).toBeNull();
+    expect(resumableScreen(scope, paths, "/cliente-peticiones/conversacion", thread)).toBeNull();
   });
 
   it("omite rutas transitorias, de autenticación, eliminadas o sin un identificador válido", () => {

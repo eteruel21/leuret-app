@@ -46,7 +46,7 @@ function queueKey(userId: string): string {
 
 export function isRetryableOfflineError(error: unknown): boolean {
   if (!(error instanceof ApiError)) return true;
-  return error.status === 408 || error.status === 429 || error.status >= 500;
+  return error.status === 0 || error.status === 408 || error.status === 429 || error.status >= 500;
 }
 
 export async function getOfflineQueue(): Promise<QueuedOfflineAction[]> {

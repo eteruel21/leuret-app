@@ -1,571 +1,196 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
-import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
-} from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BackBar } from "@/components/back-navigation";
-import {
-  colors,
-  layout,
-  radius,
-  shadows,
-} from "@/constants/theme";
+import { LeuretBrand } from "@/components/LeuretBrand";
+import { LeuretButton } from "@/components/LeuretButton";
+import { LeuretFeedback } from "@/components/LeuretFeedback";
 import TurnstileChallenge from "@/components/TurnstileChallenge";
+import { colors, layout, radius, shadows, spacing, typography } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 
+type Mode = "login" | "recovery" | "sent";
+
 export default function LoginScreen() {
-  const { signIn, resetPassword } = useAuth();
-
+  const { signIn, resetPassword, sessionNotice } = useAuth();
+  const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
-  const [password, setPassword] =
-    useState("");
-  const [loginError, setLoginError] =
-    useState<string | null>(null);
-  const [showPassword, setShowPassword] =
-    useState(false);
-  const [submitting, setSubmitting] =
-    useState(false);
-  const [loginCaptchaToken, setLoginCaptchaToken] = useState<string | null>(null);
-  const [loginCaptchaResetKey, setLoginCaptchaResetKey] = useState(0);
-  const [recoveryCaptchaToken, setRecoveryCaptchaToken] = useState<string | null>(null);
-  const [recoveryCaptchaResetKey, setRecoveryCaptchaResetKey] = useState(0);
-  const [showRecovery, setShowRecovery] = useState(false);
-  const [recoverySent, setRecoverySent] = useState(false);
-  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
 
-  function closeRecovery() {
-    setRecoverySent(false);
-    setRecoveryEmail("");
-    setShowRecovery(false);
+  const signingIn = mode === "login";
+  const submitLabel = signingIn ? "Iniciar sesión" : "Enviar enlace de recuperación";
+
+  function switchMode(next: Mode) {
+    if (submitting) return;
+    setFormError(null);
+    setCaptchaToken(null);
+    setMode(next);
   }
 
-  async function handleSignIn() {
+  async function submit() {
+    if (submitting || !captchaToken) return;
     const cleanEmail = email.trim();
-
-    setLoginError(null);
-
-    if (!cleanEmail || !password) {
-      const message =
-        "Introduce tu correo y contraseña.";
-
-      setLoginError(message);
-
-      if (Platform.OS !== "web") {
-        Alert.alert(
-          "Datos incompletos",
-          message,
-        );
-      }
-
+    if (!cleanEmail || (signingIn && !password)) {
+      setFormError(signingIn ? "Introduce tu correo y contraseña." : "Introduce tu correo electrónico.");
       return;
     }
 
-    if (!loginCaptchaToken) {
-      const message =
-        "Completa la verificación de seguridad antes de iniciar sesión.";
-
-      setLoginError(message);
-
-      if (Platform.OS !== "web") {
-        Alert.alert(
-          "Verificación requerida",
-          message,
-        );
-      }
-
-      return;
-    }
-
-    const captchaToken = loginCaptchaToken;
-    setLoginCaptchaToken(null);
-    setLoginCaptchaResetKey((current) => current + 1);
-
+    setFormError(null);
+    setSubmitting(true);
     try {
-      setSubmitting(true);
-
-      const { error } = await signIn(
-        cleanEmail,
-        password,
-        captchaToken,
-      );
-
-
-      if (error) {
-        const friendlyMessage =
-          translateAuthError(error.message);
-
-        setLoginError(friendlyMessage);
-
-        if (Platform.OS !== "web") {
-          Alert.alert(
-            "No fue posible iniciar sesión",
-            friendlyMessage,
-          );
-        }
-      }
+      const { error } = signingIn
+        ? await signIn(cleanEmail, password, captchaToken)
+        : await resetPassword(cleanEmail, captchaToken);
+      if (error) setFormError(error.message);
+      else if (!signingIn) setMode("sent");
     } finally {
       setSubmitting(false);
+      setCaptchaToken(null);
+      setCaptchaResetKey((current) => current + 1);
     }
   }
 
-  async function handleResetPassword() {
-    const cleanEmail = email.trim();
-
-    if (!cleanEmail) {
-      Alert.alert(
-        "Correo requerido",
-        "Introduce tu correo antes de solicitar la recuperación.",
-      );
-      return;
-    }
-
-    if (!recoveryCaptchaToken) {
-      Alert.alert(
-        "Verificación requerida",
-        "Completa la verificación de seguridad para recuperar tu contraseña.",
-      );
-      return;
-    }
-
-    const captchaToken = recoveryCaptchaToken;
-
-    setRecoveryCaptchaToken(null);
-    setRecoveryCaptchaResetKey(
-      (current) => current + 1,
-    );
-
-    try {
-      setSubmitting(true);
-
-      const { error } = await resetPassword(
-        cleanEmail,
-        captchaToken,
-      );
-
-      if (error) {
-        Alert.alert(
-          "No fue posible enviar la solicitud",
-          translateAuthError(error.message),
-        );
-        return;
-      }
-
-      setRecoveryEmail(cleanEmail);
-      setRecoverySent(true);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
+  const showBack = !signingIn;
   return (
-    <SafeAreaView
-      style={styles.safeArea}
-      edges={showRecovery ? ["bottom"] : ["top", "left", "right", "bottom"]}
-    >
-      {showRecovery ? <BackBar onPress={closeRecovery} /> : null}
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={
-          Platform.OS === "ios"
-            ? "padding"
-            : undefined
-        }
-      >
+    <SafeAreaView style={styles.safeArea} edges={showBack ? ["bottom", "left", "right"] : undefined}>
+      {showBack ? <BackBar onPress={() => switchMode("login")} /> : null}
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
         >
-          <View style={styles.backgroundOrbLarge} />
-          <View style={styles.backgroundOrbSmall} />
-
-          <View style={styles.brand}>
-            <View style={styles.brandRow}>
-              <View style={styles.logo}>
-                <Ionicons
-                  name="construct"
-                  size={23}
-                  color={colors.surfaceDark}
-                />
-              </View>
-
-              <Text style={styles.brandName}>
-                LEURET
-              </Text>
-            </View>
-
-            <Text style={styles.brandEyebrow}>
-              GESTIÓN PARA CONTRATISTAS
-            </Text>
-
-            <Text style={styles.brandHeadline}>
-              Construye mejor.{"\n"}Administra fácil.
-            </Text>
-
-            <Text style={styles.brandDescription}>
-              Obras, clientes, presupuestos y cálculos siempre organizados.
-            </Text>
-
-            <View style={styles.benefitsRow}>
-              <View style={styles.benefit}>
-                <Ionicons
-                  name="shield-checkmark"
-                  size={15}
-                  color={colors.primary}
-                />
-                <Text style={styles.benefitText}>Seguro</Text>
-              </View>
-              <View style={styles.benefit}>
-                <Ionicons
-                  name="cloud-done"
-                  size={15}
-                  color={colors.primary}
-                />
-                <Text style={styles.benefitText}>En la nube</Text>
-              </View>
-            </View>
-          </View>
-
+          <LeuretBrand width={120} />
           <View style={styles.card}>
-            {recoverySent ? (
+            {mode === "sent" ? (
               <>
-                <View
-                  style={[
-                    styles.logo,
-                    {
-                      alignSelf: "center",
-                      marginBottom: 18,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="checkmark"
-                    size={26}
-                    color={colors.surfaceDark}
-                  />
-                </View>
-
-                <Text style={styles.formEyebrow}>
-                  RECUPERACIÓN SOLICITADA
-                </Text>
-
-                <Text style={styles.title}>
-                  Solicitud enviada con éxito
-                </Text>
-
-                <Text style={styles.subtitle}>
-                  Si existe una cuenta asociada a este correo,
-                  recibirás un enlace para cambiar tu contraseña.
-                </Text>
-
-                <View
-                  style={[
-                    styles.inputContainer,
-                    {
-                      marginBottom: 18,
-                      justifyContent: "center",
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="mail-outline"
-                    size={19}
-                    color={colors.primary}
-                  />
-
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontSize: 13,
-                      fontWeight: "700",
-                    }}
-                  >
-                    {recoveryEmail}
-                  </Text>
-                </View>
-
-                <Text
-                  style={[
-                    styles.subtitle,
-                    { marginBottom: 22 },
-                  ]}
-                >
-                  Revisa tu bandeja de entrada y también la
-                  carpeta de correo no deseado. El enlace es
-                  válido durante 1 hora.
-                </Text>
-
-                <Pressable
-                  onPress={closeRecovery}
-                  style={({ pressed }) => [
-                    styles.primaryButton,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.primaryButtonText}>
-                    Volver al inicio de sesión
-                  </Text>
-
-                  <Ionicons
-                    name="arrow-back-outline"
-                    size={19}
-                    color={colors.textLight}
-                  />
-                </Pressable>
-              </>
-            ) : showRecovery ? (
-              <>
-                <Text style={styles.formEyebrow}>RECUPERAR ACCESO</Text>
-                <Text style={styles.title}>
-                  ¿Olvidaste tu contraseña?
-                </Text>
-
-                <Text style={styles.subtitle}>
-                  Ingresa tu correo y completa la verificación para recibir el enlace de recuperación.
-                </Text>
-
-                <View style={styles.field}>
-                  <Text style={styles.label}>
-                    Correo electrónico
-                  </Text>
-
-                  <View style={styles.inputContainer}>
-                    <Ionicons
-                      name="mail-outline"
-                      size={20}
-                      color={colors.textSecondary}
-                    />
-
-                    <TextInput
-                      value={email}
-                      onChangeText={setEmail}
-                      placeholder="correo@empresa.com"
-                      placeholderTextColor={colors.textMuted}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      keyboardType="email-address"
-                      textContentType="emailAddress"
-                      style={styles.input}
-                    />
-                  </View>
-                </View>
-
-                <TurnstileChallenge
-                  action="recover_password"
-                  onToken={setRecoveryCaptchaToken}
-                  resetKey={recoveryCaptchaResetKey}
+                <LeuretFeedback
+                  tone="success"
+                  title="Solicitud enviada"
+                  message={`Si hay una cuenta asociada a ${email.trim()}, recibirás un enlace para cambiar tu contraseña. Revisa también la carpeta de correo no deseado.`}
                 />
-
-                <Pressable
-                  onPress={() => void handleResetPassword()}
-                  disabled={submitting || !recoveryCaptchaToken}
-                  style={({ pressed }) => [
-                    styles.primaryButton,
-                    { marginTop: 14 },
-                    (submitting || !recoveryCaptchaToken) && styles.primaryButtonDisabled,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  {submitting ? (
-                    <ActivityIndicator color={colors.textLight} />
-                  ) : (
-                    <>
-                      <Text style={styles.primaryButtonText}>
-                        Enviar enlace de recuperación
-                      </Text>
-                      <Ionicons
-                        name="send-outline"
-                        size={18}
-                        color={colors.textLight}
-                      />
-                    </>
-                  )}
-                </Pressable>
-
-                <Pressable
-                  onPress={closeRecovery}
-                  style={styles.forgotButton}
-                >
-                  <Text style={[styles.forgotText, { color: colors.textSecondary }]}>
-                    ← Volver al inicio de sesión
-                  </Text>
-                </Pressable>
+                <LeuretButton
+                  label="Volver al inicio de sesión"
+                  variant="secondary"
+                  icon="arrow-back-outline"
+                  onPress={() => switchMode("login")}
+                />
               </>
             ) : (
               <>
-                <Text style={styles.formEyebrow}>BIENVENIDO DE NUEVO</Text>
-                <Text style={styles.title}>
-                  Iniciar sesión
-                </Text>
+                <View style={styles.heading}>
+                  <Text accessibilityRole="header" style={styles.title}>
+                    {signingIn ? "Iniciar sesión" : "Recuperar contraseña"}
+                  </Text>
+                  <Text style={styles.subtitle}>
+                    {signingIn
+                      ? "Accede a tu espacio de trabajo."
+                      : "Te enviaremos un enlace para recuperar el acceso."}
+                  </Text>
+                </View>
 
-                <Text style={styles.subtitle}>
-                  Accede a tu empresa y continúa trabajando.
-                </Text>
+                {signingIn && sessionNotice && !formError ? (
+                  <LeuretFeedback tone="info" compact title={sessionNotice} />
+                ) : null}
 
                 <View style={styles.field}>
-                  <Text style={styles.label}>
-                    Correo electrónico
-                  </Text>
-
+                  <Text style={styles.label}>Correo electrónico</Text>
                   <View style={styles.inputContainer}>
-                    <Ionicons
-                      name="mail-outline"
-                      size={20}
-                      color={colors.textSecondary}
-                    />
-
+                    <Ionicons name="mail-outline" size={20} color={colors.textSecondary} />
                     <TextInput
+                      accessibilityLabel="Correo electrónico"
                       value={email}
                       onChangeText={setEmail}
                       placeholder="correo@empresa.com"
-                      placeholderTextColor={colors.textMuted}
+                      placeholderTextColor={colors.textSecondary}
                       autoCapitalize="none"
                       autoCorrect={false}
+                      autoComplete="email"
                       keyboardType="email-address"
-                      textContentType="emailAddress"
+                      editable={!submitting}
                       style={styles.input}
                     />
                   </View>
                 </View>
 
-                <View style={styles.field}>
-                  <Text style={styles.label}>
-                    Contraseña
-                  </Text>
-
-                  <View style={styles.inputContainer}>
-                    <Ionicons
-                      name="lock-closed-outline"
-                      size={20}
-                      color={colors.textSecondary}
-                    />
-
-                    <TextInput
-                      value={password}
-                      onChangeText={setPassword}
-                      placeholder="Tu contraseña"
-                      placeholderTextColor={colors.textMuted}
-                      secureTextEntry={!showPassword}
-                      autoCapitalize="none"
-                      textContentType="password"
-                      style={styles.input}
-                    />
-
-                    <Pressable
-                      onPress={() =>
-                        setShowPassword(
-                          (current) => !current,
-                        )
-                      }
-                      hitSlop={10}
-                    >
-                      <Ionicons
-                        name={
-                          showPassword
-                            ? "eye-off-outline"
-                            : "eye-outline"
-                        }
-                        size={21}
-                        color={colors.textSecondary}
+                {signingIn ? (
+                  <View style={styles.field}>
+                    <Text style={styles.label}>Contraseña</Text>
+                    <View style={styles.inputContainer}>
+                      <Ionicons name="lock-closed-outline" size={20} color={colors.textSecondary} />
+                      <TextInput
+                        accessibilityLabel="Contraseña"
+                        value={password}
+                        onChangeText={setPassword}
+                        placeholder="Tu contraseña"
+                        placeholderTextColor={colors.textSecondary}
+                        secureTextEntry={!showPassword}
+                        autoCapitalize="none"
+                        autoComplete="current-password"
+                        editable={!submitting}
+                        returnKeyType="go"
+                        onSubmitEditing={() => void submit()}
+                        style={styles.input}
                       />
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                        onPress={() => setShowPassword((current) => !current)}
+                        style={styles.visibilityButton}
+                      >
+                        <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={21} color={colors.textSecondary} />
+                      </Pressable>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={submitting}
+                      onPress={() => switchMode("recovery")}
+                      style={styles.forgotButton}
+                    >
+                      <Text style={styles.link}>¿Olvidaste tu contraseña?</Text>
                     </Pressable>
-                  </View>
-                </View>
-
-                {loginError ? (
-                  <View style={styles.loginErrorBox}>
-                    <Ionicons
-                      name="alert-circle-outline"
-                      size={18}
-                      color={colors.danger}
-                    />
-
-                    <Text style={styles.loginErrorText}>
-                      {loginError}
-                    </Text>
                   </View>
                 ) : null}
 
+                {formError ? (
+                  <LeuretFeedback
+                    tone="error"
+                    compact
+                    title={signingIn ? "No pudimos iniciar sesión" : "No pudimos enviar el enlace"}
+                    message={formError}
+                  />
+                ) : null}
+
                 <TurnstileChallenge
-                  action="login"
-                  onToken={setLoginCaptchaToken}
-                  resetKey={loginCaptchaResetKey}
+                  key={mode}
+                  action={signingIn ? "login" : "recover_password"}
+                  onToken={setCaptchaToken}
+                  resetKey={captchaResetKey}
                 />
 
-                <Pressable
-                  onPress={() => {
-                    setRecoverySent(false);
-                    setRecoveryEmail("");
-                    setShowRecovery(true);
-                  }}
-                  style={styles.forgotButton}
-                >
-                  <Text style={styles.forgotText}>
-                    ¿Olvidaste tu contraseña?
-                  </Text>
-                </Pressable>
+                <LeuretButton
+                  label={submitLabel}
+                  icon={signingIn ? "arrow-forward-outline" : "send-outline"}
+                  onPress={() => void submit()}
+                  disabled={!captchaToken}
+                  loading={submitting}
+                />
 
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Iniciar sesión"
-                  onPress={() => void handleSignIn()}
-                  disabled={submitting || !loginCaptchaToken}
-                  style={({ pressed }) => [
-                    styles.primaryButton,
-                    (submitting || !loginCaptchaToken) &&
-                      styles.primaryButtonDisabled,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  {submitting ? (
-                    <ActivityIndicator
-                      color={colors.textLight}
-                    />
-                  ) : (
-                    <>
-                      <Text
-                        style={styles.primaryButtonText}
-                      >
-                        Iniciar sesión
-                      </Text>
-
-                      <Ionicons
-                        name="arrow-forward-outline"
-                        size={20}
-                        color={colors.textLight}
-                      />
-                    </>
-                  )}
-                </Pressable>
-
-
-                <View style={styles.registerRow}>
-                  <Text style={styles.registerLabel}>
-                    ¿No tienes una cuenta?
-                  </Text>
-
-                  <Pressable
-                    onPress={() =>
-                      router.push("/registro")
-                    }
-                  >
-                    <Text style={styles.registerLink}>
-                      Crear cuenta
-                    </Text>
-                  </Pressable>
-                </View>
+                {signingIn ? (
+                  <View style={styles.registerRow}>
+                    <Text style={styles.registerLabel}>¿No tienes una cuenta?</Text>
+                    <Pressable accessibilityRole="link" disabled={submitting} onPress={() => router.push("/registro")}>
+                      <Text style={styles.link}>Crear cuenta</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
               </>
             )}
           </View>
@@ -575,301 +200,46 @@ export default function LoginScreen() {
   );
 }
 
-function translateAuthError(
-  message: string,
-): string {
-  const normalized = message.toLowerCase();
-
-  if (
-    normalized.includes(
-      "invalid login credentials",
-    )
-  ) {
-    return "El correo o la contraseña son incorrectos.";
-  }
-
-  if (
-    normalized.includes(
-      "email not confirmed",
-    )
-  ) {
-    return "Debes confirmar tu correo antes de iniciar sesión.";
-  }
-
-  if (
-    normalized.includes(
-      "too many requests",
-    )
-  ) {
-    return "Se realizaron demasiados intentos. Inténtalo nuevamente más tarde.";
-  }
-
-  if (
-    normalized.includes("failed to fetch") ||
-    normalized.includes("network") ||
-    normalized.includes("network request failed") ||
-    normalized.includes("connection")
-  ) {
-    return "No pudimos conectarnos al servidor. Verifica tu conexión e inténtalo nuevamente.";
-  }
-
-  if (
-    normalized.includes("captcha") ||
-    normalized.includes("turnstile") ||
-    normalized.includes("verification")
-  ) {
-    return "No pudimos completar la verificación de seguridad. Inténtalo nuevamente.";
-  }
-
-  return "No pudimos completar la solicitud. Inténtalo nuevamente.";
-}
-
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.surfaceDark,
-  },
-
+  flex: { flex: 1 },
+  safeArea: { flex: 1, backgroundColor: colors.surfaceDark },
   content: {
     flexGrow: 1,
     justifyContent: "center",
-    width: "100%",
-    maxWidth: layout.maxContentWidth,
     alignSelf: "center",
+    width: "100%",
+    maxWidth: 480,
+    gap: spacing.lg,
     paddingHorizontal: layout.screenPadding,
-    paddingTop: 34,
-    paddingBottom: 34,
-    overflow: "hidden",
+    paddingVertical: spacing.xl,
   },
-
-  backgroundOrbLarge: {
-    position: "absolute",
-    width: 310,
-    height: 310,
-    top: -145,
-    right: -155,
-    borderRadius: 155,
-    borderWidth: 48,
-    borderColor: "rgba(255,255,255,0.035)",
-  },
-
-  backgroundOrbSmall: {
-    position: "absolute",
-    width: 150,
-    height: 150,
-    top: 235,
-    left: -90,
-    borderRadius: 75,
-    backgroundColor: "rgba(22,155,98,0.10)",
-  },
-
-  brand: {
-    marginBottom: 30,
-  },
-
-  brandRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 11,
-  },
-
-  logo: {
-    width: 43,
-    height: 43,
-    borderRadius: 13,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  brandName: {
-    color: colors.textLight,
-    fontSize: 13,
-    fontWeight: "900",
-    letterSpacing: 1.4,
-  },
-
-  brandEyebrow: {
-    marginTop: 35,
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1.2,
-  },
-
-  brandHeadline: {
-    marginTop: 8,
-    color: colors.textLight,
-    fontSize: 35,
-    fontWeight: "900",
-    lineHeight: 40,
-    letterSpacing: -1.2,
-  },
-
-  brandDescription: {
-    maxWidth: 360,
-    marginTop: 12,
-    color: colors.textLightMuted,
-    fontSize: 14,
-    lineHeight: 21,
-  },
-
-  benefitsRow: {
-    marginTop: 18,
-    flexDirection: "row",
-    gap: 18,
-  },
-
-  benefit: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-
-  benefitText: {
-    color: colors.textLightMuted,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-
   card: {
-    padding: 22,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.55)",
+    padding: spacing.ml,
     borderRadius: radius.lg,
     backgroundColor: colors.surface,
+    gap: spacing.md,
     ...shadows.raised,
   },
-
-  formEyebrow: {
-    marginBottom: 6,
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1.1,
-  },
-
-  title: {
-    color: colors.text,
-    fontSize: 26,
-    fontWeight: "900",
-    letterSpacing: -0.6,
-  },
-
-  subtitle: {
-    marginTop: 7,
-    marginBottom: 24,
-    color: colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-
-  field: {
-    marginBottom: 16,
-  },
-
-  label: {
-    marginBottom: 7,
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: "800",
-  },
-
+  heading: { gap: spacing.xs },
+  title: { ...typography.title, color: colors.text },
+  subtitle: { ...typography.body, color: colors.textSecondary },
+  field: { gap: spacing.sm },
+  label: { ...typography.label, color: colors.text },
   inputContainer: {
-    minHeight: 54,
-    paddingHorizontal: 14,
+    minHeight: 52,
+    paddingHorizontal: spacing.base,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
     borderRadius: radius.md,
     backgroundColor: colors.background,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: spacing.sm,
   },
-
-  input: {
-    flex: 1,
-    color: colors.text,
-    fontSize: 14,
-  },
-
-  loginErrorBox: {
-    marginBottom: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: colors.danger,
-    borderRadius: radius.md,
-    backgroundColor: colors.dangerSoft,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-  },
-
-  loginErrorText: {
-    flex: 1,
-    color: colors.danger,
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: "700",
-  },
-
-  forgotButton: {
-    alignSelf: "flex-end",
-    marginTop: -4,
-    marginBottom: 18,
-  },
-
-  forgotText: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: "800",
-  },
-
-  primaryButton: {
-    minHeight: 56,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 9,
-  },
-
-  primaryButtonDisabled: {
-    opacity: 0.65,
-  },
-
-  primaryButtonText: {
-    color: colors.textLight,
-    fontSize: 15,
-    fontWeight: "900",
-  },
-
-  registerRow: {
-    marginTop: 20,
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 5,
-  },
-
-  registerLabel: {
-    color: colors.textSecondary,
-    fontSize: 13,
-  },
-
-  registerLink: {
-    color: colors.primary,
-    fontSize: 13,
-    fontWeight: "900",
-  },
-
-  pressed: {
-    opacity: 0.78,
-    transform: [{ scale: 0.99 }],
-  },
+  input: { flex: 1, minWidth: 0, color: colors.text, ...typography.body },
+  visibilityButton: { minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
+  forgotButton: { alignSelf: "flex-end", minHeight: 34, justifyContent: "center" },
+  link: { ...typography.label, color: colors.accentPressed },
+  registerRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, justifyContent: "center" },
+  registerLabel: { ...typography.label, color: colors.textSecondary },
 });

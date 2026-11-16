@@ -10,3 +10,34 @@ export function browserAccount() {
     fullName: "Andrea Cliente de Prueba"
   };
 }
+
+export function browserAdmin() {
+  const client = browserAccount();
+  return { email: client.email.replace(/^cliente-/, "admin-"), password: client.password, fullName: "Administración de Prueba" };
+}
+
+export const contractorCompanies = ["Constructora Norte de Prueba", "Constructora Sur de Prueba"];
+
+export function browserContractor() {
+  const client = browserAccount();
+  return {
+    email: client.email.replace(/^cliente-/, "contratista-"),
+    password: client.password,
+    fullName: "Contratista de Prueba"
+  };
+}
+
+export function mockBrowserTurnstile(page) {
+  return page.route("https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit", (route) =>
+    route.fulfill({
+      contentType: "application/javascript",
+      body: `window.turnstile = {
+        render(_element, options) {
+          queueMicrotask(() => options.callback(${JSON.stringify(turnstileToken)}));
+          return 'ci-widget';
+        },
+        remove() {}
+      };`
+    })
+  );
+}

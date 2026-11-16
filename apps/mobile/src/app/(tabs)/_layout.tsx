@@ -1,61 +1,10 @@
-import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
-import { useEffect } from "react";
-import {
-  type ColorValue,
-  StyleSheet,
-} from "react-native";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
+import { Tabs } from "expo-router/js-tabs";
 
 import { BackBar } from "@/components/back-navigation";
-import { colors } from "@/constants/theme";
-
-type IconName = React.ComponentProps<typeof Ionicons>["name"];
-
-function TabIcon({
-  focused,
-  active,
-  inactive,
-  color,
-}: {
-  focused: boolean;
-  active: IconName;
-  inactive: IconName;
-  color: ColorValue;
-}) {
-  const progress = useSharedValue(focused ? 1 : 0);
-
-  useEffect(() => {
-    progress.value = withSpring(focused ? 1 : 0, {
-      damping: 16,
-      stiffness: 220,
-      mass: 0.7,
-    });
-  }, [focused, progress]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: -2 * progress.value },
-      { scale: 1 + 0.08 * progress.value },
-    ],
-  }));
-
-  return (
-    <Animated.View style={[styles.iconWrap, focused && styles.iconWrapActive, animatedStyle]}>
-      <Ionicons
-        name={focused ? active : inactive}
-        size={21}
-        color={color}
-      />
-    </Animated.View>
-  );
-}
+import { TabIcon, useLeuretTabsOptions } from "@/components/leuret-tabs";
 
 export default function TabsLayout() {
+  const tabsOptions = useLeuretTabsOptions();
   return (
     <Tabs
       backBehavior="history"
@@ -68,41 +17,14 @@ export default function TabsLayout() {
             fallbackMode="navigate"
           />
         ),
-        tabBarHideOnKeyboard: true,
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.steel,
-        tabBarStyle: {
-          height: 74,
-          marginHorizontal: 12,
-          marginBottom: 10,
-          paddingTop: 8,
-          paddingBottom: 8,
-          backgroundColor: colors.surfaceRaised,
-          borderTopWidth: 0,
-          borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: 24,
-          shadowColor: colors.surfaceDark,
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.10,
-          shadowRadius: 22,
-          elevation: 14,
-        },
-        tabBarItemStyle: {
-          paddingVertical: 2,
-        },
-        tabBarLabelStyle: {
-          marginTop: 1,
-          fontSize: 9,
-          fontWeight: "800",
-          letterSpacing: 0.15,
-        },
+        ...tabsOptions,
       })}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Inicio",
+          tabBarAccessibilityLabel: "Inicio",
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused} active="home" inactive="home-outline" color={color} />
           ),
@@ -113,6 +35,7 @@ export default function TabsLayout() {
         name="calculos"
         options={{
           title: "Cálculos",
+          tabBarAccessibilityLabel: "Cálculos",
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused} active="calculator" inactive="calculator-outline" color={color} />
           ),
@@ -123,6 +46,7 @@ export default function TabsLayout() {
         name="clientes"
         options={{
           title: "Clientes",
+          tabBarAccessibilityLabel: "Clientes",
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused} active="people" inactive="people-outline" color={color} />
           ),
@@ -133,6 +57,7 @@ export default function TabsLayout() {
         name="agenda"
         options={{
           title: "Agenda",
+          tabBarAccessibilityLabel: "Agenda",
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused} active="calendar" inactive="calendar-outline" color={color} />
           ),
@@ -143,6 +68,7 @@ export default function TabsLayout() {
         name="mas"
         options={{
           title: "Más",
+          tabBarAccessibilityLabel: "Más",
           tabBarIcon: ({ color, focused }) => (
             <TabIcon
               focused={focused}
@@ -156,18 +82,3 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  iconWrap: {
-    width: 42,
-    height: 30,
-    borderRadius: 15,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconWrapActive: {
-    backgroundColor: colors.accentSoft,
-    borderWidth: 1,
-    borderColor: colors.glowAccent,
-  },
-});

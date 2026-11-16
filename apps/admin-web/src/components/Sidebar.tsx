@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import {
   BookOpen,
-  Briefcase,
   Building2,
   Calculator,
   DollarSign,
@@ -18,6 +17,7 @@ import {
   Users,
 } from "lucide-react";
 
+import { BrandMark } from "./CommonUI";
 import { TAB_LABELS, type Tab } from "./ops/navigation";
 
 export type { Tab };
@@ -100,16 +100,15 @@ export function Sidebar({ activeTab, setActiveTab, pendingUsersCount, email, onS
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <Briefcase size={24} />
-        <span>Leuret</span>
-        <small>Admin</small>
+        <BrandMark />
+        <span>Administración</span>
       </div>
       <button type="button" className="sidebar-search" onClick={onOpenSearch}>
         <Search size={16} />
         <span>Buscar...</span>
         <kbd>{isMac ? "⌘" : "Ctrl"} K</kbd>
       </button>
-      <nav className="nav-links">
+      <nav className="nav-links" aria-label="Secciones del panel">
         {GROUPS.map((group) => (
           <div className="nav-group" key={group.label}>
             <span className="nav-group-label">{group.label}</span>
@@ -126,6 +125,16 @@ export function Sidebar({ activeTab, setActiveTab, pendingUsersCount, email, onS
           </div>
         ))}
       </nav>
+      <label className="field mobile-nav">
+        <span>Sección del panel</span>
+        <select value={activeTab} onChange={(event) => setActiveTab(event.target.value as Tab)}>
+          {GROUPS.map((group) => (
+            <optgroup key={group.label} label={group.label}>
+              {group.items.map(({ tab }) => <option key={tab} value={tab}>{TAB_LABELS[tab]}</option>)}
+            </optgroup>
+          ))}
+        </select>
+      </label>
       <div className="sidebar-footer">
         <strong>Superadministrador</strong>
         <span>{email}</span>

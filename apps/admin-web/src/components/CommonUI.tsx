@@ -1,16 +1,50 @@
-import type { ReactNode } from "react";
+import { createContext, type ReactNode } from "react";
+import leuretLogo from "../../../mobile/assets/images/leuret-logo-header.png";
 import { AlertTriangle, CheckCircle2, Loader2, X } from "lucide-react";
 
-export function FullScreenLoader({ label }: { label: string }) {
-  return <div className="fullscreen-loader"><Loader2 className="spin" size={32} /><span>{label}</span></div>;
+export const PanelRefreshContext = createContext(0);
+
+export function BrandMark() {
+  return <img className="brand-mark" src={leuretLogo} width={112} height={79} alt="LEURET" />;
 }
 
-export function AlertBanner({ message, onClose }: { message: string; onClose?: () => void }) {
-  return <div className="alert-banner"><AlertTriangle size={18} /><span>{message}</span>{onClose && <button onClick={onClose}><X size={16} /></button>}</div>;
+export function FullScreenLoader({ label }: { label: string }) {
+  return (
+    <main className="fullscreen-loader">
+      <div className="fullscreen-loader-content">
+        <BrandMark />
+        <ContentLoader label={label} />
+      </div>
+    </main>
+  );
+}
+
+export function ContentLoader({ label }: { label: string }) {
+  return (
+    <div className="content-loader" role="status">
+      <Loader2 className="spin" size={24} aria-hidden="true" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+export function AlertBanner({ message, onClose, onRetry }: {
+  message: string;
+  onClose?: () => void;
+  onRetry?: () => void;
+}) {
+  return (
+    <div className="alert-banner" role="alert">
+      <AlertTriangle size={18} aria-hidden="true" />
+      <span>{message}</span>
+      {onRetry && <button type="button" className="button button-secondary" onClick={onRetry}>Reintentar</button>}
+      {onClose && <button type="button" aria-label="Cerrar aviso" onClick={onClose}><X size={16} /></button>}
+    </div>
+  );
 }
 
 export function SuccessBanner({ message }: { message: string }) {
-  return <div className="success-banner"><CheckCircle2 size={18} /><span>{message}</span></div>;
+  return <div className="success-banner" role="status"><CheckCircle2 size={18} aria-hidden="true" /><span>{message}</span></div>;
 }
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {

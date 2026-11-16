@@ -1,15 +1,13 @@
-import { Stack } from "expo-router";
-import {
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { type ErrorBoundaryProps, Stack } from "expo-router";
+import { StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 import { stackBackOptions } from "@/components/back-navigation";
-import { colors } from "@/constants/theme";
+import { LeuretBrand } from "@/components/LeuretBrand";
+import { LeuretFeedback } from "@/components/LeuretFeedback";
+import { LeuretLoading } from "@/components/LeuretLoading";
+import { colors, layout, spacing } from "@/constants/theme";
 import {
   AuthProvider,
   useAuth,
@@ -33,39 +31,36 @@ import { installWebAlert } from "@/utils/alert";
 // En la web, Alert.alert no muestra nada: se reemplaza antes del primer render.
 installWebAlert();
 
-function LeuretStartupMark() {
-  const pulse = useSharedValue(0);
-
-  useEffect(() => {
-    pulse.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 780 }),
-        withTiming(0, { duration: 780 }),
-      ),
-      -1,
-      false,
-    );
-  }, [pulse]);
-
-  const haloStyle = useAnimatedStyle(() => ({
-    opacity: 0.22 + pulse.value * 0.5,
-    transform: [{ scale: 1 + pulse.value * 0.28 }],
-  }));
-
-  const markStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 + pulse.value * 0.035 }],
-  }));
-
+function StartupScreen({ title, message, onRetry }: { title?: string; message?: string; onRetry?: () => void }) {
   return (
-    <View style={styles.loadingLogo}>
-      <Animated.View style={[styles.loadingPulseRing, haloStyle]} />
-      <Animated.Image
-        source={require("../../assets/images/leuret-logo-header.png")}
-        style={[styles.loadingLogoImage, markStyle]}
-        resizeMode="contain"
-        accessibilityLabel="Logo oficial de LEURET"
+    <SafeAreaView style={styles.startup}>
+      <View style={styles.startupContent}>
+        <LeuretBrand width={120} />
+        {title && onRetry ? (
+          <LeuretFeedback
+            tone="error"
+            title={title}
+            message={message}
+            actionLabel="Reintentar"
+            onAction={onRetry}
+          />
+        ) : (
+          <LeuretLoading message={message ?? "Recuperando tu sesión…"} compact />
+        )}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
+  return (
+    <SafeAreaProvider>
+      <StartupScreen
+        title="No pudimos abrir esta pantalla"
+        message="Inténtalo de nuevo para volver a cargarla."
+        onRetry={() => void retry()}
       />
-    </View>
+    </SafeAreaProvider>
   );
 }
 
@@ -74,11 +69,15 @@ function RootNavigator() {
     session,
     profile,
     loading: authLoading,
+    restoreError,
+    retryRestore,
   } = useAuth();
 
   const {
     activeCompany,
     loading: companyLoading,
+    initialError: companyError,
+    refreshCompanies,
   } = useCompany();
 
   const isAuthenticated = Boolean(session);
@@ -115,6 +114,7 @@ function RootNavigator() {
   const isCompanyInitialLoading =
     canUseSpaces && companyLoading && !activeCompany;
   const loading = isInitialLoading || isCompanyInitialLoading;
+  const startupError = restoreError ?? (canUseSpaces ? companyError : null);
 
   const initialRoute = initialRouteFor({
     authenticated: isAuthenticated,
@@ -133,11 +133,11 @@ function RootNavigator() {
     : null;
   const resume = useScreenResume({
     authenticated: isAuthenticated,
-    loading,
+    loading: loading || Boolean(startupError),
     scope: resumeScope,
     scopeKey: resumeKey,
   });
-  const navigationReady = !loading && resume.ready;
+  const navigationReady = !loading && !startupError && resume.ready;
 
   // Tocar un aviso abre su solicitud o documento, incluso en arranque en frío.
   useNotificationNavigation({
@@ -145,17 +145,18 @@ function RootNavigator() {
     isClient: isClientAuthenticated && !hasActiveCompany,
   });
 
-  if (!navigationReady) {
+  if (startupError) {
     return (
-      <View style={styles.loading}>
-        <View style={styles.loadingOrb} />
-        <LeuretStartupMark />
-
-        <Text style={styles.loadingText}>
-          Preparando tu espacio de trabajo
-        </Text>
-      </View>
+      <StartupScreen
+        title={restoreError ? "No pudimos recuperar tu sesión" : "No pudimos cargar tu espacio"}
+        message={startupError}
+        onRetry={restoreError ? () => void retryRestore() : () => void refreshCompanies()}
+      />
     );
+  }
+
+  if (!navigationReady) {
+    return <StartupScreen message={authLoading ? "Recuperando tu sesión…" : "Preparando tu espacio de trabajo…"} />;
   }
 
   return (
@@ -256,61 +257,18 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  flex: {
+  flex: { flex: 1 },
+  startup: {
     flex: 1,
-  },
-
-  loading: {
-    flex: 1,
-    backgroundColor: colors.surfaceDark,
-    alignItems: "center",
+    backgroundColor: colors.background,
     justifyContent: "center",
-    overflow: "hidden",
+    paddingHorizontal: spacing.lg,
   },
-
-  loadingOrb: {
-    position: "absolute",
-    width: 330,
-    height: 330,
-    top: -145,
-    right: -170,
-    borderRadius: 165,
-    borderWidth: 52,
-    borderColor: "rgba(255,255,255,0.035)",
-  },
-
-  loadingLogo: {
-    width: 216,
-    height: 170,
-    borderRadius: 24,
-    backgroundColor: colors.cream,
+  startupContent: {
+    alignSelf: "center",
     alignItems: "center",
-    justifyContent: "center",
-  },
-
-  loadingPulseRing: {
-    position: "absolute",
-    width: 216,
-    height: 170,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    backgroundColor: colors.glowBlue,
-  },
-
-  loadingLogoImage: {
-    width: 196,
-    height: 138,
-  },
-
-  loadingText: {
-    marginTop: 22,
-    color: colors.textLightMuted,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-
-  loadingIndicator: {
-    marginTop: 22,
+    width: "100%",
+    maxWidth: layout.maxContentWidth / 2,
+    gap: spacing.lg,
   },
 });

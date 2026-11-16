@@ -160,3 +160,45 @@ test("registro vincula cada documento con la versión publicada por la API", asy
     new RegExp("/legal/privacy/version/" + privacy.version + "$")
   );
 });
+
+test("la sesión nativa conserva el marcador ante un fallo temporal de SecureStore y permite reintentar", async () => {
+  vi.doMock("react-native", () => ({ Platform: { OS: "ios" } }));
+  vi.resetModules();
+
+  try {
+    const storage = await import("expo-secure-store");
+    const { restoreStoredSession } = await import("../api");
+    const marker = JSON.stringify({ sessionId: "fixture-ios-session" });
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(marker);
+    vi.mocked(storage.isAvailableAsync).mockResolvedValue(true);
+    vi.mocked(storage.getItemAsync)
+      .mockRejectedValueOnce(new Error("SecureStore no disponible temporalmente"))
+      .mockResolvedValue("fixture-refresh-token");
+    fetchMock.mockResolvedValueOnce(successfulResponse({
+      accessToken: "fixture-access-token",
+      refreshToken: "fixture-rotated-refresh-token",
+      sessionId: "fixture-ios-session",
+      expiresIn: 900,
+      user: { id: "fixture-ios-user", role: "client", active: true }
+    }));
+
+    await expect(restoreStoredSession()).rejects.toThrow("SecureStore no disponible temporalmente");
+    expect(AsyncStorage.multiRemove).not.toHaveBeenCalled();
+    expect(storage.deleteItemAsync).not.toHaveBeenCalled();
+
+    const restored = await restoreStoredSession();
+    expect(restored?.user?.id).toBe("fixture-ios-user");
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/auth\/refresh$/);
+    expect(JSON.parse(options.body as string)).toEqual({
+      sessionId: "fixture-ios-session",
+      refreshToken: "fixture-refresh-token"
+    });
+    expect(storage.setItemAsync).toHaveBeenCalledWith("contractor_refresh_token", "fixture-rotated-refresh-token");
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith("contractor-pro.local-session.v1", marker);
+  } finally {
+    vi.doUnmock("react-native");
+    vi.resetModules();
+  }
+});

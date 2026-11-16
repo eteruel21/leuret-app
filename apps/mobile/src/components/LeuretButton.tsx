@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, StyleSheet, Text, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
 
 import { MotionPressable } from "@/components/MotionPressable";
-import { colors, radius, shadows } from "@/constants/theme";
+import { colors, motion, radius, shadows, spacing, typography } from "@/constants/theme";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 type LeuretButtonVariant = "primary" | "secondary" | "ghost" | "danger";
@@ -23,6 +23,7 @@ export function LeuretButton({
   loading = false,
   fullWidth = false,
   disabled,
+  accessibilityState,
   style,
   ...props
 }: LeuretButtonProps) {
@@ -33,19 +34,16 @@ export function LeuretButton({
 
   return (
     <MotionPressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
       {...props}
+      accessibilityState={{ ...accessibilityState, disabled: Boolean(isDisabled), busy: loading }}
       disabled={isDisabled}
-      pressedScale={0.97}
+      pressedScale={motion.pressScale}
       style={[styles.button, buttonVariantStyle, fullWidth && styles.fullWidth, isDisabled && styles.disabled, style]}
     >
-      {loading ? (
-        <ActivityIndicator color={iconColor} />
-      ) : (
-        <>
-          {icon ? <Ionicons name={icon} size={19} color={iconColor} /> : null}
-          <Text style={[styles.label, textVariantStyle]}>{label}</Text>
-        </>
-      )}
+      {loading ? <ActivityIndicator color={iconColor} /> : icon ? <Ionicons name={icon} size={19} color={iconColor} /> : null}
+      <Text style={[styles.label, textVariantStyle]}>{label}</Text>
     </MotionPressable>
   );
 }
@@ -53,18 +51,19 @@ export function LeuretButton({
 const styles = StyleSheet.create({
   button: {
     minHeight: 52,
-    paddingHorizontal: 18,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.base,
     borderRadius: radius.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: spacing.sm,
   },
   fullWidth: {
     width: "100%",
   },
   primaryButton: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accentPressed,
     ...shadows.glow,
   },
   secondaryButton: {
@@ -77,11 +76,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentSoft,
   },
   dangerButton: {
-    backgroundColor: colors.danger,
+    backgroundColor: colors.accentPressed,
   },
   label: {
-    fontSize: 14,
-    fontWeight: "900",
+    ...typography.label,
+    flexShrink: 1,
+    textAlign: "center",
   },
   lightText: {
     color: colors.textLight,
@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   ghostText: {
-    color: colors.accent,
+    color: colors.accentPressed,
   },
   disabled: {
     opacity: 0.55,

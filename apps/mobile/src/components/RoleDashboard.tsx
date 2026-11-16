@@ -1,53 +1,42 @@
 import { Ionicons } from "@expo/vector-icons";
-import { type Href, router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { type Href, router } from "expo-router";
+import { useCallback } from "react";
+import { Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { AttentionList, Kpi, dashboardStyles as styles } from "@/components/OwnerDashboard";
+import { LeuretFeedback } from "@/components/LeuretFeedback";
+import { LeuretLoading } from "@/components/LeuretLoading";
+import { useFocusedResource } from "@/hooks/useFocusedResource";
 import { colors } from "@/constants/theme";
 import { getRoleDashboard } from "@/services/role-dashboard-service";
 import { formatMoney } from "@/utils/format";
-import { roleAttention, roleKpis, type RoleDashboard as RoleDashboardData } from "@/utils/role-dashboard";
+import { roleAttention, roleKpis } from "@/utils/role-dashboard";
 
 /** Inicio con números propios para Ventas y Presupuestista. */
 export function RoleDashboard({ companyId, role }: { companyId: string; role: "sales" | "estimator" }) {
-  const [dashboard, setDashboard] = useState<RoleDashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [stale, setStale] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const loadDashboard = useCallback(async () => {
+    const result = await getRoleDashboard(companyId);
+    return {
+      data: result.dashboard ? { dashboard: result.dashboard, stale: result.fromCache } : undefined,
+      error: result.error,
+    };
+  }, [companyId]);
+  const { data: snapshot, loading, error, reload } = useFocusedResource(`${companyId}:${role}`, loadDashboard);
 
-  useFocusEffect(
-    useCallback(() => {
-      let mounted = true;
-      void getRoleDashboard(companyId).then((result) => {
-        if (!mounted) return;
-        setDashboard(result.dashboard);
-        setStale(result.fromCache);
-        setError(result.dashboard ? null : result.error);
-        setLoading(false);
-      });
-      return () => {
-        mounted = false;
-      };
-    }, [companyId])
-  );
-
-  if (loading && !dashboard) {
-    return (
-      <View style={styles.loadingBox}>
-        <ActivityIndicator color={colors.primary} />
-        <Text style={styles.muted}>Calculando tus indicadores…</Text>
-      </View>
-    );
-  }
-
+  if (loading) return <LeuretLoading message="Cargando tus indicadores…" compact />;
+  const dashboard = snapshot?.dashboard;
+  const stale = snapshot?.stale;
   if (!dashboard) {
     return (
-      <View style={styles.loadingBox}>
-        <Ionicons name="cloud-offline-outline" size={22} color={colors.textMuted} />
-        <Text style={styles.muted}>{error ?? "No se pudieron cargar los indicadores."}</Text>
-      </View>
+      <LeuretFeedback
+        tone="error"
+        title="No pudimos cargar tus indicadores"
+        message={error ?? undefined}
+        actionLabel="Reintentar"
+        onAction={() => void reload()}
+        compact
+      />
     );
   }
 
@@ -68,10 +57,21 @@ export function RoleDashboard({ companyId, role }: { companyId: string; role: "s
         {stale ? (
           <View style={styles.staleBadge}>
             <Ionicons name="cloud-offline-outline" size={13} color={colors.textSecondary} />
-            <Text style={styles.staleText}>Sin conexión</Text>
+            <Text style={styles.staleText}>Datos guardados</Text>
           </View>
         ) : null}
       </View>
+
+      {error ? (
+        <LeuretFeedback
+          tone="warning"
+          title="No pudimos actualizar los indicadores"
+          message={error}
+          actionLabel="Reintentar"
+          onAction={() => void reload()}
+          compact
+        />
+      ) : null}
 
       <View style={styles.kpiGrid}>
         {kpis.map((kpi) => (

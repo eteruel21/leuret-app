@@ -1,9 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { LeuretButton } from "@/components/LeuretButton";
-import { colors, radius } from "@/constants/theme";
+import { colors, radius, spacing, typography } from "@/constants/theme";
 
 type FeedbackTone = "success" | "error" | "warning" | "info";
 
@@ -35,31 +34,33 @@ export function LeuretFeedback({
         : { icon: "information-circle-outline" as const, color: colors.info, background: colors.infoSoft };
 
   return (
-    <Animated.View entering={FadeInDown.duration(320)} style={[styles.container, compact && styles.compact, { backgroundColor: config.background, borderColor: config.color }, style]}>
+    <View style={[styles.container, compact && styles.compact, { backgroundColor: config.background, borderColor: config.color }, style]}>
       <View style={[styles.iconWrap, { borderColor: config.color }]}>
         <Ionicons name={config.icon} size={22} color={config.color} />
       </View>
       <View style={styles.content}>
-        <Text style={styles.title}>{title}</Text>
-        {message ? <Text style={styles.message}>{message}</Text> : null}
+        <View accessibilityRole={tone === "error" ? "alert" : undefined} accessibilityLiveRegion="polite">
+          <Text style={styles.title}>{title}</Text>
+          {message ? <Text style={styles.message}>{message}</Text> : null}
+        </View>
         {actionLabel && onAction ? <LeuretButton label={actionLabel} variant="ghost" onPress={onAction} style={styles.action} /> : null}
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     width: "100%",
-    padding: 14,
+    padding: spacing.md,
     borderWidth: 1,
     borderRadius: radius.lg,
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 12,
+    gap: spacing.base,
   },
   compact: {
-    padding: 11,
+    padding: spacing.base,
   },
   iconWrap: {
     width: 40,
@@ -75,18 +76,16 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.text,
-    fontSize: 14,
-    fontWeight: "900",
+    ...typography.label,
   },
   message: {
-    marginTop: 4,
+    marginTop: spacing.xs,
     color: colors.textSecondary,
-    fontSize: 12,
-    lineHeight: 18,
+    ...typography.body,
   },
   action: {
     alignSelf: "flex-start",
-    minHeight: 40,
-    marginTop: 10,
+    minHeight: 44,
+    marginTop: spacing.sm,
   },
 });

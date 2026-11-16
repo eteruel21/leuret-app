@@ -1,9 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useFocusEffect, type Href } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { router, type Href } from "expo-router";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -11,16 +10,14 @@ import {
   Text,
   View,
 } from "react-native";
+import { LeuretBrand } from "@/components/LeuretBrand";
+import { LeuretFeedback } from "@/components/LeuretFeedback";
+import { LeuretLoading } from "@/components/LeuretLoading";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import Animated, {
   FadeIn,
   FadeInDown,
   FadeInUp,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -38,10 +35,10 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { OwnerDashboard } from "@/components/OwnerDashboard";
 import { RoleDashboard } from "@/components/RoleDashboard";
+import { useFocusedResource } from "@/hooks/useFocusedResource";
 import { useJobRequestsHomeSummary } from "@/hooks/useJobRequestsHomeSummary";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
-  HOME_FOCUS,
   ROLE_LABELS,
   quickActionsFor,
   type QuickActionId,
@@ -123,55 +120,18 @@ function QuickAction({
   );
 }
 
-function LeuretPulseOrb() {
-  const pulse = useSharedValue(0);
-
-  useEffect(() => {
-    pulse.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 900 }),
-        withTiming(0, { duration: 900 }),
-      ),
-      -1,
-      false,
-    );
-  }, [pulse]);
-
-  const ringStyle = useAnimatedStyle(() => ({
-    opacity: 0.45 + pulse.value * 0.55,
-    transform: [{ scale: 1 + pulse.value * 0.22 }],
-  }));
-
-  const coreStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 + pulse.value * 0.12 }],
-  }));
-
-  return (
-    <View style={styles.pulseIcon}>
-      <Animated.View style={[styles.pulseRing, ringStyle]}>
-        <Animated.View style={[styles.pulseCore, coreStyle]} />
-      </Animated.View>
-    </View>
-  );
-}
-
 function SectionHeader({
-  eyebrow,
   title,
   action,
   onAction,
 }: {
-  eyebrow: string;
   title: string;
   action?: string;
   onAction?: () => void;
 }) {
   return (
     <View style={styles.sectionHeader}>
-      <View>
-        <Text style={styles.sectionEyebrow}>{eyebrow}</Text>
-        <Text style={styles.sectionTitle}>{title}</Text>
-      </View>
+      <Text accessibilityRole="header" style={styles.sectionTitle}>{title}</Text>
 
       {action && onAction ? (
         <Pressable
@@ -186,13 +146,20 @@ function SectionHeader({
   );
 }
 
-type DashboardState = { projectCount: number; activeProjectCount: number; clientCount: number; invoiceCount: number; balanceDue: number; nextActivity: Appointment | null; loading: boolean; error: boolean; };
-const EMPTY_DASHBOARD: DashboardState = { projectCount: 0, activeProjectCount: 0, clientCount: 0, invoiceCount: 0, balanceDue: 0, nextActivity: null, loading: false, error: false };
-function formatMoney(amount: number): string { return `B/. ${amount.toFixed(2)}`; }
-function formatActivityDate(date: string): string { const value = new Date(`${date}T12:00:00`); return Number.isNaN(value.getTime()) ? date : new Intl.DateTimeFormat("es-PA",{weekday:"short",day:"numeric",month:"short"}).format(value); }
+const activityDate = new Intl.DateTimeFormat("es-PA", { weekday: "short", day: "numeric", month: "short" });
+const todayDate = new Intl.DateTimeFormat("es-PA", { weekday: "long", day: "numeric", month: "long" });
+
+function formatMoney(amount: number): string {
+  return `B/. ${amount.toFixed(2)}`;
+}
+
+function formatActivityDate(date: string): string {
+  const value = new Date(`${date}T12:00:00`);
+  return Number.isNaN(value.getTime()) ? date : activityDate.format(value);
+}
 
 export default function HomeScreen() {
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const { activeCompany, memberships, setActiveCompanyId } = useCompany();
   const { role, can } = usePermissions();
   const [companySheetOpen, setCompanySheetOpen] = useState(false);
@@ -232,24 +199,47 @@ export default function HomeScreen() {
   const initial = firstName.charAt(0).toUpperCase();
   const companyName = activeCompany?.name || "Leuret";
 
-  const [dashboard, setDashboard] = useState<DashboardState>(EMPTY_DASHBOARD);
+  const companyId = activeCompany?.id;
+  const scope = companyId && role ? `${session?.sessionId}:${companyId}:${role}` : null;
+  const loadMetrics = useCallback(async () => {
+    const [projects, clients, invoices] = await Promise.all([
+      listProjectsByCompany(companyId!),
+      listClients(companyId!),
+      listInvoices(companyId!),
+    ]);
+    const error = projects.error || clients.error || invoices.error;
+    if (error) return { error };
 
-  useFocusEffect(useCallback(() => {
-    const companyId = activeCompany?.id;
-    if (!companyId) { setDashboard(EMPTY_DASHBOARD); return; }
-    let mounted = true;
-    setDashboard({ ...EMPTY_DASHBOARD, loading: true });
-    void Promise.all([listProjectsByCompany(companyId), listClients(companyId), listInvoices(companyId), fetchCompanyActivities(companyId)]).then(([projectsResult, clientsResult, invoicesResult, activities]) => {
-      if (!mounted) return;
-      const activeProjects = projectsResult.projects.filter((project) => project.status !== "completed" && project.status !== "cancelled");
-      const invoices = invoicesResult.invoices.filter((invoice) => invoice.status !== "cancelled");
-      const balanceDue = invoices.reduce((total, invoice) => total + Math.max(Number(invoice.balance_due ?? 0), 0), 0);
-      const currentTime = new Date();
-      const nextActivity = activities.filter((activity) => activity.status === "scheduled" || activity.status === "confirmed").filter((activity) => { const date = new Date(`${activity.date}T${activity.time}`); return !Number.isNaN(date.getTime()) && date >= currentTime; }).sort((a,b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))[0] ?? null;
-      setDashboard({ projectCount: projectsResult.projects.length, activeProjectCount: activeProjects.length, clientCount: clientsResult.clients.length, invoiceCount: invoices.length, balanceDue, nextActivity, loading: false, error: Boolean(projectsResult.error || clientsResult.error || invoicesResult.error) });
-    }).catch(() => { if (mounted) setDashboard({ ...EMPTY_DASHBOARD, error: true }); });
-    return () => { mounted = false; };
-  }, [activeCompany?.id]));
+    const openInvoices = invoices.invoices.filter(({ status }) => status !== "cancelled");
+    return {
+      data: {
+        projectCount: projects.projects.length,
+        activeProjectCount: projects.projects.filter(({ status }) => status !== "completed" && status !== "cancelled").length,
+        clientCount: clients.clients.length,
+        invoiceCount: openInvoices.length,
+        balanceDue: openInvoices.reduce((total, invoice) => total + Math.max(Number(invoice.balance_due ?? 0), 0), 0),
+      },
+    };
+  }, [companyId]);
+  const loadNextActivity = useCallback(async () => {
+    const activities = await fetchCompanyActivities(companyId!);
+    const now = Date.now();
+    let nextActivity: Appointment | null = null;
+    let nextTime = Infinity;
+    for (const activity of activities) {
+      const time = new Date(`${activity.date}T${activity.time}`).getTime();
+      if ((activity.status === "scheduled" || activity.status === "confirmed") && time >= now && time < nextTime) {
+        nextActivity = activity;
+        nextTime = time;
+      }
+    }
+    return { data: { nextActivity } };
+  }, [companyId]);
+
+  const metrics = useFocusedResource(scope, loadMetrics);
+  const agenda = useFocusedResource(scope, loadNextActivity, 0);
+  const { data: dashboard } = metrics;
+  const nextActivity = agenda.data?.nextActivity;
 
   const now = new Date();
   const hour = now.getHours();
@@ -261,11 +251,7 @@ export default function HomeScreen() {
         ? "Buenas tardes"
         : "Buenas noches";
 
-  const formattedDate = new Intl.DateTimeFormat("es-PA", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  }).format(now);
+  const formattedDate = todayDate.format(now);
 
   const handleInvoices = () => {
     router.push("/facturas" as Href);
@@ -285,7 +271,7 @@ export default function HomeScreen() {
             entering={FadeIn.duration(500)}
             style={styles.topBar}
           >
-            <View style={styles.brand}><Image source={require("../../../assets/images/leuret-logo-header.png")} style={styles.brandLogo} resizeMode="contain" /></View>
+            <LeuretBrand width={96} />
 
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <NotificationsBell />
@@ -308,22 +294,8 @@ export default function HomeScreen() {
               {formattedDate.toUpperCase()}
             </Text>
 
-            <Text style={styles.greeting}>
+            <Text accessibilityRole="header" style={styles.heroTitle}>
               {greeting}, {firstName}
-            </Text>
-
-            <Text style={styles.heroTitle}>
-              Tu trabajo,
-              {"\n"}
-              <Text style={styles.heroTitleAccent}>
-                más inteligente.
-              </Text>
-            </Text>
-
-            <Text style={styles.heroDescription}>
-              {role
-                ? HOME_FOCUS[role]
-                : "Proyectos, cálculos, presupuestos y clientes organizados desde un solo lugar."}
             </Text>
           </Animated.View>
 
@@ -368,21 +340,21 @@ export default function HomeScreen() {
 
             <View style={styles.metrics}>
               <View style={styles.metric}>
-                <Text style={styles.metricValue}>{dashboard.loading ? "" : dashboard.error ? "—" : dashboard.projectCount}</Text>
+                <Text style={styles.metricValue}>{dashboard?.projectCount ?? "—"}</Text>
                 <Text style={styles.metricLabel}>Proyectos</Text>
               </View>
 
               <View style={styles.metricDivider} />
 
               <View style={styles.metric}>
-                <Text style={styles.metricValue}>{dashboard.loading ? "" : dashboard.error ? "—" : dashboard.clientCount}</Text>
+                <Text style={styles.metricValue}>{dashboard?.clientCount ?? "—"}</Text>
                 <Text style={styles.metricLabel}>Clientes</Text>
               </View>
 
               <View style={styles.metricDivider} />
 
               <View style={styles.metric}>
-                <Text style={styles.metricValue}>{dashboard.loading ? "" : dashboard.error ? "—" : dashboard.invoiceCount}</Text>
+                <Text style={styles.metricValue}>{dashboard?.invoiceCount ?? "—"}</Text>
                 <Text style={styles.metricLabel}>Facturas</Text>
               </View>
             </View>
@@ -391,10 +363,7 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.content}>
-          <SectionHeader
-            eyebrow="ACCESOS RÁPIDOS"
-            title="¿Qué quieres hacer?"
-          />
+          <SectionHeader title="Accesos rápidos" />
 
           <View style={styles.quickGrid}>
             {quickActions.map((id, index) => {
@@ -424,6 +393,18 @@ export default function HomeScreen() {
             ) : null}
           </View>
 
+          {metrics.loading ? <LeuretLoading message="Cargando indicadores…" compact /> : null}
+          {metrics.error ? (
+            <LeuretFeedback
+              tone="error"
+              title="No pudimos actualizar los indicadores"
+              message={dashboard ? "Se muestran los últimos datos cargados. " + metrics.error : metrics.error}
+              actionLabel="Reintentar"
+              onAction={() => void metrics.reload()}
+              compact
+            />
+          ) : null}
+
           {showOwnerDashboard && activeCompany ? (
             <>
               <OnboardingChecklist />
@@ -436,7 +417,6 @@ export default function HomeScreen() {
             entering={FadeInDown.delay(320).duration(480)}
           >
             <SectionHeader
-              eyebrow="CONTROL"
               title="Tu operación"
             />
 
@@ -469,7 +449,7 @@ export default function HomeScreen() {
                     Proyectos
                   </Text>
                   <Text style={styles.operationText}>
-                    {dashboard.loading ? "Actualizando proyectos..." : dashboard.error ? "No se pudo verificar la información." : dashboard.projectCount === 0 ? "Todavía no tienes proyectos." : `${dashboard.activeProjectCount} activos de ${dashboard.projectCount}.`}
+                    {!dashboard ? "Ver obras, tareas y avances" : dashboard.projectCount === 0 ? "Todavía no tienes proyectos." : `${dashboard.activeProjectCount} activos de ${dashboard.projectCount}.`}
                   </Text>
                 </View>
 
@@ -511,7 +491,7 @@ export default function HomeScreen() {
                     Finanzas
                   </Text>
                   <Text style={styles.operationText}>
-                    {dashboard.loading ? "Actualizando facturación..." : dashboard.error ? "No se pudo verificar la información." : dashboard.balanceDue > 0 ? `Por cobrar: ${formatMoney(dashboard.balanceDue)}` : "Sin saldos pendientes."}
+                    {!dashboard ? "Ver cobros y saldos" : dashboard.balanceDue > 0 ? `Por cobrar: ${formatMoney(dashboard.balanceDue)}` : "Sin saldos pendientes."}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -525,7 +505,6 @@ export default function HomeScreen() {
             entering={FadeInDown.delay(390).duration(480)}
           >
             <SectionHeader
-              eyebrow="AGENDA"
               title="Próximas actividades"
               action="Ver agenda"
               onAction={() =>
@@ -533,67 +512,54 @@ export default function HomeScreen() {
               }
             />
 
-            <Pressable
-              onPress={() =>
-                router.push("/(tabs)/agenda" as Href)
-              }
-              style={({ pressed }) => [
-                styles.agendaCard,
-                pressed && styles.rowPressed,
-              ]}
-            >
-              <View style={styles.agendaIcon}>
-                <Ionicons
-                  name="calendar-clear-outline"
-                  size={24}
-                  color={colors.accent}
-                />
-              </View>
-
-              <View style={styles.agendaCopy}>
-                <Text style={styles.agendaTitle}>
-                  {dashboard.nextActivity ? dashboard.nextActivity.title : "Tu agenda está libre"}
-                </Text>
-
-                <Text style={styles.agendaText}>
-                  {dashboard.nextActivity ? `${formatActivityDate(dashboard.nextActivity.date)}  ${dashboard.nextActivity.time.slice(0,5)}${dashboard.nextActivity.clientName ? `  ${dashboard.nextActivity.clientName}` : ""}` : "Tus próximas visitas, trabajos y recordatorios aparecerán aquí."}
-                </Text>
-              </View>
-
-              <Ionicons
-                name="arrow-forward"
-                size={18}
-                color={colors.textMuted}
+            {agenda.loading ? <LeuretLoading message="Cargando agenda…" compact /> : null}
+            {agenda.error ? (
+              <LeuretFeedback
+                tone="error"
+                title="No pudimos actualizar la agenda"
+                message={agenda.error}
+                actionLabel="Reintentar"
+                onAction={() => void agenda.reload()}
+                compact
               />
-            </Pressable>
+            ) : null}
+            {agenda.data ? (
+              <Pressable
+                onPress={() =>
+                  router.push("/(tabs)/agenda" as Href)
+                }
+                style={({ pressed }) => [
+                  styles.agendaCard,
+                  pressed && styles.rowPressed,
+                ]}
+              >
+                <View style={styles.agendaIcon}>
+                  <Ionicons
+                    name="calendar-clear-outline"
+                    size={24}
+                    color={colors.accent}
+                  />
+                </View>
+
+                <View style={styles.agendaCopy}>
+                  <Text style={styles.agendaTitle}>
+                    {nextActivity ? nextActivity.title : "Tu agenda está libre"}
+                  </Text>
+
+                  <Text style={styles.agendaText}>
+                    {nextActivity ? `${formatActivityDate(nextActivity.date)}  ${nextActivity.time.slice(0,5)}${nextActivity.clientName ? `  ${nextActivity.clientName}` : ""}` : "Tus próximas visitas, trabajos y recordatorios aparecerán aquí."}
+                  </Text>
+                </View>
+
+                <Ionicons
+                  name="arrow-forward"
+                  size={18}
+                  color={colors.textMuted}
+                />
+              </Pressable>
+            ) : null}
           </Animated.View>
 
-          <Animated.View
-            entering={FadeInDown.delay(460).duration(480)}
-            style={styles.pulseCard}
-          >
-            <LeuretPulseOrb />
-
-            <View style={styles.pulseCopy}>
-              <Text style={styles.pulseEyebrow}>
-                LEURET PULSE
-              </Text>
-
-              <Text style={styles.pulseTitle}>
-                {dashboard.loading ? "Actualizando tu espacio" : dashboard.error ? "Revisa la sincronización" : "Todo listo para trabajar"}
-              </Text>
-
-              <Text style={styles.pulseText}>
-                {dashboard.loading ? "Estamos cargando la información más reciente." : dashboard.error ? "Parte de la información no pudo actualizarse." : "Tu información está actualizada y preparada."}
-              </Text>
-            </View>
-
-            <Ionicons
-              name="sparkles-outline"
-              size={20}
-              color={colors.accent}
-            />
-          </Animated.View>
         </View>
       </ScrollView>
       <Modal
@@ -702,7 +668,7 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 120,
+    paddingBottom: spacing.xxl,
     backgroundColor: colors.background,
   },
 
@@ -738,85 +704,9 @@ const styles = StyleSheet.create({
 
   topBar: {
     minHeight: 52,
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  brandLogo: {
-    width: 112,
-    height: 79,
-  },
-
-  brand: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 11,
-  },
-
-  mark: {
-    position: "relative",
-    width: 40,
-    height: 40,
-  },
-
-  markVertical: {
-    position: "absolute",
-    left: 9,
-    top: 4,
-    width: 8,
-    height: 29,
-    borderRadius: 5,
-    backgroundColor: colors.primary,
-    transform: [{ rotate: "-8deg" }],
-  },
-
-  markDiagonal: {
-    position: "absolute",
-    left: 14,
-    top: 20,
-    width: 10,
-    height: 19,
-    borderRadius: 5,
-    backgroundColor: colors.primary,
-    transform: [{ rotate: "-42deg" }],
-  },
-
-  markHorizontal: {
-    position: "absolute",
-    left: 18,
-    bottom: 5,
-    width: 20,
-    height: 8,
-    borderRadius: 5,
-    backgroundColor: colors.accent,
-    transform: [{ rotate: "-10deg" }],
-  },
-
-  markGlow: {
-    position: "absolute",
-    width: 28,
-    height: 28,
-    left: 7,
-    top: 7,
-    borderRadius: 14,
-    backgroundColor: colors.glowBlue,
-    opacity: 0.5,
-  },
-
-  brandName: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "900",
-    letterSpacing: 2.2,
-  },
-
-  brandTagline: {
-    marginTop: 2,
-    color: colors.textMuted,
-    fontSize: 7,
-    fontWeight: "800",
-    letterSpacing: 1.6,
+    justifyContent: "space-between",
   },
 
   avatar: {
@@ -843,41 +733,18 @@ const styles = StyleSheet.create({
   },
 
   heroCopy: {
-    marginTop: spacing.xl,
+    marginTop: spacing.lg,
+    gap: spacing.xs,
   },
 
   dateText: {
-    color: colors.accent,
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 1.4,
-  },
-
-  greeting: {
-    marginTop: spacing.md,
+    ...typography.caption,
     color: colors.textSecondary,
-    fontSize: 15,
-    fontWeight: "600",
   },
 
   heroTitle: {
-    marginTop: spacing.xs,
+    ...typography.title,
     color: colors.text,
-    fontSize: 38,
-    lineHeight: 43,
-    fontWeight: "900",
-    letterSpacing: -1.4,
-  },
-
-  heroTitleAccent: {
-    color: colors.primary,
-  },
-
-  heroDescription: {
-    maxWidth: 360,
-    marginTop: spacing.md,
-    color: colors.textSecondary,
-    ...typography.body,
   },
 
   companyCard: {
@@ -1130,13 +997,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
 
-  sectionEyebrow: {
-    marginBottom: 5,
-    color: colors.accent,
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 1.4,
-  },
 
   sectionTitle: {
     color: colors.text,
@@ -1332,67 +1192,5 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 11,
     lineHeight: 17,
-  },
-
-  pulseCard: {
-    marginTop: spacing.xl,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceAlt,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  pulseIcon: {
-    width: 46,
-    height: 46,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  pulseRing: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  pulseCore: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: colors.accent,
-    ...shadows.glow,
-  },
-
-  pulseCopy: {
-    flex: 1,
-    marginHorizontal: spacing.base,
-  },
-
-  pulseEyebrow: {
-    color: colors.accent,
-    fontSize: 8,
-    fontWeight: "900",
-    letterSpacing: 1.2,
-  },
-
-  pulseTitle: {
-    marginTop: 3,
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: "800",
-  },
-
-  pulseText: {
-    marginTop: 3,
-    color: colors.textSecondary,
-    fontSize: 10,
-    lineHeight: 15,
   },
 });

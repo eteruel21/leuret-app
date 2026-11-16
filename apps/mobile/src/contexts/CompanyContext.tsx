@@ -6,6 +6,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState
@@ -29,6 +30,19 @@ const FOREGROUND_REFRESH_MS = 60_000;
 const ACTIVE_COMPANY_KEY =
   "@contractor-pro:active-company-id";
 const CLIENT_SPACE = "client";
+const NO_MEMBERSHIPS: CompanyMembership[] = [];
+
+type WorkspaceSnapshot = {
+  scope: string;
+  memberships: CompanyMembership[];
+  activeCompanyId: string | null;
+};
+
+type WorkspaceRequest = {
+  scope: string;
+  refreshing: boolean;
+  error: string | null;
+};
 
 type CreateCompanyInput = {
   name: string;
@@ -45,6 +59,7 @@ type CompanyContextValue = {
     | null;
   loading: boolean;
   refreshing: boolean;
+  initialError: string | null;
 
   /** Recarga las empresas. Si se indica `preferredCompanyId` y existe, la activa. */
   refreshCompanies: (preferredCompanyId?: string) => Promise<boolean>;
@@ -70,203 +85,115 @@ const CompanyContext =
 export function CompanyProvider({
   children
 }: PropsWithChildren) {
-  const {
-    user,
-    profile,
-    loading: authLoading
-  } = useAuth();
-
-  const userId = user?.id ?? null;
-  const canLoadCompanies = Boolean(profile?.active);
+  const { session, profile, loading: authLoading } = useAuth();
+  const userId = profile?.id;
   const hasClientSpace = profile?.role === "client";
+  const canLoadCompanies = Boolean(profile?.active);
+  const scope = session?.sessionId && userId
+    ? JSON.stringify([session.sessionId, userId, profile.role])
+    : null;
+  const preferenceKey = userId ? `${ACTIVE_COMPANY_KEY}:${userId}` : null;
 
-  const [memberships, setMemberships] =
-    useState<CompanyMembership[]>([]);
+  const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
+  const [request, setRequest] = useState<WorkspaceRequest | null>(null);
+  const currentScope = useRef(scope);
+  const sequence = useRef(0);
+  const pending = useRef<{ scope: string; preferred?: string; promise: Promise<boolean> } | null>(null);
+  const preference = useRef<{ scope: string; value: string | null } | null>(null);
 
-  const [
-    activeCompanyId,
-    setActiveCompanyIdState
-  ] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    currentScope.current = scope;
+    return () => { currentScope.current = null; };
+  }, [scope]);
 
-  const [loading, setLoading] =
-    useState(true);
+  const visible = scope && snapshot?.scope === scope ? snapshot : null;
+  const memberships = visible?.memberships ?? NO_MEMBERSHIPS;
+  const activeCompanyId = visible?.activeCompanyId ?? null;
+  const initialError = scope && request?.scope === scope && !visible ? request.error : null;
+  const loading = authLoading || Boolean(canLoadCompanies && scope && !visible && !initialError);
+  const refreshing = Boolean(scope && request?.scope === scope && request.refreshing);
 
-  const [refreshing, setRefreshing] =
-    useState(false);
+  const companies = useMemo(() => memberships.map(({ company }) => company).filter(Boolean), [memberships]);
+  const activeMembership = memberships.find(({ company_id }) => company_id === activeCompanyId) ?? null;
+  const activeCompany = activeMembership?.company ?? null;
 
-  const companies = useMemo(
-    () =>
-      memberships
-        .map(
-          (membership) =>
-            membership.company
-        )
-        .filter(Boolean),
-    [memberships]
-  );
+  const refreshCompanies = useCallback(async (preferredCompanyId?: string) => {
+    // Accepting an invitation can activate a membership before the profile is refreshed.
+    if (!scope || !preferenceKey || currentScope.current !== scope) return false;
+    if (pending.current?.scope === scope && (!preferredCompanyId || pending.current.preferred === preferredCompanyId)) {
+      return pending.current.promise;
+    }
 
-  const activeCompany = useMemo(
-    () =>
-      companies.find(
-        (company) =>
-          company.id === activeCompanyId
-      ) ?? null,
-    [
-      activeCompanyId,
-      companies
-    ]
-  );
+    const requestId = ++sequence.current;
+    const isCurrent = () => currentScope.current === scope && requestId === sequence.current;
+    const preferenceAtStart = preference.current;
+    setRequest({ scope, refreshing: true, error: null });
 
-  const activeMembership = useMemo(
-    () =>
-      memberships.find(
-        (membership) =>
-          membership.company_id ===
-          activeCompanyId
-      ) ?? null,
-    [
-      activeCompanyId,
-      memberships
-    ]
-  );
-
-  const refreshCompanies =
-    useCallback(async (preferredCompanyId?: string) => {
-      if (!userId) {
-        setMemberships([]);
-        setActiveCompanyIdState(null);
-        setLoading(false);
-        setRefreshing(false);
-
-        await AsyncStorage.removeItem(
-          ACTIVE_COMPANY_KEY
-        );
-
-        return false;
-      }
-
-      setRefreshing(true);
-
+    const promise = (async () => {
       try {
-        const result =
-          await listCompanyMemberships();
-
+        const [result, storedPreference] = await Promise.all([
+          listCompanyMemberships(),
+          preferenceAtStart?.scope === scope
+            ? Promise.resolve(preferenceAtStart.value)
+            : AsyncStorage.getItem(preferenceKey)
+                .then((stored) => stored ?? AsyncStorage.getItem(ACTIVE_COMPANY_KEY))
+                .catch(() => null),
+        ]);
+        if (!isCurrent()) return false;
         if (result.error) {
-          throw new Error(result.error);
+          setRequest({ scope, refreshing: false, error: result.error });
+          return false;
         }
 
-        setMemberships(
-          result.memberships
-        );
-
-        if (
-          preferredCompanyId &&
-          result.memberships.some(
-            (membership) =>
-              membership.company_id ===
-              preferredCompanyId
-          )
-        ) {
-          await AsyncStorage.setItem(
-            ACTIVE_COMPANY_KEY,
-            preferredCompanyId
-          );
+        const selected = preference.current?.scope === scope ? preference.current.value : storedPreference;
+        const preferred = preference.current === preferenceAtStart ? preferredCompanyId : undefined;
+        const canSelect = (id?: string | null) => result.memberships.some(({ company_id }) => company_id === id);
+        let companyId = hasClientSpace ? null : result.memberships[0]?.company_id ?? null;
+        if (preferred && canSelect(preferred)) {
+          companyId = preferred;
+        } else if (canSelect(selected)) {
+          companyId = selected;
         }
 
-        const storedCompanyId =
-          await AsyncStorage.getItem(
-            ACTIVE_COMPANY_KEY
-          );
+        const value = companyId ?? (hasClientSpace ? CLIENT_SPACE : null);
+        preference.current = { scope, value };
+        setSnapshot({ scope, memberships: result.memberships, activeCompanyId: companyId });
+        setRequest({ scope, refreshing: false, error: null });
+        if (value) void AsyncStorage.setItem(preferenceKey, value).catch(() => undefined);
 
-        const storedCompanyExists =
-          result.memberships.some(
-            (membership) =>
-              membership.company_id ===
-              storedCompanyId
-          );
-
-        if (
-          storedCompanyId &&
-          storedCompanyExists
-        ) {
-          setActiveCompanyIdState(
-            storedCompanyId
-          );
-
-          return !preferredCompanyId || storedCompanyId === preferredCompanyId;
+        return !preferredCompanyId || companyId === preferredCompanyId;
+      } catch {
+        if (isCurrent()) {
+          setRequest({ scope, refreshing: false, error: "Revisa tu conexión e intenta cargar tu espacio de nuevo." });
         }
-
-        if (hasClientSpace && storedCompanyId === CLIENT_SPACE) {
-          setActiveCompanyIdState(null);
-          return !preferredCompanyId;
-        }
-
-        const firstCompanyId = hasClientSpace ? null : result.memberships[0]?.company_id ?? null;
-
-        setActiveCompanyIdState(
-          firstCompanyId
-        );
-
-        if (firstCompanyId) {
-          await AsyncStorage.setItem(
-            ACTIVE_COMPANY_KEY,
-            firstCompanyId
-          );
-        } else {
-          await AsyncStorage.removeItem(
-            ACTIVE_COMPANY_KEY
-          );
-        }
-        return !preferredCompanyId || firstCompanyId === preferredCompanyId;
-      } catch (error) {
-        console.error(
-          "Error cargando empresas:",
-          error
-        );
-
         return false;
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (isCurrent()) pending.current = null;
       }
-    }, [hasClientSpace, userId]);
+    })();
+    pending.current = { scope, preferred: preferredCompanyId, promise };
+    return promise;
+  }, [hasClientSpace, preferenceKey, scope]);
 
   useEffect(() => {
-    if (authLoading) return;
-
-    let active = true;
-
-    void Promise.resolve().then(() => {
-      if (!active) return;
-
-      if (userId && !canLoadCompanies) {
-        setMemberships([]);
-        setActiveCompanyIdState(null);
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
+    if (!scope) {
+      setSnapshot(null);
+      setRequest(null);
+      preference.current = null;
+      pending.current = null;
+    } else if (canLoadCompanies) {
       void refreshCompanies();
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [
-    authLoading,
-    canLoadCompanies,
-    userId,
-    refreshCompanies
-  ]);
+    }
+  }, [canLoadCompanies, refreshCompanies, scope]);
 
   // Un rol cambiado o un acceso retirado por otra persona se refleja al volver
   // a la app o al recibir el aviso, sin esperar a que la API responda 403.
-  const lastForegroundRefresh = useRef(Date.now());
   useEffect(() => {
-    if (!userId || !canLoadCompanies) return;
+    if (!scope || !canLoadCompanies) return;
+    let lastForegroundRefresh = Date.now();
     const appState = AppState.addEventListener("change", (state) => {
-      if (state !== "active" || Date.now() - lastForegroundRefresh.current < FOREGROUND_REFRESH_MS) return;
-      lastForegroundRefresh.current = Date.now();
+      if (state !== "active" || Date.now() - lastForegroundRefresh < FOREGROUND_REFRESH_MS) return;
+      lastForegroundRefresh = Date.now();
       void refreshCompanies();
     });
     const push = Platform.OS === "web" ? null : Notifications.addNotificationReceivedListener((notification) => {
@@ -276,41 +203,26 @@ export function CompanyProvider({
       appState.remove();
       push?.remove();
     };
-  }, [canLoadCompanies, refreshCompanies, userId]);
+  }, [canLoadCompanies, refreshCompanies, scope]);
 
-  const setActiveCompanyId =
-    useCallback(
-      async (companyId: string) => {
-        const exists =
-          memberships.some(
-            (membership) =>
-              membership.company_id ===
-              companyId
-          );
+  const selectSpace = useCallback(async (companyId: string | null) => {
+    if (!scope || !preferenceKey || currentScope.current !== scope) return;
+    const value = companyId ?? CLIENT_SPACE;
+    preference.current = { scope, value };
+    setSnapshot((current) => current?.scope === scope ? { ...current, activeCompanyId: companyId } : current);
+    await AsyncStorage.setItem(preferenceKey, value).catch(() => undefined);
+  }, [preferenceKey, scope]);
 
-        if (!exists) {
-          throw new Error(
-            "No tienes acceso a esta empresa."
-          );
-        }
-
-        setActiveCompanyIdState(
-          companyId
-        );
-
-        await AsyncStorage.setItem(
-          ACTIVE_COMPANY_KEY,
-          companyId
-        );
-      },
-      [memberships]
-    );
+  const setActiveCompanyId = useCallback(async (companyId: string) => {
+    if (!memberships.some(({ company_id }) => company_id === companyId)) {
+      throw new Error("No tienes acceso a esta empresa.");
+    }
+    await selectSpace(companyId);
+  }, [memberships, selectSpace]);
 
   const useClientSpace = useCallback(async () => {
-    if (!hasClientSpace) return;
-    await AsyncStorage.setItem(ACTIVE_COMPANY_KEY, CLIENT_SPACE);
-    setActiveCompanyIdState(null);
-  }, [hasClientSpace]);
+    if (hasClientSpace) await selectSpace(null);
+  }, [hasClientSpace, selectSpace]);
 
   const createCompany =
     useCallback(
@@ -361,6 +273,7 @@ export function CompanyProvider({
         activeMembership,
         loading,
         refreshing,
+        initialError,
         refreshCompanies,
         setActiveCompanyId,
         useClientSpace,
@@ -373,6 +286,7 @@ export function CompanyProvider({
         activeMembership,
         loading,
         refreshing,
+        initialError,
         refreshCompanies,
         setActiveCompanyId,
         useClientSpace,

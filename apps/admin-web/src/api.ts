@@ -21,6 +21,7 @@ const API_URL = getApiUrl();
 
 const SESSION_KEY =
   "contractor-pro.admin-session.v1";
+const REQUEST_TIMEOUT_MS = 15_000;
 
 export type AdminUser = {
   id: string;
@@ -66,47 +67,43 @@ export class ApiError extends Error {
 
 let memorySession: AdminSession | null = null;
 let refreshInProgress: { sessionId: string; promise: Promise<AdminSession> } | null = null;
+const sessionEndedListeners = new Set<(sessionId: string) => void>();
 
-async function readResponse<T>(
-  response: Response
-): Promise<T> {
-  const body = await response
-    .json()
-    .catch(() => null);
-
-  if (!response.ok) {
-    const errorBody =
-      body as ErrorResponse | null;
-
-    throw new ApiError(
-      errorBody?.message ||
-      "No fue posible completar la solicitud.",
-      response.status
-    );
-  }
-
-  return body as T;
+export function onAdminSessionEnded(listener: (sessionId: string) => void): () => void {
+  sessionEndedListeners.add(listener);
+  return () => { sessionEndedListeners.delete(listener); };
 }
 
-async function publicRequest<T>(
-  path: string,
-  init: RequestInit = {}
-): Promise<T> {
-  const response = await fetch(
-    `${API_URL}${path}`,
-    {
-      ...init,
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-        "Content-Type":
-          "application/json",
-        ...init.headers
-      }
-    }
-  );
+async function publicRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const bounded = (!init.method || init.method.toUpperCase() === "GET")
+    || path === "/auth/login" || path === "/auth/refresh" || path === "/auth/logout";
+  const controller = bounded && !init.signal ? new AbortController() : null;
+  const timeout = controller ? setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : null;
+  const signal = init.signal ?? controller?.signal;
 
-  return readResponse<T>(response);
+  try {
+    const response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      signal,
+      credentials: "include",
+      headers: { Accept: "application/json", "Content-Type": "application/json", ...init.headers }
+    });
+    const body = await response.json().catch(() => null);
+    if (signal?.aborted) throw signal.reason;
+    if (response.ok) return body as T;
+
+    const errorBody = body as ErrorResponse | null;
+    let message = typeof errorBody?.message === "string" ? errorBody.message : "No fue posible completar la solicitud.";
+    if (response.status >= 500) message = "Leuret no está disponible en este momento. Inténtalo de nuevo en unos minutos.";
+    if (response.status === 429) message = "Hubo demasiados intentos. Espera un momento y vuelve a intentarlo.";
+    throw new ApiError(message, response.status);
+  } catch (error) {
+    if (error instanceof ApiError || init.signal?.aborted) throw error;
+    if (signal?.aborted) throw new ApiError("Leuret tardó en responder. Inténtalo de nuevo.", 0);
+    throw new ApiError("No pudimos conectar con Leuret. Revisa tu conexión e inténtalo de nuevo.", 0);
+  } finally {
+    if (timeout !== null) clearTimeout(timeout);
+  }
 }
 
 function saveSession(
@@ -148,6 +145,12 @@ function clearSession(): void {
   localStorage.removeItem(
     SESSION_KEY
   );
+}
+
+function endSession(sessionId: string): void {
+  if (readStoredSessionId() !== sessionId) return;
+  clearSession();
+  sessionEndedListeners.forEach((listener) => listener(sessionId));
 }
 
 function toSession(
@@ -195,21 +198,17 @@ async function refreshSession(sessionId: string): Promise<AdminSession> {
 
     return session;
   };
-  const promise = globalThis.navigator?.locks
+  const renewal = globalThis.navigator?.locks
     ? Promise.resolve(navigator.locks.request(SESSION_KEY, renew))
     : renew();
+  const promise = renewal.catch((error: unknown) => {
+    if (error instanceof ApiError && (error.status === 401 || error.status === 403)) endSession(sessionId);
+    throw error;
+  });
   refreshInProgress = { sessionId, promise };
 
   try {
     return await promise;
-  } catch (error) {
-    if (
-      error instanceof ApiError && (error.status === 401 || error.status === 403) &&
-      readStoredSessionId() === sessionId
-    ) {
-      clearSession();
-    }
-    throw error;
   } finally {
     if (refreshInProgress?.promise === promise) refreshInProgress = null;
   }
@@ -244,35 +243,29 @@ export async function authenticatedRequest<T>(
   const session =
     await validSession();
 
-  const send = (accessToken: string) =>
-    fetch(`${API_URL}${path}`, {
-      ...init,
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-        "Content-Type":
-          "application/json",
-        ...init.headers,
-        Authorization: `Bearer ${accessToken}`
-      }
-    });
-  const response = await send(session.accessToken);
-
-  if (
-    response.status === 401 &&
-    retry
-  ) {
-    if (readStoredSessionId() !== session.sessionId) {
-      throw new ApiError("La sesión cambió.", 401);
+  const send = (accessToken: string) => publicRequest<T>(path, {
+    ...init,
+    headers: { ...init.headers, Authorization: `Bearer ${accessToken}` }
+  });
+  try {
+    return await send(session.accessToken);
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 401 || !retry) {
+      if (path === "/auth/me" && error instanceof ApiError && error.status === 403) endSession(session.sessionId);
+      throw error;
     }
-    const refreshed =
-      memorySession?.sessionId === session.sessionId && memorySession.accessToken !== session.accessToken
-        ? memorySession
-        : await refreshSession(session.sessionId);
-    return readResponse<T>(await send(refreshed.accessToken));
+    if (readStoredSessionId() !== session.sessionId) throw new ApiError("La sesión cambió.", 401);
+    const refreshed = memorySession?.sessionId === session.sessionId && memorySession.accessToken !== session.accessToken
+      ? memorySession
+      : await refreshSession(session.sessionId);
+    try {
+      return await send(refreshed.accessToken);
+    } catch (retryError) {
+      if (retryError instanceof ApiError && (retryError.status === 401
+        || (path === "/auth/me" && retryError.status === 403))) endSession(session.sessionId);
+      throw retryError;
+    }
   }
-
-  return readResponse<T>(response);
 }
 
 function ensureSuperAdmin(
@@ -283,8 +276,6 @@ function ensureSuperAdmin(
     session.user.role !==
     "super_admin"
   ) {
-    clearSession();
-
     throw new ApiError(
       "Esta cuenta no es superadministradora.",
       403
@@ -329,6 +320,9 @@ export async function restoreAdminSession():
   const sessionId = readStoredSessionId();
 
   if (!sessionId) return null;
+  if (memorySession?.sessionId !== sessionId || Date.now() >= memorySession.expiresAt - 30_000) {
+    return refreshSession(sessionId);
+  }
 
   const current =
     await authenticatedRequest<{
@@ -339,15 +333,14 @@ export async function restoreAdminSession():
     return null;
   }
 
-  const session =
-    ensureSuperAdmin({
-      ...memorySession,
-      user: current.user
-    });
-
-  saveSession(session);
-
-  return session;
+  try {
+    const session = ensureSuperAdmin({ ...memorySession, user: current.user });
+    saveSession(session);
+    return session;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 403) endSession(sessionId);
+    throw error;
+  }
 }
 
 export async function logoutAdmin():

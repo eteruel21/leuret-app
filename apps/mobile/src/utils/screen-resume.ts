@@ -19,10 +19,12 @@ export type SavedScreen = {
 const SCREEN_GROUPS: Record<ResumeScope, readonly string[]> = {
   "/(tabs)": [
     "(tabs)", "agenda", "calculos", "catalogo", "clientes", "equipo",
-    "espacios", "facturas", "notificaciones", "perfil", "presupuestos", "proyectos", "solicitudes", "tareas",
+    "espacios", "facturas", "notificaciones", "perfil", "perfil-profesional", "peticiones",
+    "presupuestos", "proyectos", "solicitudes", "tareas",
   ],
   "/(client-tabs)": [
-    "(client-tabs)", "cliente-facturas", "cliente-presupuestos", "cliente-proyectos", "contratistas", "espacios", "notificaciones", "perfil", "solicitudes",
+    "(client-tabs)", "cliente-facturas", "cliente-peticiones", "cliente-presupuestos",
+    "cliente-proyectos", "contratistas", "espacios", "notificaciones", "perfil", "perfil-profesional", "solicitudes",
   ],
   "/empresa": ["empresa"],
   "/espacios": ["espacios", "perfil"],
@@ -69,6 +71,13 @@ export function resumableScreen(
     const id = routeParameter(params, "id");
     if (!id) return null;
     screenParams.id = id;
+  }
+  if (pathname === "/cliente-peticiones/conversacion" || pathname === "/peticiones/conversacion") {
+    const requestId = routeParameter(params, "requestId");
+    const companyId = routeParameter(params, "companyId");
+    if (!requestId || (!companyId && pathname.startsWith("/cliente-"))) return null;
+    screenParams.requestId = requestId;
+    if (companyId) screenParams.companyId = companyId;
   }
   if (pathname === "/solicitudes") {
     const id = routeParameter(params, "id");

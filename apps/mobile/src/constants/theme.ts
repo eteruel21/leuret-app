@@ -191,6 +191,6 @@ export const layout = {
   screenPadding: 20,
   sectionGap: 28,
   cardGap: 12,
-  tabBarHeight: 78,
+  tabBarHeight: 62,
   maxContentWidth: 720,
 };

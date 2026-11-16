@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import { Check, ChevronDown, ChevronUp, Loader2, RefreshCw, Search, Users, X } from "lucide-react";
 
 import {
@@ -8,7 +8,7 @@ import {
   type PriceContributionStatus,
   type PriceContributionsResponse,
 } from "../admin-data";
-import { EmptyState, Field, SectionHeader, SelectField, SuccessBanner, Table } from "./CommonUI";
+import { PanelRefreshContext, EmptyState, Field, SectionHeader, SelectField, SuccessBanner, Table } from "./CommonUI";
 import { errorMessage, formatDate, formatMoney } from "../utils/helpers";
 
 const STATUS_OPTIONS: Array<{ value: PriceContributionStatus; label: string }> = [
@@ -38,6 +38,7 @@ function parseAmount(value: string): number {
  * lo deja en el historial con la fuente «Aportes de usuarios».
  */
 export function PriceContributions({ onApproved }: { onApproved?: () => Promise<void> | void }) {
+  const panelRevision = useContext(PanelRefreshContext);
   const [status, setStatus] = useState<PriceContributionStatus>("pending");
   const [search, setSearch] = useState("");
   const [data, setData] = useState<PriceContributionsResponse | null>(null);
@@ -65,7 +66,7 @@ export function PriceContributions({ onApproved }: { onApproved?: () => Promise<
   useEffect(() => {
     const timer = window.setTimeout(() => void refresh(), 300);
     return () => window.clearTimeout(timer);
-  }, [refresh]);
+  }, [refresh, panelRevision]);
 
   function updateDraft(itemId: string, patch: Partial<Draft>) {
     setDrafts((current) => ({ ...current, [itemId]: { ...current[itemId]!, ...patch } }));
