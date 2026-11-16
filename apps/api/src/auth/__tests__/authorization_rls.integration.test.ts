@@ -247,6 +247,35 @@ describe("T-054: Suite de Pruebas de Autorización y RLS", () => {
     expect(crossBudgetRes.statusCode).toBe(403);
   });
 
+  it("bloquea consultas SQL directas a datos de otra empresa mediante RLS", async () => {
+    const ownerB = await adminPool.query<{ id: string }>(
+      "SELECT id FROM app_auth.users WHERE email = $1",
+      [userEmails.ownerB]
+    );
+    const ownerBId = ownerB.rows[0]?.id;
+    expect(ownerBId).toBeDefined();
+
+    const rows = await withUserTransaction(ownerBId!, async (client) => {
+      const clients = await client.query(
+        "SELECT id FROM public.clients WHERE id = $1",
+        [clientAId]
+      );
+      const projects = await client.query(
+        "SELECT id FROM public.projects WHERE company_id = $1",
+        [companyAId]
+      );
+      const budgets = await client.query(
+        "SELECT id FROM public.budgets WHERE company_id = $1",
+        [companyAId]
+      );
+      return { clients: clients.rows, projects: projects.rows, budgets: budgets.rows };
+    });
+
+    expect(rows.clients).toEqual([]);
+    expect(rows.projects).toEqual([]);
+    expect(rows.budgets).toEqual([]);
+  });
+
   it("4. Permisos por Rol en la misma Compañía", async () => {
     // Add Estimator and Sales to Company A via adminPool
     await adminPool.query(

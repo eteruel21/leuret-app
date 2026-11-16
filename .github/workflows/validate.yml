@@ -75,6 +75,9 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Verify CI and deployment safeguards
+        run: node --test scripts/ci-workflow-contract.test.mjs
+
       - name: Block new high and critical advisories in deployed dependencies
         if: github.event_name != 'push'
         shell: bash
