@@ -6,6 +6,7 @@ import {
 } from "react";
 import { Pressable, Text, View } from "react-native";
 
+import { createTurnstileStallGuard } from "@/utils/turnstile-stall";
 import {
   buildOpenInChromeIntent,
   detectInAppBrowser,
@@ -27,6 +28,8 @@ type TurnstileOptions = {
   "expired-callback"?: () => void;
   "timeout-callback"?: () => void;
   "error-callback"?: (code?: string) => void;
+  "before-interactive-callback"?: () => void;
+  "unsupported-callback"?: () => void;
 };
 
 type TurnstileApi = {
@@ -42,9 +45,6 @@ declare global {
     turnstile?: TurnstileApi;
   }
 }
-
-/** Si el widget no entrega token ni error en este tiempo, mostramos ayuda. */
-const TURNSTILE_STALL_MS = 15_000;
 
 const TURNSTILE_SCRIPT_ID = "cloudflare-turnstile-script";
 const TURNSTILE_SCRIPT_URL =
@@ -138,7 +138,6 @@ export default function TurnstileChallenge({
 
     let cancelled = false;
     let api: TurnstileApi | null = null;
-    let settled = false;
 
     onTokenRef.current(null);
     setFailed(false);
@@ -150,11 +149,9 @@ export default function TurnstileChallenge({
       }
     };
 
-    const stallTimer = setTimeout(() => {
-      if (!settled) {
-        markFailed();
-      }
-    }, TURNSTILE_STALL_MS);
+    // Se detiene con el token, con un error o cuando Turnstile pide la
+    // casilla: en ese caso el widget espera a la persona y no está trabado.
+    const stallGuard = createTurnstileStallGuard(markFailed);
 
     loadTurnstile()
       .then((turnstile) => {
@@ -182,7 +179,7 @@ export default function TurnstileChallenge({
           size: "flexible",
 
           callback: (token) => {
-            settled = true;
+            stallGuard.stop();
             if (!cancelled) {
               setFailed(false);
               onTokenRef.current(token);
@@ -201,22 +198,31 @@ export default function TurnstileChallenge({
             }
           },
 
+          "before-interactive-callback": () => {
+            stallGuard.stop();
+          },
+
+          "unsupported-callback": () => {
+            stallGuard.stop();
+            markFailed();
+          },
+
           "error-callback": (code) => {
             console.error("[Cloudflare Turnstile] Error:", code);
-            settled = true;
+            stallGuard.stop();
             markFailed();
           },
         });
       })
       .catch((error) => {
         console.error("[Cloudflare Turnstile]", error);
-        settled = true;
+        stallGuard.stop();
         markFailed();
       });
 
     return () => {
       cancelled = true;
-      clearTimeout(stallTimer);
+      stallGuard.stop();
 
       if (api && widgetIdRef.current) {
         try {
