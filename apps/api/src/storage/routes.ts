@@ -313,11 +313,8 @@ export async function registerStorageRoutes(app: FastifyInstance): Promise<void>
       } catch (error) {
         try {
           await deleteStorageFile(storagePath);
-        } catch (cleanupError) {
-          request.log.error(
-            { cleanupError, storagePath },
-            "No se pudo revertir una carga de foto sin registro"
-          );
+        } catch {
+          request.log.error("No se pudo revertir una carga de foto sin registro.");
         }
         throw error;
       }

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "../../config/env.js";
+import { configureMetrics } from "../../observability/events.js";
 import { verifyCaptcha } from "../services.js";
 
 const mutableEnv = env as unknown as {
@@ -36,6 +37,7 @@ describe("Cloudflare Turnstile server-side validation", () => {
     mutableEnv.NODE_ENV = original.nodeEnv;
     mutableEnv.TURNSTILE_SECRET_KEY = original.secret;
     mutableEnv.TURNSTILE_ALLOWED_HOSTNAMES = original.hostnames;
+    configureMetrics(undefined);
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -106,12 +108,15 @@ describe("Cloudflare Turnstile server-side validation", () => {
   });
 
   it("rechaza token expirado o reutilizado", async () => {
+    const writeDataPoint = vi.fn();
+    configureMetrics({ writeDataPoint });
     mockSiteverify({
       success: false,
       "error-codes": ["timeout-or-duplicate"]
     });
 
     await expect(verifyCaptcha("replayed-token", "203.0.113.10", "login")).resolves.toBe(false);
+    expect(writeDataPoint).not.toHaveBeenCalled();
   });
 
   it("falla cerrado cuando Siteverify no responde", async () => {
@@ -123,8 +128,13 @@ describe("Cloudflare Turnstile server-side validation", () => {
   });
 
   it("rechaza respuesta HTTP no exitosa de Siteverify", async () => {
+    const writeDataPoint = vi.fn();
+    configureMetrics({ writeDataPoint });
     mockSiteverify({ success: false }, 503);
 
     await expect(verifyCaptcha("valid-token", "203.0.113.10", "login")).resolves.toBe(false);
+    expect(writeDataPoint).toHaveBeenCalledWith(expect.objectContaining({
+      blobs: ["integration_failure", "turnstile", "verify_captcha"]
+    }));
   });
 });

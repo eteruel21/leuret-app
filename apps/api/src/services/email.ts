@@ -1,4 +1,5 @@
 import { env } from "../config/env.js";
+import { recordIntegrationFailure } from "../observability/events.js";
 
 type VerificationEmailInput = {
   to: string;
@@ -35,6 +36,7 @@ async function deliverWithResend({
   idempotencyKey
 }: ResendMessage): Promise<EmailDeliveryResult> {
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
+    recordIntegrationFailure("resend", "send_email", "not_configured");
     return { sent: false, reason: "not_configured" };
   }
 
@@ -56,11 +58,13 @@ async function deliverWithResend({
     });
 
     if (!response.ok) {
+      recordIntegrationFailure("resend", "send_email", "http_error", { upstreamStatus: response.status });
       return { sent: false, reason: "delivery_failed" };
     }
 
     return { sent: true };
   } catch {
+    recordIntegrationFailure("resend", "send_email", "request_failed");
     return { sent: false, reason: "delivery_failed" };
   }
 }
