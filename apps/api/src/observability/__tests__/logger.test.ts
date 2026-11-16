@@ -7,7 +7,7 @@ function capture(level = "info") {
   const logger = createAppLogger({
     level,
     now: () => new Date("2026-11-09T12:00:00.000Z"),
-    write: (eventLevel, line) => lines.push({ level: eventLevel, entry: JSON.parse(line) })
+    write: (eventLevel, entry) => lines.push({ level: eventLevel, entry })
   });
   return { logger, lines };
 }

@@ -113,8 +113,8 @@ async function signMessage(message: JobRequestMessageRow) {
 async function removeUploadedFile(request: FastifyRequest, storagePath: string) {
   try {
     await deleteStorageFile(storagePath);
-  } catch (cleanupError) {
-    request.log.error({ cleanupError: safeErrorDetails(cleanupError), storagePath }, "No se pudo revertir la carga de una foto.");
+  } catch {
+    request.log.error("No se pudo revertir la carga de una foto.");
   }
 }
 

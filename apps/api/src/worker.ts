@@ -5,7 +5,7 @@ import { httpServerHandler } from "cloudflare:node";
 import { buildApp } from "./app.js";
 import { processAccountDeletionStorageQueue } from "./account/storage-cleanup.js";
 import { processInvoicePaymentReminders } from "./invoices/payment-reminders.js";
-import { safeErrorDetails } from "./security/redaction.js";
+import { configureMetrics, recordInfrastructureFailure, serviceLogger } from "./observability/events.js";
 import {
   configureHyperdriveDatabase
 } from "./db/pool.js";
@@ -23,11 +23,12 @@ type CloudflareHttpFetch =
 
 type CloudflareHttpRequest =
   Parameters<CloudflareHttpFetch>[0];
+type WorkerEnv = Env & { LEURET_METRICS: AnalyticsEngineDataset };
 
 let handlerPromise:
   Promise<CloudflareHttpHandler> | undefined;
 
-function configureRuntimeBindings(env: Env): void {
+function configureRuntimeBindings(env: WorkerEnv): void {
   configureHyperdriveDatabase(
     env.HYPERDRIVE.connectionString
   );
@@ -39,6 +40,24 @@ function configureRuntimeBindings(env: Env): void {
   }
 
   configureR2Storage(env.R2_STORAGE);
+}
+
+async function monitorScheduledTask<T extends { claimed: number; failed: number }>(
+  operation: "account_storage_cleanup" | "invoice_payment_reminders",
+  task: Promise<T>
+): Promise<void> {
+  try {
+    const result = await task;
+    if (result.claimed > 0) {
+      serviceLogger.info({ event: "scheduled_task", operation, ...result }, "Tanda de trabajo procesada.");
+    }
+    if (result.failed > 0) {
+      recordInfrastructureFailure("worker_cron", operation, "retry_pending", { failedCount: result.failed });
+    }
+  } catch {
+    recordInfrastructureFailure("worker_cron", operation, "operation_failed");
+    throw new Error(`Falló la tarea programada ${operation}.`);
+  }
 }
 
 async function getHandler():
@@ -64,60 +83,41 @@ async function getHandler():
 export default {
   async fetch(
     request: Request,
-    env: Env,
+    env: WorkerEnv,
     context: ExecutionContext
   ): Promise<Response> {
-    configureRuntimeBindings(env);
-
-    const handler = await getHandler();
-
-    if (!handler.fetch) {
-      throw new Error(
-        "El adaptador HTTP de Cloudflare no expuso fetch."
-      );
+    configureMetrics(env.LEURET_METRICS);
+    try {
+      configureRuntimeBindings(env);
+      const handler = await getHandler();
+      if (!handler.fetch) {
+        throw new Error("El adaptador HTTP de Cloudflare no expuso fetch.");
+      }
+      return await handler.fetch(request as unknown as CloudflareHttpRequest, env, context);
+    } catch {
+      recordInfrastructureFailure("worker", "fetch", "operation_failed");
+      throw new Error("Falló la ejecución HTTP del Worker.");
     }
-
-    return handler.fetch(
-      request as unknown as CloudflareHttpRequest,
-      env,
-      context
-    );
   },
 
   async scheduled(
     _controller: ScheduledController,
-    env: Env,
+    env: WorkerEnv,
     context: ExecutionContext
   ): Promise<void> {
-    configureRuntimeBindings(env);
+    configureMetrics(env.LEURET_METRICS);
+    try {
+      configureRuntimeBindings(env);
+    } catch {
+      recordInfrastructureFailure("worker", "scheduled", "operation_failed");
+      throw new Error("Falló el inicio de las tareas programadas del Worker.");
+    }
 
     context.waitUntil(
-      processAccountDeletionStorageQueue({
-        limit: 50
-      }).then((result) => {
-        if (result.failed > 0) {
-          console.warn(
-            "La limpieza programada de cuentas conserva objetos para reintento.",
-            {
-              claimed: result.claimed,
-              completed: result.completed,
-              failed: result.failed
-            }
-          );
-        }
-      })
+      monitorScheduledTask("account_storage_cleanup", processAccountDeletionStorageQueue({ limit: 50 }))
     );
-
     context.waitUntil(
-      processInvoicePaymentReminders({ limit: 25 })
-        .then((result) => {
-          if (result.claimed > 0) {
-            console.log(JSON.stringify({ level: "info", msg: "Recordatorios de cobro procesados.", ...result }));
-          }
-        })
-        .catch((error: unknown) => {
-          console.error("Fallaron los recordatorios de cobro programados.", safeErrorDetails(error));
-        })
+      monitorScheduledTask("invoice_payment_reminders", processInvoicePaymentReminders({ limit: 25 }))
     );
   }
-} satisfies ExportedHandler<Env>;
+} satisfies ExportedHandler<WorkerEnv>;

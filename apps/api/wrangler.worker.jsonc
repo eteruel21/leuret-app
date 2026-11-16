@@ -7,8 +7,18 @@
   ],
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 1
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false
+    }
   },
+  "analytics_engine_datasets": [
+    {
+      "binding": "LEURET_METRICS",
+      "dataset": "leuret_api_metrics"
+    }
+  ],
   "vars": {
     "NODE_ENV": "production",
     "DATABASE_MODE": "hyperdrive",
