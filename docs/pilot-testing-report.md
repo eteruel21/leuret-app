@@ -1,4 +1,6 @@
-# Informe de Prueba Piloto con Empresas Controladas — Contractor Pro
+# Informe de prueba piloto de LEURET
+
+> Los criterios vigentes de lanzamiento se mantienen en el [roadmap](ROADMAP.md).
 
 **Fecha de ejecución:** 21 de julio de 2026  
 **Entorno:** Staging / Production Pilot  

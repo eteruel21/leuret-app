@@ -1,6 +1,6 @@
-# App móvil nativa: compilaciones, pruebas y publicación
+# Compilaciones nativas, pruebas y publicación de LEURET
 
-Guía para compilar **Leuret** para Android e iOS con EAS, probarla en teléfonos reales y publicarla. La configuración vive en `apps/mobile/app.json`, `apps/mobile/app.config.js` y `apps/mobile/eas.json`.
+Guía para compilar **Leuret** para Android e iOS con EAS, probarla en teléfonos reales y publicarla. El workspace usa Expo SDK 57. Consulta [`app.json`](../apps/mobile/app.json), [`app.config.js`](../apps/mobile/app.config.js) y [`eas.json`](../apps/mobile/eas.json). Ejecuta los comandos de EAS desde `apps/mobile`.
 
 `npm run check:native -w apps/mobile` revisa la configuración y exporta los paquetes JavaScript de Android e iOS. CI lo ejecuta en cada PR.
 
@@ -30,7 +30,7 @@ Guía para compilar **Leuret** para Android e iOS con EAS, probarla en teléfono
 | `pilot` | Piloto en teléfonos reales, API de producción | interna | pilot / preview |
 | `production` | Tiendas: AAB para Google Play, IPA para App Store | store | production |
 
-Todos los perfiles de prueba y producción usan `https://api.leurettech.com` y la verificación Turnstile de `https://app.leurettech.com/turnstile`.
+Los perfiles `preview`, `pilot` y `production` usan `https://api.leurettech.com` y el desafío `https://app.leurettech.com/turnstile`. Para compilar contra staging, configura la URL y el widget de ese entorno. Consulta [perfiles de EAS Build](https://docs.expo.dev/build/eas-json/).
 
 ## 3. Requisitos antes de la primera compilación con avisos
 
@@ -40,30 +40,30 @@ Sin esto el teléfono Android no obtiene token y **no recibe avisos push**.
 2. Subirlo a EAS como variable de tipo archivo, en los entornos preview y production:
    ```bash
    cd apps/mobile
-   eas env:create --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json --environment preview --environment production --visibility secret
+   npx --yes eas-cli@27.4.1 env:create --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json --environment preview --environment production --visibility secret
    ```
    (En local basta con dejar el archivo en `apps/mobile/google-services.json`.)
-3. En Firebase → Configuración del proyecto → Cuentas de servicio, generar una clave privada (JSON) y subirla en `eas credentials -p android` → *Google Service Account* → *FCM V1*.
+3. En Firebase → Configuración del proyecto → Cuentas de servicio, generar una clave privada (JSON) y subirla en `npx --yes eas-cli@27.4.1 credentials -p android` → *Google Service Account* → *FCM V1*.
 
 `app.config.js` detiene la build de Android de production si falta el archivo, y avisa en preview/pilot.
 
 ### iOS: APNs y firma
 1. Cuenta de Apple Developer activa. Crear la app en App Store Connect con Bundle ID `com.leuret.app`.
-2. `eas credentials -p ios`: dejar que EAS cree el certificado de distribución, el perfil de aprovisionamiento y la **clave de notificaciones push (APNs)**.
-3. Para builds internas (Ad Hoc) registrar los iPhone con `eas device:create`.
+2. `npx --yes eas-cli@27.4.1 credentials -p ios`: dejar que EAS cree el certificado de distribución, el perfil de aprovisionamiento y la **clave de notificaciones push (APNs)**.
+3. Para builds internas (Ad Hoc) registrar los iPhone con `npx --yes eas-cli@27.4.1 device:create`.
 
 ## 4. Compilar
 
 ```bash
 cd apps/mobile
-npx eas login
-npm run build:android:pilot     # APK de prueba
-npm run build:ios:pilot         # Ad Hoc (iPhone registrados)
-npm run build:android:prod      # AAB para Google Play
-npm run build:ios:prod          # IPA para App Store / TestFlight
+npx --yes eas-cli@27.4.1 whoami
+npx --yes eas-cli@27.4.1 build -p android --profile pilot
+npx --yes eas-cli@27.4.1 build -p ios --profile pilot
+npx --yes eas-cli@27.4.1 build -p android --profile production
+npx --yes eas-cli@27.4.1 build -p ios --profile production
 ```
 
-Enviar a las tiendas: `eas submit -p android --profile production` (pista interna) y `eas submit -p ios --profile production` (TestFlight).
+Si necesitas iniciar sesión, usa `npx --yes eas-cli@27.4.1 login --browser`. Para enviar un binario firmado, usa `npx --yes eas-cli@27.4.1 submit -p android --profile production` para la pista interna de Google Play o `npx --yes eas-cli@27.4.1 submit -p ios --profile production` para TestFlight. Selecciona el build que verificaste.
 
 ## 5. Pruebas en teléfonos reales
 
@@ -99,12 +99,19 @@ Marcar cada punto en Android **y** iPhone.
 
 ## 6. Actualizaciones OTA
 
-Cambios solo de JavaScript o imágenes se publican sin pasar por las tiendas:
+EAS Update publica cambios compatibles de JavaScript y recursos. Confirma el proyecto, la plataforma, el runtime y la rama asociada al canal. Configura `EXPO_PUBLIC_API_URL` y las variables públicas de Turnstile en el entorno EAS correspondiente. El SDK 57 exige indicar el entorno en el comando. El perfil piloto usa el entorno `preview`.
+
 ```bash
 cd apps/mobile
-npx eas update --channel production --message "Descripción del cambio"
+npx --yes eas-cli@27.4.1 update --channel pilot --platform all \
+  --environment preview --message "Validación del piloto"
 ```
-Cambios en `app.json`, plugins, permisos, íconos o dependencias nativas requieren **una build nueva**. Al subir `version`, las builds viejas dejan de recibir OTA de la versión nueva.
+
+Verifica el ID de la actualización en los dispositivos piloto. Cierra completamente la aplicación y ábrela de nuevo para descargarla. Si sigue ejecutando la anterior, realiza otra apertura en frío. Para una publicación de producción usa el canal y entorno `production` después de verificar el resultado del piloto.
+
+Los cambios de configuración nativa, plugins, permisos, íconos de la app o dependencias nativas requieren una compilación nueva. Con la política `appVersion`, las actualizaciones solo llegan a compilaciones que comparten la versión de runtime.
+
+Consulta [variables de EAS Update](https://docs.expo.dev/eas/environment-variables/usage/) y [versiones de runtime](https://docs.expo.dev/eas-update/runtime-versions/).
 
 ## 7. Pendiente / mejoras
 

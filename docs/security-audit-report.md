@@ -1,4 +1,6 @@
-# Informe de Auditoría Final de Seguridad — Contractor Pro
+# Informe de auditoría de seguridad de LEURET
+
+> Para revisar los controles vigentes, consulta la [arquitectura](architecture.md) y el [workflow de validación](../.github/workflows/validate.yml).
 
 **Fecha de auditoría:** 21 de julio de 2026  
 **Alcance:** Monorepo (`apps/api`, `apps/admin-web`, `apps/mobile`, PostgreSQL Database)  
