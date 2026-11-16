@@ -202,11 +202,13 @@ export default function HomeScreen() {
 
   const companyId = activeCompany?.id;
   const scope = companyId && role ? `${session?.sessionId}:${companyId}:${role}` : null;
+  // Solo propietario, administrador y ventas consultan facturas (ventas, las suyas).
+  const canViewInvoices = can("invoices.view");
   const loadMetrics = useCallback(async () => {
     const [projects, clients, invoices] = await Promise.all([
       listProjectsByCompany(companyId!),
       listClients(companyId!),
-      listInvoices(companyId!),
+      canViewInvoices ? listInvoices(companyId!) : Promise.resolve({ invoices: [], error: null }),
     ]);
     const error = projects.error || clients.error || invoices.error;
     if (error) return { error };
@@ -221,7 +223,7 @@ export default function HomeScreen() {
         balanceDue: openInvoices.reduce((total, invoice) => total + Math.max(Number(invoice.balance_due ?? 0), 0), 0),
       },
     };
-  }, [companyId]);
+  }, [companyId, canViewInvoices]);
   const loadNextActivity = useCallback(async () => {
     const activities = await fetchCompanyActivities(companyId!);
     const now = Date.now();
