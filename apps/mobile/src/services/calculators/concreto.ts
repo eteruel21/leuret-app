@@ -72,7 +72,7 @@ export function registerConcreteCalculator() {
           itemType: "labor",
           description: "Mano de Obra Vaciado de Concreto",
           unitName: "m3",
-          quantity: Number(res.volumeWithWaste.toFixed(2)),
+          quantity: Number(res.netVolume.toFixed(2)),
           unitCost: prices.laborCubicMeter,
           unitPrice: prices.laborCubicMeter,
           subtotal: res.laborCost

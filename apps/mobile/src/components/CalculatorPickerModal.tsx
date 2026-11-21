@@ -7,7 +7,7 @@ import { CALCULATORS, type CalculatorRoute } from "@/constants/calculators";
 import { colors, radius } from "@/constants/theme";
 
 /**
- * Abre cualquiera de las 10 calculadoras con contexto: desde un presupuesto
+ * Abre cualquiera de las calculadoras con contexto: desde un presupuesto
  * (`budgetId`, la partida se guarda en él) o desde una obra o cliente
  * (`projectId`/`clientId`, el cálculo guardado queda ligado a ellos).
  */

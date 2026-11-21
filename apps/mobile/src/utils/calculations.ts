@@ -67,6 +67,7 @@ export type ConcreteResult = {
 const CEMENT_DENSITY_KG_M3 = 1440;
 const DRY_VOLUME_FACTOR = 1.54;
 const DEFAULT_AGGREGATE_BAG_VOLUME = 0.0142;
+const MORTAR_DRY_VOLUME_FACTOR = 1.33;
 
 function sanitizeNumber(value: number): number {
   if (!Number.isFinite(value) || value < 0) {
@@ -127,9 +128,11 @@ export function calculateConcrete(
     sanitizeNumber(input.cementDensityKgM3 ?? 0) ||
     CEMENT_DENSITY_KG_M3;
 
-  const dryVolumeFactor =
-    sanitizeNumber(input.dryVolumeFactor ?? 0) ||
-    DRY_VOLUME_FACTOR;
+  // Sin piedra es mortero (nivelación, repello grueso): su volumen seco es
+  // menor que el del concreto.
+  const dryVolumeFactor = gravelPart === 0
+    ? MORTAR_DRY_VOLUME_FACTOR
+    : sanitizeNumber(input.dryVolumeFactor ?? 0) || DRY_VOLUME_FACTOR;
 
   const defaultAggregateBagVolume =
     sanitizeNumber(
@@ -150,8 +153,7 @@ export function calculateConcrete(
     !Number.isFinite(netVolume) ||
     netVolume === 0 ||
     cementPart === 0 ||
-    sandPart === 0 ||
-    gravelPart === 0
+    sandPart === 0
   ) {
     return createEmptyResult();
   }
@@ -190,8 +192,10 @@ export function calculateConcrete(
       ? gravelBagsToBuy * sanitizeNumber(prices.gravelBag)
       : gravelVolume * sanitizeNumber(prices.gravelCubicMeter);
 
+  // La mano de obra se cobra por lo que se coloca (volumen neto), no por el
+  // desperdicio de material.
   const laborCost =
-    volumeWithWaste *
+    netVolume *
     sanitizeNumber(prices.laborCubicMeter);
 
   const materialsCost =
@@ -274,8 +278,6 @@ export type MasonryResult = {
   laborCost: number;
   totalCost: number;
 };
-
-const MORTAR_DRY_VOLUME_FACTOR = 1.33;
 
 function createEmptyMasonryResult(): MasonryResult {
   return {

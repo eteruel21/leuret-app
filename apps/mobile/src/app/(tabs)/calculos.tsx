@@ -56,7 +56,7 @@ export default function CalculationsScreen() {
           </View>
 
           <View style={styles.countBadge}>
-            <Text style={styles.countValue}>10</Text>
+            <Text style={styles.countValue}>{categories.length}</Text>
             <Text style={styles.countLabel}>tipos</Text>
           </View>
         </View>
