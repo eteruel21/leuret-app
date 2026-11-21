@@ -32,7 +32,7 @@ export type Budget = {
   id: string;
   company_id: string;
   client_id: string;
-  project_id: string;
+  project_id: string | null;
   budget_number: string;
   version: number;
   title: string;
