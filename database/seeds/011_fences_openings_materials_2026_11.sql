@@ -1,0 +1,34 @@
+-- Insumos de las calculadoras Cercas y Puertas y ventanas. Se cargan sin precio (0): el usuario lo
+-- agrega desde la app con lo que le cuesta (queda como su precio personal) y el superadministrador
+-- aprueba los aportes antes de pasarlos al catálogo de todos (migración 040).
+-- El cemento y el silicón ya existen en seeds anteriores. Los nombres coinciden con las palabras
+-- clave de cada campo de las calculadoras.
+-- Idempotente: solo inserta conceptos nuevos (por código).
+
+begin;
+
+insert into public.platform_catalog_items (
+  code, sku, name, description, item_type, category_name, unit_name, unit_symbol,
+  default_unit_cost, default_sale_price, default_waste_percentage, active
+) values
+  ('leuret:material:cerca:tubo-galvanizado-poste-6m', 'CER-POS-6M', 'Tubo galvanizado para poste de cerca 1-7/8" x 6 m', 'Insumo de la calculadora de Cercas. Sin precio todavía: agrégalo desde la app con lo que te cuesta (te sirve de inmediato como precio personal) y el superadministrador revisa los aportes antes de pasarlo al catálogo de todos.', 'material', 'Cercas y portones', 'Unidad', 'und.', 0, 0, 5, true),
+  ('leuret:material:cerca:tubo-galvanizado-superior-6m', 'CER-SUP-6M', 'Tubo galvanizado superior para cerca 1-5/8" x 6 m', 'Insumo de la calculadora de Cercas. Sin precio todavía: agrégalo desde la app con lo que te cuesta (te sirve de inmediato como precio personal) y el superadministrador revisa los aportes antes de pasarlo al catálogo de todos.', 'material', 'Cercas y portones', 'Unidad', 'und.', 0, 0, 5, true),
+  ('leuret:material:cerca:malla-ciclon-rollo-15m', 'CER-MAL-15', 'Malla ciclón galvanizada (rollo de 15 m x 1.8 m)', 'Insumo de la calculadora de Cercas. Sin precio todavía: agrégalo desde la app con lo que te cuesta (te sirve de inmediato como precio personal) y el superadministrador revisa los aportes antes de pasarlo al catálogo de todos.', 'material', 'Cercas y portones', 'Rollo', 'rollo', 0, 0, 5, true),
+  ('leuret:material:cerca:alambre-puas-rollo', 'CER-PUA-ROL', 'Alambre de púas galvanizado (rollo de 300 m)', 'Insumo de la calculadora de Cercas. Sin precio todavía: agrégalo desde la app con lo que te cuesta (te sirve de inmediato como precio personal) y el superadministrador revisa los aportes antes de pasarlo al catálogo de todos.', 'material', 'Cercas y portones', 'Rollo', 'rollo', 0, 0, 5, true),
+  ('leuret:material:cerca:porton-tubo-malla', 'CER-POR-TM', 'Portón de tubo y malla ciclón (unidad)', 'Insumo de la calculadora de Cercas. Sin precio todavía: agrégalo desde la app con lo que te cuesta (te sirve de inmediato como precio personal) y el superadministrador revisa los aportes antes de pasarlo al catálogo de todos.', 'material', 'Cercas y portones', 'Unidad', 'und.', 0, 0, 0, true),
+  ('leuret:material:cerca:accesorios-poste', 'CER-ACC-POS', 'Accesorios de poste de cerca: tapa, tensor y abrazaderas (juego)', 'Insumo de la calculadora de Cercas. Sin precio todavía: agrégalo desde la app con lo que te cuesta (te sirve de inmediato como precio personal) y el superadministrador revisa los aportes antes de pasarlo al catálogo de todos.', 'material', 'Cercas y portones', 'Juego', 'juego', 0, 0, 0, true),
+  ('leuret:labor:instalacion-cerca-ciclon-m', 'LAB-CER-M', 'Mano de obra de instalación de cerca de malla ciclón (m)', 'Insumo de la calculadora de Cercas. Sin precio todavía: agrégalo desde la app con lo que te cuesta (te sirve de inmediato como precio personal) y el superadministrador revisa los aportes antes de pasarlo al catálogo de todos.', 'labor', 'Mano de obra', 'Metro', 'm', 0, 0, 0, true),
+  ('leuret:material:puerta:puerta-interior-marco', 'PUE-INT-MAR', 'Puerta interior con marco (unidad)', 'Insumo de la calculadora de Puertas y ventanas. Sin precio todavía: agrégalo desde la app con lo que te cuesta (te sirve de inmediato como precio personal) y el superadministrador revisa los aportes antes de pasarlo al catálogo de todos.', 'material', 'Puertas y ventanas', 'Unidad', 'und.', 0, 0, 0, true),
+  ('leuret:material:puerta:ventana-aluminio-vidrio', 'VEN-ALU-VID', 'Ventana de aluminio con vidrio (unidad)', 'Insumo de la calculadora de Puertas y ventanas. Sin precio todavía: agrégalo desde la app con lo que te cuesta (te sirve de inmediato como precio personal) y el superadministrador revisa los aportes antes de pasarlo al catálogo de todos.', 'material', 'Puertas y ventanas', 'Unidad', 'und.', 0, 0, 0, true),
+  ('leuret:material:puerta:bisagra-puerta-3-5in', 'PUE-BIS-35', 'Bisagra para puerta 3.5" (unidad)', 'Insumo de la calculadora de Puertas y ventanas. Sin precio todavía: agrégalo desde la app con lo que te cuesta (te sirve de inmediato como precio personal) y el superadministrador revisa los aportes antes de pasarlo al catálogo de todos.', 'material', 'Puertas y ventanas', 'Unidad', 'und.', 0, 0, 0, true),
+  ('leuret:material:puerta:cerradura-pomo-puerta', 'PUE-CER-POM', 'Cerradura de pomo para puerta interior', 'Insumo de la calculadora de Puertas y ventanas. Sin precio todavía: agrégalo desde la app con lo que te cuesta (te sirve de inmediato como precio personal) y el superadministrador revisa los aportes antes de pasarlo al catálogo de todos.', 'material', 'Puertas y ventanas', 'Unidad', 'und.', 0, 0, 0, true),
+  ('leuret:material:puerta:vidrio-claro-m2', 'VEN-VID-M2', 'Vidrio claro de 6 mm (m²)', 'Insumo de la calculadora de Puertas y ventanas. Sin precio todavía: agrégalo desde la app con lo que te cuesta (te sirve de inmediato como precio personal) y el superadministrador revisa los aportes antes de pasarlo al catálogo de todos.', 'material', 'Puertas y ventanas', 'Metro cuadrado', 'm²', 0, 0, 10, true),
+  ('leuret:labor:instalacion-puerta-und', 'LAB-PUE-UND', 'Mano de obra de instalación de puerta con marco (unidad)', 'Insumo de la calculadora de Puertas y ventanas. Sin precio todavía: agrégalo desde la app con lo que te cuesta (te sirve de inmediato como precio personal) y el superadministrador revisa los aportes antes de pasarlo al catálogo de todos.', 'labor', 'Mano de obra', 'Unidad', 'und.', 0, 0, 0, true),
+  ('leuret:labor:instalacion-ventana-und', 'LAB-VEN-UND', 'Mano de obra de instalación de ventana (unidad)', 'Insumo de la calculadora de Puertas y ventanas. Sin precio todavía: agrégalo desde la app con lo que te cuesta (te sirve de inmediato como precio personal) y el superadministrador revisa los aportes antes de pasarlo al catálogo de todos.', 'labor', 'Mano de obra', 'Unidad', 'und.', 0, 0, 0, true)
+on conflict do nothing;
+
+commit;
+
+-- Verificación (solo lectura):
+-- select category_name, count(*) from public.platform_catalog_items
+--  where sku in ('CER-POS-6M','CER-SUP-6M','CER-MAL-15','CER-PUA-ROL','CER-POR-TM','CER-ACC-POS','LAB-CER-M','PUE-INT-MAR','VEN-ALU-VID','PUE-BIS-35','PUE-CER-POM','VEN-VID-M2','LAB-PUE-UND','LAB-VEN-UND') group by 1;

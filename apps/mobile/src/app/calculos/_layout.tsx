@@ -40,6 +40,8 @@ export default function CalculationsLayout() {
       <Stack.Screen name="excavacion" options={{ title: "Excavación y relleno" }} />
       <Stack.Screen name="encofrado" options={{ title: "Encofrado" }} />
       <Stack.Screen name="estructura" options={{ title: "Estructura" }} />
+      <Stack.Screen name="cercas" options={{ title: "Cercas" }} />
+      <Stack.Screen name="puertas-ventanas" options={{ title: "Puertas y ventanas" }} />
     </Stack>
   );
 }
