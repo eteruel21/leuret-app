@@ -15,7 +15,10 @@ export type CalculatorRoute =
   | "/calculos/acero"
   | "/calculos/techos"
   | "/calculos/plomeria"
-  | "/calculos/impermeabilizacion";
+  | "/calculos/impermeabilizacion"
+  | "/calculos/excavacion"
+  | "/calculos/encofrado"
+  | "/calculos/estructura";
 
 export type CalculationCategory = {
   id: string;
@@ -154,6 +157,33 @@ export const CALCULATORS: CalculationCategory[] = [
     enabled: true,
     route: "/calculos/impermeabilizacion",
   },
+  {
+    id: "earthwork",
+    title: "Excavación y relleno",
+    description:
+      "Volumen, viajes de volquete y relleno compactado.",
+    icon: "layers-outline",
+    enabled: true,
+    route: "/calculos/excavacion",
+  },
+  {
+    id: "formwork",
+    title: "Encofrado",
+    description:
+      "Plywood, madera y clavos según los usos.",
+    icon: "albums-outline",
+    enabled: true,
+    route: "/calculos/encofrado",
+  },
+  {
+    id: "structure",
+    title: "Estructura",
+    description:
+      "Zapatas, columnas, vigas y losa: concreto, acero y encofrado.",
+    icon: "business-outline",
+    enabled: true,
+    route: "/calculos/estructura",
+  },
 ];
 
 export type CalculatorId =
@@ -170,7 +200,10 @@ export type CalculatorId =
   | "rebar"
   | "roofing"
   | "plumbing"
-  | "waterproofing";
+  | "waterproofing"
+  | "earthwork"
+  | "formwork"
+  | "structure";
 
 /** Calculadora por su código (el `formula_code` de un cálculo guardado). */
 export function calculatorById(id: string | null | undefined): CalculationCategory | null {
