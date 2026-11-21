@@ -24,7 +24,12 @@ export type CalculatorRoute =
   | "/calculos/premezclado"
   | "/calculos/contrapiso"
   | "/calculos/cielo-falso-gypsum"
-  | "/calculos/centro-carga";
+  | "/calculos/centro-carga"
+  | "/calculos/escalera"
+  | "/calculos/muro-retencion"
+  | "/calculos/cisterna"
+  | "/calculos/enchape"
+  | "/calculos/estructura-metalica";
 
 export type CalculationCategory = {
   id: string;
