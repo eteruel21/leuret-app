@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { adminPool } from "../../db/test-db.js";
+import { withUserTransaction } from "../../db/with-user-transaction.js";
 import { createClientBudgetRepo } from "../repository.js";
 import { createClientBudgetSchema } from "../schemas.js";
 
@@ -14,7 +15,7 @@ describe("presupuesto del cliente sin obra", () => {
 
   beforeAll(async () => {
     userId = (await adminPool.query<{ id: string }>(
-      `INSERT INTO app_auth.users (email, password_hash) VALUES ($1, 'test') RETURNING id`,
+      `INSERT INTO app_auth.users (email, email_confirmed_at) VALUES ($1, now()) RETURNING id`,
       [`client_budget_${suffix}@example.com`]
     )).rows[0]!.id;
     await adminPool.query(`UPDATE public.profiles SET active = true, approved_at = now() WHERE id = $1`, [userId]);
@@ -54,6 +55,18 @@ describe("presupuesto del cliente sin obra", () => {
   });
 
   it("asocia el presupuesto al cliente y guarda la partida con su total", async () => {
+    const visibility = await withUserTransaction(userId, async (db) => (
+      await db.query<{ client_count: number; company_count: number; member_count: number }>(
+        `SELECT
+          (SELECT count(*)::int FROM public.clients WHERE id = $1 AND company_id = $2 AND active) AS client_count,
+          (SELECT count(*)::int FROM public.companies WHERE id = $2 AND active) AS company_count,
+          (SELECT count(*)::int FROM public.company_members
+            WHERE company_id = $2 AND user_id = app.current_user_id() AND active) AS member_count`,
+        [clientId, companyId]
+      )
+    ).rows[0]);
+    expect(visibility).toEqual({ client_count: 1, company_count: 1, member_count: 1 });
+
     const budgetId = await createClientBudgetRepo(userId, input());
     expect(budgetId).toBeTruthy();
     const result = await adminPool.query(
