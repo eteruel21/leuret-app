@@ -155,6 +155,8 @@ function companyRoutes(role) {
     ["calc-estructura", "/calculos/estructura"],
     ["calc-cercas", "/calculos/cercas"],
     ["calc-puertas-ventanas", "/calculos/puertas-ventanas"],
+    ["calc-premezclado", "/calculos/premezclado"],
+    ["calc-contrapiso", "/calculos/contrapiso"],
     ["clientes", "/clientes"],
     ["cliente-detalle", `/clientes/${data.clientId}`],
     ["mas", "/mas"],
