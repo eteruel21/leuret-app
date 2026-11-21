@@ -37,6 +37,9 @@ export default function CalculationsLayout() {
       <Stack.Screen name="techos" options={{ title: "Techos y cubiertas" }} />
       <Stack.Screen name="plomeria" options={{ title: "Plomería" }} />
       <Stack.Screen name="impermeabilizacion" options={{ title: "Impermeabilización" }} />
+      <Stack.Screen name="excavacion" options={{ title: "Excavación y relleno" }} />
+      <Stack.Screen name="encofrado" options={{ title: "Encofrado" }} />
+      <Stack.Screen name="estructura" options={{ title: "Estructura" }} />
     </Stack>
   );
 }
