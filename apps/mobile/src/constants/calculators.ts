@@ -20,7 +20,9 @@ export type CalculatorRoute =
   | "/calculos/encofrado"
   | "/calculos/estructura"
   | "/calculos/cercas"
-  | "/calculos/puertas-ventanas";
+  | "/calculos/puertas-ventanas"
+  | "/calculos/premezclado"
+  | "/calculos/contrapiso";
 
 export type CalculationCategory = {
   id: string;
@@ -204,6 +206,24 @@ export const CALCULATORS: CalculationCategory[] = [
     enabled: true,
     route: "/calculos/puertas-ventanas",
   },
+  {
+    id: "ready-mix",
+    title: "Concreto premezclado",
+    description:
+      "Pedido a la planta: m³, camiones, carga corta y bomba.",
+    icon: "car-outline",
+    enabled: true,
+    route: "/calculos/premezclado",
+  },
+  {
+    id: "subfloor",
+    title: "Contrapiso y zócalo",
+    description:
+      "Mortero de nivelación, zócalo, adhesivo y mano de obra.",
+    icon: "reorder-four-outline",
+    enabled: true,
+    route: "/calculos/contrapiso",
+  },
 ];
 
 export type CalculatorId =
@@ -225,7 +245,9 @@ export type CalculatorId =
   | "formwork"
   | "structure"
   | "fence"
-  | "openings";
+  | "openings"
+  | "ready-mix"
+  | "subfloor";
 
 /** Calculadora por su código (el `formula_code` de un cálculo guardado). */
 export function calculatorById(id: string | null | undefined): CalculationCategory | null {

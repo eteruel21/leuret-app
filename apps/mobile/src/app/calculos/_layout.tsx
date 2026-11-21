@@ -42,6 +42,8 @@ export default function CalculationsLayout() {
       <Stack.Screen name="estructura" options={{ title: "Estructura" }} />
       <Stack.Screen name="cercas" options={{ title: "Cercas" }} />
       <Stack.Screen name="puertas-ventanas" options={{ title: "Puertas y ventanas" }} />
+      <Stack.Screen name="premezclado" options={{ title: "Concreto premezclado" }} />
+      <Stack.Screen name="contrapiso" options={{ title: "Contrapiso y zócalo" }} />
     </Stack>
   );
 }
