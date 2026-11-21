@@ -22,6 +22,8 @@ import { calculatePaint, type PaintResult } from "../../services/calculators/pin
 import { formatDecimal, formatMoney } from "../../utils/format";
 import { loadSyncedSetting, saveSyncedSetting } from "@/services/user-settings-service";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
+import { CreateClientBudgetModal } from "@/components/CreateClientBudgetModal";
+import { router } from "expo-router";
 import { useSavedCalculation } from "@/components/SaveCalculation";
 import type { BudgetLineDraft } from "@/services/budget-service";
 
@@ -60,6 +62,7 @@ export default function PaintScreen() {
   const [form, setForm] = useState<Form>(initial);
   const [primer, setPrimer] = useState(true);
   const [result, setResult] = useState<PaintResult | null>(null);
+  const [creatingBudget, setCreatingBudget] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -227,6 +230,8 @@ export default function PaintScreen() {
     else setMessage("La partida fue guardada en el presupuesto.");
   }
 
+  const newBudgetLine = result ? buildBudgetLine() : null;
+
   const fields: [keyof Form, string, string][] = [
     ["length", "Largo", "m"], ["height", "Altura", "m"],
     ["wallCount", "Cantidad de muros", "und."],
@@ -279,13 +284,19 @@ export default function PaintScreen() {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Pressable onPress={calculate} style={styles.primary}><Text style={styles.primaryText}>Calcular pintura</Text></Pressable>
-      {result ? <Results result={result} currency={currency} onAdd={addToBudget} /> : null}
+      {result ? <Results result={result} currency={currency} onAdd={addToBudget}
+        onCreate={() => setCreatingBudget(true)} /> : null}
         {result ? saveButton : null}
       {message ? <Text style={styles.success}>{message}</Text> : null}
     </ScrollView>
     <Picker visible={Boolean(target)} target={target} items={items} loading={loading}
       currency={currency} onClose={() => setTarget(null)} onSelect={choose} />
     {priceModal}
+    {newBudgetLine ? <CreateClientBudgetModal
+      visible={creatingBudget} onClose={() => setCreatingBudget(false)}
+      defaultTitle="Pintura de paredes" item={newBudgetLine}
+      onCreated={(id) => router.push({ pathname: "/presupuestos/[id]", params: { id } })}
+    /> : null}
   </SafeAreaView>;
 }
 
@@ -333,7 +344,9 @@ function Picker({ visible, target, items, loading, currency, onClose, onSelect }
           <Text style={styles.itemName}>{item.name}</Text><Text style={styles.price}>{((item.sale_price || item.unit_cost) > 0 ? formatMoney(item.sale_price || item.unit_cost, currency) : "Sin precio · agregar")}</Text>
         </Pressable>} />}</SafeAreaView></Modal>;
 }
-function Results({ result, currency, onAdd }: { result: PaintResult; currency?: string; onAdd: () => void }) {
+function Results({ result, currency, onAdd, onCreate }: {
+  result: PaintResult; currency?: string; onAdd: () => void; onCreate: () => void;
+}) {
   const m = (v: number) => formatMoney(v, currency);
   return <View style={styles.results}><Text style={styles.sectionTitle}>Resultado</Text>
     <Text>Área neta: {formatDecimal(result.netArea, 2, currency)} m²</Text>
@@ -341,7 +354,11 @@ function Results({ result, currency, onAdd }: { result: PaintResult; currency?: 
     <Text>Primer: {formatDecimal(result.primerGallonsExact, 2, currency)} gal · Comprar {result.primerGallonsToBuy}</Text>
     <Text>Materiales: {m(result.materialsCost)}</Text><Text>Mano de obra: {m(result.laborCost)}</Text>
     <Text style={styles.total}>Total: {m(result.totalCost)}</Text>
-    <Pressable onPress={onAdd} style={styles.primary}><Text style={styles.primaryText}>Agregar al presupuesto</Text></Pressable></View>;
+    <Pressable onPress={onAdd} style={styles.primary}><Text style={styles.primaryText}>Agregar al presupuesto</Text></Pressable>
+    <Pressable onPress={onCreate} style={styles.createBudget} accessibilityRole="button">
+      <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+      <Text style={styles.createBudgetText}>Crear presupuesto nuevo</Text>
+    </Pressable></View>;
 }
 
 const styles = StyleSheet.create({
@@ -364,6 +381,10 @@ const styles = StyleSheet.create({
   catalogValue: { color: colors.accent, fontSize: 12 }, primary: { height: 52, borderRadius: radius.md,
     backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", marginBottom: 16 },
   primaryText: { color: colors.textLight, fontWeight: "900" }, error: { color: colors.danger, padding: 12 },
+  createBudget: { minHeight: 52, borderRadius: radius.md, borderWidth: 1,
+    borderColor: colors.primary, backgroundColor: colors.surface, alignItems: "center",
+    justifyContent: "center", flexDirection: "row", gap: 8 },
+  createBudgetText: { color: colors.primary, fontWeight: "800", fontSize: 15 },
   success: { color: colors.success, padding: 12 }, results: { padding: 18, backgroundColor: colors.surface,
     borderRadius: radius.lg, gap: 8, marginBottom: 16 }, total: { fontSize: 18, fontWeight: "900", marginVertical: 8 },
   modal: { flex: 1, padding: 20, backgroundColor: colors.background }, close: { color: colors.primary,

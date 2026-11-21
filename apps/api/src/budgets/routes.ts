@@ -17,6 +17,7 @@ import {
   listBudgetSchema,
   companyQuerySchema,
   createBudgetSchema,
+  createClientBudgetSchema,
   createBudgetItemSchema,
   updateBudgetItemSchema,
   updateBudgetSchema,
@@ -33,6 +34,7 @@ import {
   getClientBudgetDetailService,
   getCompanyBudgetsService,
   createProjectBudgetService,
+  createClientBudgetService,
   getBudgetDetailsService,
   addBudgetItemService,
   deleteBudgetItemService,
@@ -134,6 +136,33 @@ export async function registerBudgetRoutes(
       const input = parsedQuery.data;
       const budgets = await getCompanyBudgetsService(userId, input.companyId, input.projectId);
       return { budgets };
+    }
+  );
+
+  app.post(
+    "/budgets",
+    {
+      preHandler: [authenticateRequest, requireActiveUser, requireCompanyRole(["owner", "admin", "estimator"], "body")]
+    },
+    async (request, reply) => {
+      const userId = authenticatedUserId(request, reply);
+      if (!userId) return;
+
+      const parsedBody = createClientBudgetSchema.safeParse(request.body);
+      if (!parsedBody.success) {
+        return reply.status(400).send({ message: "Revisa el cliente, título y partida del presupuesto." });
+      }
+
+      try {
+        const budgetId = await createClientBudgetService(userId, parsedBody.data);
+        if (!budgetId) {
+          return reply.status(404).send({ message: "El cliente no está activo en esta empresa." });
+        }
+        return reply.status(201).send({ budgetId });
+      } catch (error) {
+        request.log.error(safeErrorDetails(error), "No se pudo crear el presupuesto del cliente.");
+        return reply.status(400).send({ message: "No se pudo crear el presupuesto. Inténtalo de nuevo." });
+      }
     }
   );
 

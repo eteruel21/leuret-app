@@ -3,6 +3,7 @@ import {
   getClientBudgetDetailRepo,
   findCompanyBudgets,
   createProjectBudgetRepo,
+  createClientBudgetRepo,
   getBudgetDetailsRepo,
   addBudgetItemRepo,
   deleteBudgetItemRepo,
@@ -21,6 +22,8 @@ import {
   type UpdateBudgetItemInput,
   type UpdateBudgetInput
 } from "./repository.js";
+import type { z } from "zod";
+import type { createClientBudgetSchema } from "./schemas.js";
 import { notifyBudgetDecision, notifyBudgetSent } from "../notifications/event-service.js";
 
 export async function getClientBudgetsService(userId: string) {
@@ -37,6 +40,10 @@ export async function getCompanyBudgetsService(userId: string, companyId: string
 
 export async function createProjectBudgetService(userId: string, companyId: string, projectId: string, title?: string) {
   return createProjectBudgetRepo(userId, companyId, projectId, title);
+}
+
+export async function createClientBudgetService(userId: string, input: z.infer<typeof createClientBudgetSchema>) {
+  return createClientBudgetRepo(userId, input);
 }
 
 export async function getBudgetDetailsService(userId: string, budgetId: string, companyId: string) {

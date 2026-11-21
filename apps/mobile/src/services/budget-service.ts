@@ -279,6 +279,29 @@ export async function createBudgetFromProject(
   }
 }
 
+/** Crea un presupuesto del cliente y guarda su primera partida de forma atómica. */
+export async function createBudgetForClient(
+  input: { companyId: string; clientId: string; title: string; item: BudgetLineDraft }
+): Promise<{ budgetId: string | null; error: string | null }> {
+  try {
+    const response = await authenticatedRequest<{ budgetId: string }>(
+      "/budgets",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          companyId: input.companyId,
+          clientId: input.clientId,
+          title: input.title.trim(),
+          item: input.item
+        })
+      }
+    );
+    return { budgetId: response.budgetId, error: null };
+  } catch (error) {
+    return { budgetId: null, error: errorMessage(error) };
+  }
+}
+
 export async function getBudgetById(
   companyId: string,
   budgetId: string

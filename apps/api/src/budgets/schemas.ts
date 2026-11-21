@@ -113,6 +113,14 @@ export const createBudgetItemSchema = z.object({
     .optional()
 });
 
+/** Nuevo presupuesto para un cliente, con su primera partida en una sola operación. */
+export const createClientBudgetSchema = z.object({
+  companyId: uuidSchema,
+  clientId: uuidSchema,
+  title: z.string().trim().min(2).max(250),
+  item: createBudgetItemSchema.omit({ companyId: true })
+});
+
 /** Cambios en una partida de un borrador. Solo se cambia lo que se envía. */
 export const updateBudgetItemSchema = z.object({
   companyId: uuidSchema,

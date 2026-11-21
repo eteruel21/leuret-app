@@ -1,6 +1,7 @@
 import { withUserTransaction } from "../db/with-user-transaction.js";
+import type { PoolClient } from "pg";
 import type { z } from "zod";
-import type { createBudgetItemSchema, updateBudgetItemSchema, updateBudgetSchema } from "./schemas.js";
+import type { createBudgetItemSchema, createClientBudgetSchema, updateBudgetItemSchema, updateBudgetSchema } from "./schemas.js";
 
 export type CreateBudgetItemInput = z.infer<typeof createBudgetItemSchema>;
 export type UpdateBudgetItemInput = z.infer<typeof updateBudgetItemSchema>;
@@ -217,6 +218,50 @@ export async function createProjectBudgetRepo(userId: string, companyId: string,
   });
 }
 
+/** El cliente, el presupuesto y su primera partida se confirman juntos. */
+export async function createClientBudgetRepo(userId: string, input: z.infer<typeof createClientBudgetSchema>) {
+  return withUserTransaction(userId, async (client) => {
+    const customer = await client.query(
+      `SELECT id FROM public.clients WHERE id = $1 AND company_id = $2 AND active = true`,
+      [input.clientId, input.companyId]
+    );
+    if (!customer.rows[0]) return null;
+
+    const company = await client.query<{ currency_code: string; tax_rate: string }>(
+      `SELECT currency_code, tax_rate FROM public.companies WHERE id = $1 AND active = true`,
+      [input.companyId]
+    );
+    if (!company.rows[0]) return null;
+
+    const budget = await client.query<{ id: string }>(
+      `INSERT INTO public.budgets (
+         company_id, client_id, project_id, budget_number, title, currency_code,
+         tax_rate, terms, created_by
+       ) VALUES (
+         $1, $2, NULL, public.next_document_number($1, 'budget'), $3, $4, $5,
+         (SELECT setting_value #>> '{}' FROM public.company_settings
+          WHERE company_id = $1 AND setting_key = 'pdf_terms'), app.current_user_id()
+       ) RETURNING id`,
+      [input.companyId, input.clientId, input.title, company.rows[0].currency_code, company.rows[0].tax_rate]
+    );
+    const budgetId = budget.rows[0]!.id;
+
+    await client.query(
+      `INSERT INTO public.budget_sections (company_id, budget_id, name, sort_order)
+       VALUES ($1, $2, 'General', 1)`,
+      [input.companyId, budgetId]
+    );
+    await client.query(
+      `INSERT INTO public.budget_change_history (company_id, budget_id, version, action, performed_by, notes)
+       VALUES ($1, $2, 1, 'created', app.current_user_id(), 'Presupuesto creado')`,
+      [input.companyId, budgetId]
+    );
+
+    await insertBudgetItem(client, budgetId, { ...input.item, companyId: input.companyId });
+    return budgetId;
+  });
+}
+
 export async function getBudgetDetailsRepo(userId: string, budgetId: string, companyId: string) {
   return withUserTransaction(userId, async (client) => {
     const budgetResult = await client.query(
@@ -341,7 +386,11 @@ async function checkBudgetIsDraft(client: any, budgetId: string) {
 export async function addBudgetItemRepo(userId: string, budgetId: string, input: CreateBudgetItemInput) {
   return withUserTransaction(userId, async (client) => {
     await checkBudgetIsDraft(client, budgetId);
+    return insertBudgetItem(client, budgetId, input);
+  });
+}
 
+async function insertBudgetItem(client: PoolClient, budgetId: string, input: CreateBudgetItemInput) {
     const result = await client.query(
       `
         INSERT INTO public.budget_items (
@@ -415,7 +464,6 @@ export async function addBudgetItemRepo(userId: string, budgetId: string, input:
     }
 
     return item;
-  });
 }
 
 export async function deleteBudgetItemRepo(userId: string, budgetId: string, itemId: string, companyId: string) {
