@@ -157,6 +157,8 @@ function companyRoutes(role) {
     ["calc-puertas-ventanas", "/calculos/puertas-ventanas"],
     ["calc-premezclado", "/calculos/premezclado"],
     ["calc-contrapiso", "/calculos/contrapiso"],
+    ["calc-cielo-falso-gypsum", "/calculos/cielo-falso-gypsum"],
+    ["calc-centro-carga", "/calculos/centro-carga"],
     ["clientes", "/clientes"],
     ["cliente-detalle", `/clientes/${data.clientId}`],
     ["mas", "/mas"],
