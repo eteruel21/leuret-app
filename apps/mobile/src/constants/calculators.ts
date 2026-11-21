@@ -18,7 +18,9 @@ export type CalculatorRoute =
   | "/calculos/impermeabilizacion"
   | "/calculos/excavacion"
   | "/calculos/encofrado"
-  | "/calculos/estructura";
+  | "/calculos/estructura"
+  | "/calculos/cercas"
+  | "/calculos/puertas-ventanas";
 
 export type CalculationCategory = {
   id: string;
@@ -184,6 +186,24 @@ export const CALCULATORS: CalculationCategory[] = [
     enabled: true,
     route: "/calculos/estructura",
   },
+  {
+    id: "fence",
+    title: "Cercas",
+    description:
+      "Malla ciclón: postes, malla, púas y portones.",
+    icon: "git-network-outline",
+    enabled: true,
+    route: "/calculos/cercas",
+  },
+  {
+    id: "openings",
+    title: "Puertas y ventanas",
+    description:
+      "Unidades, herrajes, vidrio, sellador e instalación.",
+    icon: "enter-outline",
+    enabled: true,
+    route: "/calculos/puertas-ventanas",
+  },
 ];
 
 export type CalculatorId =
@@ -203,7 +223,9 @@ export type CalculatorId =
   | "waterproofing"
   | "earthwork"
   | "formwork"
-  | "structure";
+  | "structure"
+  | "fence"
+  | "openings";
 
 /** Calculadora por su código (el `formula_code` de un cálculo guardado). */
 export function calculatorById(id: string | null | undefined): CalculationCategory | null {

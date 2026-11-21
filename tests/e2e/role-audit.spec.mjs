@@ -153,6 +153,8 @@ function companyRoutes(role) {
     ["calc-excavacion", "/calculos/excavacion"],
     ["calc-encofrado", "/calculos/encofrado"],
     ["calc-estructura", "/calculos/estructura"],
+    ["calc-cercas", "/calculos/cercas"],
+    ["calc-puertas-ventanas", "/calculos/puertas-ventanas"],
     ["clientes", "/clientes"],
     ["cliente-detalle", `/clientes/${data.clientId}`],
     ["mas", "/mas"],
