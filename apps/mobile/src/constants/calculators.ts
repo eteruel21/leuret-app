@@ -22,7 +22,9 @@ export type CalculatorRoute =
   | "/calculos/cercas"
   | "/calculos/puertas-ventanas"
   | "/calculos/premezclado"
-  | "/calculos/contrapiso";
+  | "/calculos/contrapiso"
+  | "/calculos/cielo-falso-gypsum"
+  | "/calculos/centro-carga";
 
 export type CalculationCategory = {
   id: string;
@@ -224,6 +226,24 @@ export const CALCULATORS: CalculationCategory[] = [
     enabled: true,
     route: "/calculos/contrapiso",
   },
+  {
+    id: "gypsum-ceiling",
+    title: "Cielo falso de gypsum",
+    description:
+      "Láminas, canales, colgantes, tornillos y acabado.",
+    icon: "remove-outline",
+    enabled: true,
+    route: "/calculos/cielo-falso-gypsum",
+  },
+  {
+    id: "panel-grounding",
+    title: "Centro de carga y tierra",
+    description:
+      "Tamaño del centro de carga, breakers y puesta a tierra.",
+    icon: "flash-outline",
+    enabled: true,
+    route: "/calculos/centro-carga",
+  },
 ];
 
 export type CalculatorId =
@@ -247,7 +267,9 @@ export type CalculatorId =
   | "fence"
   | "openings"
   | "ready-mix"
-  | "subfloor";
+  | "subfloor"
+  | "gypsum-ceiling"
+  | "panel-grounding";
 
 /** Calculadora por su código (el `formula_code` de un cálculo guardado). */
 export function calculatorById(id: string | null | undefined): CalculationCategory | null {
