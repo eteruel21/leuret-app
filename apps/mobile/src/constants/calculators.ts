@@ -11,7 +11,11 @@ export type CalculatorRoute =
   | "/calculos/electricidad"
   | "/calculos/sistemas-especiales"
   | "/calculos/aire-acondicionado"
-  | "/calculos/muebles-mdf";
+  | "/calculos/muebles-mdf"
+  | "/calculos/acero"
+  | "/calculos/techos"
+  | "/calculos/plomeria"
+  | "/calculos/impermeabilizacion";
 
 export type CalculationCategory = {
   id: string;
@@ -22,7 +26,7 @@ export type CalculationCategory = {
   route?: CalculatorRoute;
 };
 
-/** Las 10 calculadoras: pestaña Cálculos y botón «Calculadoras» del presupuesto. */
+/** Las calculadoras: pestaña Cálculos y botón «Calculadoras» del presupuesto. */
 export const CALCULATORS: CalculationCategory[] = [
   {
     id: "concrete",
@@ -114,6 +118,42 @@ export const CALCULATORS: CalculationCategory[] = [
     enabled: true,
     route: "/calculos/muebles-mdf",
   },
+  {
+    id: "rebar",
+    title: "Acero de refuerzo",
+    description:
+      "Varillas, estribos, malla, alambre de amarre y armado.",
+    icon: "construct-outline",
+    enabled: true,
+    route: "/calculos/acero",
+  },
+  {
+    id: "roofing",
+    title: "Techos y cubiertas",
+    description:
+      "Láminas, carriolas, tornillos, cumbrera y canal.",
+    icon: "home-outline",
+    enabled: true,
+    route: "/calculos/techos",
+  },
+  {
+    id: "plumbing",
+    title: "Plomería",
+    description:
+      "Tubería de agua y drenaje, accesorios y aparatos.",
+    icon: "water-outline",
+    enabled: true,
+    route: "/calculos/plomeria",
+  },
+  {
+    id: "waterproofing",
+    title: "Impermeabilización",
+    description:
+      "Galones, imprimante, malla y mano de obra.",
+    icon: "umbrella-outline",
+    enabled: true,
+    route: "/calculos/impermeabilizacion",
+  },
 ];
 
 export type CalculatorId =
@@ -126,7 +166,11 @@ export type CalculatorId =
   | "electricity"
   | "special-systems"
   | "air-conditioning"
-  | "mdf";
+  | "mdf"
+  | "rebar"
+  | "roofing"
+  | "plumbing"
+  | "waterproofing";
 
 /** Calculadora por su código (el `formula_code` de un cálculo guardado). */
 export function calculatorById(id: string | null | undefined): CalculationCategory | null {

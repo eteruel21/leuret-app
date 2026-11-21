@@ -33,6 +33,10 @@ export default function CalculationsLayout() {
       <Stack.Screen name="sistemas-especiales" options={{ title: "Sistemas especiales" }} />
       <Stack.Screen name="aire-acondicionado" options={{ title: "Aire acondicionado" }} />
       <Stack.Screen name="muebles-mdf" options={{ title: "Muebles MDF" }} />
+      <Stack.Screen name="acero" options={{ title: "Acero de refuerzo" }} />
+      <Stack.Screen name="techos" options={{ title: "Techos y cubiertas" }} />
+      <Stack.Screen name="plomeria" options={{ title: "Plomería" }} />
+      <Stack.Screen name="impermeabilizacion" options={{ title: "Impermeabilización" }} />
     </Stack>
   );
 }

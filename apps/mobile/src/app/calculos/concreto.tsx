@@ -680,9 +680,10 @@ function ConcreteCalculatorForm({
     const sandRatio = parseNumber(form.sandRatio);
     const gravelRatio = parseNumber(form.gravelRatio);
 
-    if (cementRatio <= 0 || sandRatio <= 0 || gravelRatio <= 0) {
+    // Piedra en 0 = mortero (nivelación, base de piso): se permite.
+    if (cementRatio <= 0 || sandRatio <= 0 || gravelRatio < 0) {
       setError(
-        "Cada componente de la mezcla debe tener una proporción mayor que cero.",
+        "El cemento y la arena deben tener una proporción mayor que cero (la piedra puede ser 0 para mortero).",
       );
       setResult(null);
       return;
@@ -744,7 +745,9 @@ function ConcreteCalculatorForm({
 
     return {
       itemType: "service",
-      description: `Concreto · ${concreteUse.label} · mezcla ${form.cementRatio}:${form.sandRatio}:${form.gravelRatio}`,
+      description: parseNumber(form.gravelRatio) > 0
+        ? `Concreto · ${concreteUse.label} · mezcla ${form.cementRatio}:${form.sandRatio}:${form.gravelRatio}`
+        : `Mortero · ${concreteUse.label} · mezcla ${form.cementRatio}:${form.sandRatio}`,
       unitName: "m³",
       quantity: result.volumeWithWaste,
       unitCost,
@@ -920,7 +923,8 @@ function ConcreteCalculatorForm({
 
             <Text style={styles.sectionDescription}>
               La proporción inicial es 1:2:3. Puedes cambiarla
-              según el diseño o especificación del proyecto.
+              según el diseño o especificación del proyecto. Con la
+              gravilla en 0 se calcula mortero (nivelación, base de piso).
             </Text>
 
             <View style={styles.ratioRow}>
