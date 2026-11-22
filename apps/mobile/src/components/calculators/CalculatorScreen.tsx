@@ -18,7 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { usePriceContribution } from "@/components/AddPriceModal";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
-import { CreateClientBudgetModal } from "@/components/CreateClientBudgetModal";
+import { CreateBudgetButton } from "@/components/CreateBudgetButton";
 import { useSavedCalculation } from "@/components/SaveCalculation";
 import type { CalculatorId } from "@/constants/calculators";
 import { colors, radius } from "@/constants/theme";
@@ -171,7 +171,6 @@ export function CalculatorScreen<R extends BaseResult>({ config }: { config: Cal
   const [flags, setFlags] = useState<Record<string, boolean>>(config.flagDefaults ?? {});
   const [result, setResult] = useState<R | null>(null);
   const [message, setMessage] = useState("");
-  const [creatingBudget, setCreatingBudget] = useState(false);
   const [lastBudgetId, setLastBudgetId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -314,14 +313,6 @@ export function CalculatorScreen<R extends BaseResult>({ config }: { config: Cal
     }
   }
 
-  // Se calcula en cada render: si el usuario edita un campo hasta dejarlo inválido, no debe romper la pantalla.
-  let newBudgetLine: BudgetLineDraft | null = null;
-  try {
-    newBudgetLine = result ? buildBudgetLine() : null;
-  } catch {
-    newBudgetLine = null;
-  }
-
   const visiblePrices = config.prices.filter((price) => !price.showWhen || price.showWhen(values));
   const missingPrices = visiblePrices.filter((price) => parseNumber(form[price.key]) <= 0).length;
   const money = (value: number) => formatMoney(value, currency);
@@ -443,14 +434,7 @@ export function CalculatorScreen<R extends BaseResult>({ config }: { config: Cal
             <Pressable onPress={() => void addToBudget()} style={styles.primary} accessibilityRole="button">
               <Text style={styles.primaryText}>Agregar al presupuesto</Text>
             </Pressable>
-            <Pressable
-              onPress={() => setCreatingBudget(true)}
-              style={styles.createBudget}
-              accessibilityRole="button"
-            >
-              <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
-              <Text style={styles.createBudgetText}>Crear presupuesto nuevo</Text>
-            </Pressable>
+            <CreateBudgetButton buildLine={buildBudgetLine} defaultTitle={config.title} />
           </View>
         ) : null}
         {result ? saveButton : null}
@@ -458,10 +442,10 @@ export function CalculatorScreen<R extends BaseResult>({ config }: { config: Cal
         {message && lastBudgetId ? (
           <Pressable
             onPress={() => router.push({ pathname: "/presupuestos/[id]", params: { id: lastBudgetId } })}
-            style={styles.createBudget}
+            style={styles.linkButton}
             accessibilityRole="button"
           >
-            <Text style={styles.createBudgetText}>Ver presupuesto</Text>
+            <Text style={styles.linkButtonText}>Ver presupuesto</Text>
           </Pressable>
         ) : null}
       </ScrollView>
@@ -475,15 +459,6 @@ export function CalculatorScreen<R extends BaseResult>({ config }: { config: Cal
         onSelect={choose}
       />
       {priceModal}
-      {newBudgetLine ? (
-        <CreateClientBudgetModal
-          visible={creatingBudget}
-          onClose={() => setCreatingBudget(false)}
-          defaultTitle={config.title}
-          item={newBudgetLine}
-          onCreated={(id) => router.push({ pathname: "/presupuestos/[id]", params: { id } })}
-        />
-      ) : null}
     </SafeAreaView>
   );
 }
@@ -675,11 +650,11 @@ const styles = StyleSheet.create({
     justifyContent: "center", marginBottom: 16,
   },
   primaryText: { color: colors.textLight, fontWeight: "900" },
-  createBudget: {
+  linkButton: {
     minHeight: 52, borderRadius: radius.md, borderWidth: 1, borderColor: colors.primary,
-    backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8,
+    backgroundColor: colors.surface, alignItems: "center", justifyContent: "center",
   },
-  createBudgetText: { color: colors.primary, fontWeight: "800", fontSize: 15 },
+  linkButtonText: { color: colors.primary, fontWeight: "800", fontSize: 15 },
   error: { color: colors.danger, padding: 12 },
   success: { color: colors.success, padding: 12 },
   results: { padding: 18, backgroundColor: colors.surface, borderRadius: radius.lg, gap: 8, marginBottom: 16 },
