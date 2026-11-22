@@ -40,6 +40,11 @@ export default function CalculationsLayout() {
       <Stack.Screen name="excavacion" options={{ title: "Excavación y relleno" }} />
       <Stack.Screen name="encofrado" options={{ title: "Encofrado" }} />
       <Stack.Screen name="estructura" options={{ title: "Estructura" }} />
+      <Stack.Screen name="escalera" options={{ title: "Escalera de concreto" }} />
+      <Stack.Screen name="muro-retencion" options={{ title: "Muro de retención" }} />
+      <Stack.Screen name="cisterna" options={{ title: "Cisterna" }} />
+      <Stack.Screen name="enchape" options={{ title: "Enchape de paredes" }} />
+      <Stack.Screen name="estructura-metalica" options={{ title: "Estructura metálica" }} />
       <Stack.Screen name="cercas" options={{ title: "Cercas" }} />
       <Stack.Screen name="puertas-ventanas" options={{ title: "Puertas y ventanas" }} />
       <Stack.Screen name="premezclado" options={{ title: "Concreto premezclado" }} />

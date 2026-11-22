@@ -24,7 +24,12 @@ export type CalculatorRoute =
   | "/calculos/premezclado"
   | "/calculos/contrapiso"
   | "/calculos/cielo-falso-gypsum"
-  | "/calculos/centro-carga";
+  | "/calculos/centro-carga"
+  | "/calculos/escalera"
+  | "/calculos/muro-retencion"
+  | "/calculos/cisterna"
+  | "/calculos/enchape"
+  | "/calculos/estructura-metalica";
 
 export type CalculationCategory = {
   id: string;
@@ -244,6 +249,51 @@ export const CALCULATORS: CalculationCategory[] = [
     enabled: true,
     route: "/calculos/centro-carga",
   },
+  {
+    id: "stairs",
+    title: "Escalera de concreto",
+    description:
+      "Escalones, concreto, acero y encofrado de un tramo.",
+    icon: "trending-up-outline",
+    enabled: true,
+    route: "/calculos/escalera",
+  },
+  {
+    id: "retaining-wall",
+    title: "Muro de retención",
+    description:
+      "Muro y zapata con barbacanas y grava de drenaje.",
+    icon: "git-merge-outline",
+    enabled: true,
+    route: "/calculos/muro-retencion",
+  },
+  {
+    id: "tank",
+    title: "Cisterna",
+    description:
+      "Capacidad, concreto, acero e impermeabilización.",
+    icon: "water-outline",
+    enabled: true,
+    route: "/calculos/cisterna",
+  },
+  {
+    id: "wall-tiling",
+    title: "Enchape de paredes",
+    description:
+      "Azulejo, pegamento, boquilla, crucetas y esquineros.",
+    icon: "grid-outline",
+    enabled: true,
+    route: "/calculos/enchape",
+  },
+  {
+    id: "steel-frame",
+    title: "Estructura metálica",
+    description:
+      "Columnas, vigas y correas en kilos, soldadura y pintura.",
+    icon: "construct-outline",
+    enabled: true,
+    route: "/calculos/estructura-metalica",
+  },
 ];
 
 export type CalculatorId =
@@ -269,7 +319,12 @@ export type CalculatorId =
   | "ready-mix"
   | "subfloor"
   | "gypsum-ceiling"
-  | "panel-grounding";
+  | "panel-grounding"
+  | "stairs"
+  | "retaining-wall"
+  | "tank"
+  | "wall-tiling"
+  | "steel-frame";
 
 /** Calculadora por su código (el `formula_code` de un cálculo guardado). */
 export function calculatorById(id: string | null | undefined): CalculationCategory | null {
