@@ -36,6 +36,7 @@ import { listCatalogItems } from "@/services/catalog-service";
 import { loadSyncedSetting, saveSyncedSetting } from "@/services/user-settings-service";
 import type { CatalogItemWithDetails } from "@/types/catalog";
 import { formatMoney } from "@/utils/format";
+import { singularizeOne } from "@/utils/singular-text";
 
 /**
  * Pantalla de calculadora guiada por configuración.
@@ -262,13 +263,26 @@ export function CalculatorScreen<R extends BaseResult>({ config }: { config: Cal
   }
 
   function calculate() {
-    const problem = config.validate(values);
+    const negative =
+      config.sections.some((section) =>
+        section.fields.some((field) => !field.options && parseNumber(form[field.key]) < 0),
+      ) || config.prices.some((price) => parseNumber(form[price.key]) < 0);
+    const problem = negative ? "Los valores no pueden ser negativos." : config.validate(values);
     if (problem) {
       setError(problem);
       setResult(null);
       return;
     }
-    setResult(config.compute(values));
+    let computed: R;
+    try {
+      computed = config.compute(values);
+    } catch {
+      // Datos que pasan la validación pero no dejan nada que calcular (por ejemplo, vanos mayores que el área).
+      setError("Con esos datos no hay nada que calcular. Revisa las medidas e inténtalo de nuevo.");
+      setResult(null);
+      return;
+    }
+    setResult(computed);
     setError("");
     setMessage("");
     setLastBudgetId(null);
@@ -277,8 +291,12 @@ export function CalculatorScreen<R extends BaseResult>({ config }: { config: Cal
   /** Partida del resultado actual: sirve para agregar al presupuesto y para guardar el cálculo. */
   function buildBudgetLine(): BudgetLineDraft | null {
     if (!result) return null;
-    const costedValues = makeValues(withCatalogCosts(form, tracked), flags);
-    return config.buildLine(result, config.compute(costedValues), values);
+    try {
+      const costedValues = makeValues(withCatalogCosts(form, tracked), flags);
+      return config.buildLine(result, config.compute(costedValues), values);
+    } catch {
+      return null;
+    }
   }
 
   const { saveButton, saveModal } = useSavedCalculation<Snapshot>({
@@ -304,7 +322,10 @@ export function CalculatorScreen<R extends BaseResult>({ config }: { config: Cal
       return;
     }
     const line = buildBudgetLine();
-    if (!line) return;
+    if (!line) {
+      Alert.alert("No hay partida para guardar", "Calcula de nuevo con medidas válidas y vuelve a intentarlo.");
+      return;
+    }
     const response = await addBudgetItem({ companyId: activeCompany.id, budgetId: targetBudgetId, ...line });
     if (response.error) Alert.alert("No fue posible agregar la partida", response.error);
     else {
@@ -418,7 +439,7 @@ export function CalculatorScreen<R extends BaseResult>({ config }: { config: Cal
             {config.resultRows(result, values).map((row) => (
               <View key={row.label} style={styles.resultRow}>
                 <Text style={[styles.resultLabel, row.strong && styles.strong]}>{row.label}</Text>
-                <Text style={[styles.resultValue, row.strong && styles.strong]}>{row.value}</Text>
+                <Text style={[styles.resultValue, row.strong && styles.strong]}>{singularizeOne(row.value)}</Text>
               </View>
             ))}
             <View style={styles.divider} />
