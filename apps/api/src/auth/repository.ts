@@ -15,6 +15,8 @@ export type AuthUserRecord = {
   deleted_at: Date | null;
 };
 
+export type TokenType = "email_verification" | "password_reset" | "mfa_challenge";
+
 export type SessionRecord = {
   session_id: string;
   user_id: string;
@@ -222,7 +224,7 @@ export async function insertIdentity(
 export async function insertToken(
   client: PoolClient,
   userId: string,
-  tokenType: "email_verification" | "password_reset",
+  tokenType: TokenType,
   tokenHash: string,
   expiresAt: Date
 ): Promise<void> {
@@ -243,7 +245,7 @@ export async function insertToken(
 export async function invalidateOldTokens(
   client: PoolClient,
   userId: string,
-  tokenType: "email_verification" | "password_reset"
+  tokenType: TokenType
 ): Promise<void> {
   await client.query(
     `
@@ -431,7 +433,7 @@ export async function revokeSession(sessionId: string, userId: string): Promise<
 export async function consumeTokenByHash(
   client: PoolClient,
   tokenHash: string,
-  tokenType: "email_verification" | "password_reset"
+  tokenType: TokenType
 ): Promise<{ user_id: string; expires_at: Date } | null> {
   const result = await client.query<{ user_id: string; expires_at: Date }>(
     `

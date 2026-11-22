@@ -14,6 +14,7 @@ import Fastify, { LogController, type FastifyBaseLogger } from "fastify";
 import fastifyCookie from "@fastify/cookie";
 
 import { registerAuthRoutes } from "./auth/routes.js";
+import { registerMfaRoutes } from "./auth/mfa-routes.js";
 import { corsOrigins, env } from "./config/env.js";
 import { registerCatalogRoutes } from "./catalog/routes.js";
 import { pool } from "./db/pool.js";
@@ -149,6 +150,7 @@ export async function buildApp() {
   });
 
   app.register(registerAuthRoutes);
+  app.register(registerMfaRoutes);
   app.register(registerMembershipRoutes);
   app.register(registerCatalogRoutes);
   app.register(registerProfileRoutes);

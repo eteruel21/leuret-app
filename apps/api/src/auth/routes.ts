@@ -32,6 +32,7 @@ import {
   insertUser,
   insertIdentity,
   insertToken,
+  invalidateOldTokens,
   getUserStatus,
   toPublicUserProfile,
   loadOwnProfile,
@@ -45,6 +46,8 @@ import {
   updateUserPassword,
   revokeAllUserSessions
 } from "./repository.js";
+import { getMfaRecord } from "./mfa-repository.js";
+import { isMfaConfigured } from "./mfa-crypto.js";
 import {
   verifyCaptcha,
   requestUserAgent,
@@ -81,18 +84,18 @@ const genericPasswordRecoveryResponse = {
   message: "Si tu correo está registrado, recibirás un enlace para restablecer tu contraseña."
 } as const;
 
-function getRefreshCookie(clientType: "native" | "web" | "app-web" | undefined) {
+export function getRefreshCookie(clientType: "native" | "web" | "app-web" | undefined) {
   if (clientType === "app-web") return "appRefreshToken";
   if (clientType === "web") return "refreshToken";
   return undefined;
 }
 
-function isTrustedWebOrigin(request: FastifyRequest, cookieName: keyof typeof webAuthOrigins): boolean {
+export function isTrustedWebOrigin(request: FastifyRequest, cookieName: keyof typeof webAuthOrigins): boolean {
   const origin = request.headers.origin;
   return typeof origin === "string" && webAuthOrigins[cookieName].includes(origin);
 }
 
-function getCookieOptions(cookieName: "refreshToken" | "appRefreshToken") {
+export function getCookieOptions(cookieName: "refreshToken" | "appRefreshToken") {
   const isProductionOrStaging = env.NODE_ENV === "production" || env.NODE_ENV === "staging";
   const maxAgeSeconds = env.REFRESH_TOKEN_DAYS * 24 * 60 * 60;
   const expiresDate = new Date(Date.now() + maxAgeSeconds * 1000);
@@ -302,6 +305,27 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
             });
           }
 
+          // Con MFA activo no se crea sesión todavía: se devuelve un desafío de
+          // 5 minutos que /auth/mfa/verify canjea por una sesión verificada.
+          const mfaRecord = await getMfaRecord(client, user.id);
+          if (mfaRecord?.confirmed_at) {
+            if (!isMfaConfigured()) {
+              return reply.status(503).send({
+                message: "La verificación en dos pasos no está disponible. Inténtalo más tarde."
+              });
+            }
+            const challenge = generateSecureToken();
+            await invalidateOldTokens(client, user.id, "mfa_challenge");
+            await insertToken(
+              client,
+              user.id,
+              "mfa_challenge",
+              challenge.hash,
+              new Date(Date.now() + 5 * 60 * 1000)
+            );
+            return { mfaRequired: true, mfaToken: challenge.token, expiresIn: 300 };
+          }
+
           const tokens = await createSession(
             client,
             user.id,
@@ -311,20 +335,25 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
           await updateUserSignIn(client, user.id);
 
+          // El superadministrador debe activar el segundo factor (ver /auth/mfa/enroll).
+          const mfaEnrollmentRequired = profile.role === "super_admin" && isMfaConfigured();
+
           if (cookieName) {
             const { refreshToken, ...restTokens } = tokens;
             reply.setCookie(cookieName, refreshToken, getCookieOptions(cookieName));
             return {
               ...restTokens,
               user: toPublicUserProfile(profile, status),
-              requiresApproval: status !== "active"
+              requiresApproval: status !== "active",
+              ...(mfaEnrollmentRequired ? { mfaEnrollmentRequired } : {})
             };
           }
 
           return {
             ...tokens,
             user: toPublicUserProfile(profile, status),
-            requiresApproval: status !== "active"
+            requiresApproval: status !== "active",
+            ...(mfaEnrollmentRequired ? { mfaEnrollmentRequired } : {})
           };
         });
       } catch (error) {
