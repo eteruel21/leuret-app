@@ -111,7 +111,7 @@ export function BudgetPickerModal({ visible, onClose, onSelect }: BudgetPickerMo
                   {search.trim() ? "Ningún borrador coincide" : "No tienes presupuestos en borrador"}
                 </Text>
                 <Text style={styles.message}>
-                  Crea un presupuesto desde una obra y vuelve a la calculadora para agregar la partida.
+                  Cierra esta ventana y toca «Crear presupuesto nuevo» para guardar la partida en un presupuesto nuevo, o crea uno desde una obra.
                 </Text>
                 <View style={styles.emptyActions}>
                   <Pressable onPress={() => goTo("/proyectos")} style={styles.primaryButton}>

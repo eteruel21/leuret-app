@@ -96,7 +96,7 @@ export function CreateClientBudgetModal({
         <View style={styles.header}>
           <View style={styles.headerText}>
             <Text style={styles.heading}>Crear presupuesto nuevo</Text>
-            <Text style={styles.hint}>Elige un cliente y guarda esta partida de pintura en su presupuesto.</Text>
+            <Text style={styles.hint}>Elige un cliente y guarda esta partida en su presupuesto.</Text>
           </View>
           <Pressable onPress={close} disabled={saving} hitSlop={12} accessibilityRole="button" accessibilityLabel="Cerrar">
             <Ionicons name="close" size={26} color={colors.text} />
