@@ -34,7 +34,11 @@ export type CalculatorRoute =
   | "/calculos/paredes-gypsum"
   | "/calculos/baranda"
   | "/calculos/acera"
-  | "/calculos/tragaluz";
+  | "/calculos/tragaluz"
+  | "/calculos/drenaje-pluvial"
+  | "/calculos/pergola"
+  | "/calculos/iluminacion"
+  | "/calculos/cesped-riego";
 
 export type CalculationCategory = {
   id: string;
@@ -344,6 +348,42 @@ export const CALCULATORS: CalculationCategory[] = [
     enabled: true,
     route: "/calculos/tragaluz",
   },
+  {
+    id: "storm-drainage",
+    title: "Drenaje pluvial",
+    description:
+      "Canal, bajantes, tubería enterrada y cajas de registro.",
+    icon: "rainy-outline",
+    enabled: true,
+    route: "/calculos/drenaje-pluvial",
+  },
+  {
+    id: "pergola",
+    title: "Pérgola de madera",
+    description:
+      "Postes, vigas, viguetas, listones, herrajes y barniz.",
+    icon: "home-outline",
+    enabled: true,
+    route: "/calculos/pergola",
+  },
+  {
+    id: "lighting",
+    title: "Iluminación y tomacorrientes",
+    description:
+      "Luminarias, cable, tubo, cajas y circuitos por ambiente.",
+    icon: "bulb-outline",
+    enabled: true,
+    route: "/calculos/iluminacion",
+  },
+  {
+    id: "lawn",
+    title: "Césped y riego",
+    description:
+      "Tierra, grama o semilla, abono y riego por zonas.",
+    icon: "leaf-outline",
+    enabled: true,
+    route: "/calculos/cesped-riego",
+  },
 ];
 
 export type CalculatorId =
@@ -379,7 +419,11 @@ export type CalculatorId =
   | "gypsum-walls"
   | "railing"
   | "walkway"
-  | "skylight";
+  | "skylight"
+  | "storm-drainage"
+  | "pergola"
+  | "lighting"
+  | "lawn";
 
 /** Calculadora por su código (el `formula_code` de un cálculo guardado). */
 export function calculatorById(id: string | null | undefined): CalculationCategory | null {
