@@ -16,6 +16,9 @@ CREATE TABLE private.membership_trials (
   ends_at timestamptz NOT NULL CHECK (ends_at > starts_at)
 );
 
+ALTER TABLE private.launch_membership_campaign ENABLE ROW LEVEL SECURITY;
+ALTER TABLE private.membership_trials ENABLE ROW LEVEL SECURITY;
+
 REVOKE ALL ON private.launch_membership_campaign, private.membership_trials
   FROM PUBLIC, contractor_api;
 
