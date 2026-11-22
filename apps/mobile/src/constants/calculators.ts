@@ -29,7 +29,12 @@ export type CalculatorRoute =
   | "/calculos/muro-retencion"
   | "/calculos/cisterna"
   | "/calculos/enchape"
-  | "/calculos/estructura-metalica";
+  | "/calculos/estructura-metalica"
+  | "/calculos/muro-bloques-reforzado"
+  | "/calculos/paredes-gypsum"
+  | "/calculos/baranda"
+  | "/calculos/acera"
+  | "/calculos/tragaluz";
 
 export type CalculationCategory = {
   id: string;
@@ -294,6 +299,51 @@ export const CALCULATORS: CalculationCategory[] = [
     enabled: true,
     route: "/calculos/estructura-metalica",
   },
+  {
+    id: "reinforced-masonry",
+    title: "Muro de bloques reforzado",
+    description:
+      "Bloques por tamaño, mortero, celdas rellenas y varillas.",
+    icon: "apps-outline",
+    enabled: true,
+    route: "/calculos/muro-bloques-reforzado",
+  },
+  {
+    id: "gypsum-walls",
+    title: "Paredes de gypsum completas",
+    description:
+      "Doble capa, marcos de puerta, aislante y esquineros.",
+    icon: "reader-outline",
+    enabled: true,
+    route: "/calculos/paredes-gypsum",
+  },
+  {
+    id: "railing",
+    title: "Barandas y pasamanos",
+    description:
+      "Postes, rieles, barrotes, soldadura y pintura.",
+    icon: "remove-outline",
+    enabled: true,
+    route: "/calculos/baranda",
+  },
+  {
+    id: "walkway",
+    title: "Aceras y pisos exteriores",
+    description:
+      "Concreto, base, malla, juntas y sellador.",
+    icon: "footsteps-outline",
+    enabled: true,
+    route: "/calculos/acera",
+  },
+  {
+    id: "skylight",
+    title: "Tragaluces y claraboyas",
+    description:
+      "Policarbonato, marco de aluminio, sellador y botaguas.",
+    icon: "sunny-outline",
+    enabled: true,
+    route: "/calculos/tragaluz",
+  },
 ];
 
 export type CalculatorId =
@@ -324,7 +374,12 @@ export type CalculatorId =
   | "retaining-wall"
   | "tank"
   | "wall-tiling"
-  | "steel-frame";
+  | "steel-frame"
+  | "reinforced-masonry"
+  | "gypsum-walls"
+  | "railing"
+  | "walkway"
+  | "skylight";
 
 /** Calculadora por su código (el `formula_code` de un cálculo guardado). */
 export function calculatorById(id: string | null | undefined): CalculationCategory | null {
