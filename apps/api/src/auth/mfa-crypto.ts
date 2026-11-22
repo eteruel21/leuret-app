@@ -40,7 +40,7 @@ export function encryptMfaSecret(secret: Uint8Array): { ciphertext: string; iv: 
   const tag = cipher.getAuthTag();
   return {
     ciphertext: Buffer.concat([encrypted, tag]).toString("base64"),
-    iv: iv.toString("base64")
+    iv: Buffer.from(iv).toString("base64")
   };
 }
 
