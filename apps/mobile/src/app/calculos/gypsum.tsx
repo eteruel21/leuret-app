@@ -547,7 +547,7 @@ const styles = StyleSheet.create({
   inputBox: { height: 50, paddingHorizontal: 13, borderRadius: radius.md,
     backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border,
     flexDirection: "row", alignItems: "center" },
-  input: { flex: 1, height: "100%", color: colors.text, fontWeight: "700" },
+  input: { flex: 1, minWidth: 0, height: "100%", color: colors.text, fontWeight: "700" },
   unit: { color: colors.textSecondary, fontSize: 11, fontWeight: "800" },
   label: { color: colors.text, fontSize: 13, fontWeight: "900" },
   segments: { flexDirection: "row", gap: 8 },

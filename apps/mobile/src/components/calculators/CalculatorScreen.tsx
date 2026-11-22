@@ -644,7 +644,7 @@ const styles = StyleSheet.create({
     height: 50, paddingHorizontal: 12, borderRadius: radius.md, backgroundColor: colors.surfaceAlt,
     borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center",
   },
-  input: { flex: 1, height: "100%", color: colors.text },
+  input: { flex: 1, minWidth: 0, height: "100%", color: colors.text },
   unit: { color: colors.textSecondary, fontSize: 11 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {

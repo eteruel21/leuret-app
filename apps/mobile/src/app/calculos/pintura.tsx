@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
   inputGroup: { width: "48%", minWidth: 135, flexGrow: 1 }, label: { color: colors.text, fontSize: 12, fontWeight: "800", marginBottom: 6 },
   inputBox: { height: 50, paddingHorizontal: 12, borderRadius: radius.md, backgroundColor: colors.surfaceAlt,
     borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center" },
-  input: { flex: 1, height: "100%", color: colors.text }, unit: { color: colors.textSecondary, fontSize: 11 },
+  input: { flex: 1, minWidth: 0, height: "100%", color: colors.text }, unit: { color: colors.textSecondary, fontSize: 11 },
   info: { padding: 12, backgroundColor: colors.steelSoft, color: colors.primary, borderRadius: radius.md },
   switchRow: { flexDirection: "row", alignItems: "center", padding: 12, backgroundColor: colors.surfaceAlt, borderRadius: radius.md },
   switchTitle: { color: colors.text, fontWeight: "800" }, catalog: { minHeight: 58, padding: 14,
