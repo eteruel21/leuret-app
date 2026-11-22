@@ -84,7 +84,7 @@ export async function registerMfaRoutes(app: FastifyInstance) {
   // Paso 1 de la activación: genera el secreto (sin confirmar) y la URI del QR.
   app.post(
     "/auth/mfa/enroll",
-    { preHandler, config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
+    { preHandler, config: { rateLimit: { max: env.NODE_ENV === "production" ? 5 : 100, timeWindow: "1 minute" } } },
     async (request, reply) => {
       if (!isMfaConfigured()) return reply.status(503).send(notConfigured);
       const userId = request.authenticatedUser!.id;
@@ -124,7 +124,7 @@ export async function registerMfaRoutes(app: FastifyInstance) {
   // y marca la sesión actual como verificada.
   app.post(
     "/auth/mfa/confirm",
-    { preHandler, config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    { preHandler, config: { rateLimit: { max: env.NODE_ENV === "production" ? 10 : 100, timeWindow: "1 minute" } } },
     async (request, reply) => {
       if (!isMfaConfigured()) return reply.status(503).send(notConfigured);
       const body = codeSchema.safeParse(request.body);
@@ -165,7 +165,7 @@ export async function registerMfaRoutes(app: FastifyInstance) {
   // Segundo paso del login: canjea el desafío (mfaToken) por una sesión verificada.
   app.post(
     "/auth/mfa/verify",
-    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    { config: { rateLimit: { max: env.NODE_ENV === "production" ? 10 : 100, timeWindow: "1 minute" } } },
     async (request, reply) => {
       if (!isMfaConfigured()) return reply.status(503).send(notConfigured);
       const body = verifySchema.safeParse(request.body);
