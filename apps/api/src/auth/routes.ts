@@ -49,7 +49,8 @@ import {
   verifyCaptcha,
   requestUserAgent,
   hashPassword,
-  comparePassword
+  comparePassword,
+  comparePasswordAgainstDummy
 } from "./services.js";
 import {
   sendVerificationEmail,
@@ -261,7 +262,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
       const passwordMatches = user?.password_hash
         ? await comparePassword(password, user.password_hash)
-        : false;
+        : await comparePasswordAgainstDummy(password);
 
       if (!user || !passwordMatches || user.deleted_at) {
         return reply.status(401).send({
