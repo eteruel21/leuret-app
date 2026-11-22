@@ -38,7 +38,11 @@ export type CalculatorRoute =
   | "/calculos/drenaje-pluvial"
   | "/calculos/pergola"
   | "/calculos/iluminacion"
-  | "/calculos/cesped-riego";
+  | "/calculos/cesped-riego"
+  | "/calculos/piscina"
+  | "/calculos/fachada"
+  | "/calculos/ventilacion"
+  | "/calculos/paneles-solares";
 
 export type CalculationCategory = {
   id: string;
@@ -384,6 +388,42 @@ export const CALCULATORS: CalculationCategory[] = [
     enabled: true,
     route: "/calculos/cesped-riego",
   },
+  {
+    id: "pool",
+    title: "Piscina de concreto",
+    description:
+      "Excavación, vaso reforzado, revestimiento y equipo de filtración.",
+    icon: "water-outline",
+    enabled: true,
+    route: "/calculos/piscina",
+  },
+  {
+    id: "facade",
+    title: "Pintura de fachada exterior",
+    description:
+      "Reparación de repello, sellador, pintura y andamio.",
+    icon: "color-palette-outline",
+    enabled: true,
+    route: "/calculos/fachada",
+  },
+  {
+    id: "ventilation",
+    title: "Ventilación y extracción",
+    description:
+      "Extractores por caudal, ductos, rejillas y cable.",
+    icon: "aperture-outline",
+    enabled: true,
+    route: "/calculos/ventilacion",
+  },
+  {
+    id: "solar",
+    title: "Paneles solares",
+    description:
+      "Paneles según consumo, inversor, montaje, cableado y baterías.",
+    icon: "sunny-outline",
+    enabled: true,
+    route: "/calculos/paneles-solares",
+  },
 ];
 
 export type CalculatorId =
@@ -423,7 +463,11 @@ export type CalculatorId =
   | "storm-drainage"
   | "pergola"
   | "lighting"
-  | "lawn";
+  | "lawn"
+  | "pool"
+  | "facade"
+  | "ventilation"
+  | "solar";
 
 /** Calculadora por su código (el `formula_code` de un cálculo guardado). */
 export function calculatorById(id: string | null | undefined): CalculationCategory | null {
