@@ -1,3 +1,5 @@
+BEGIN;
+
 CREATE TABLE private.launch_membership_campaign (
   singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
   starts_at timestamptz,
@@ -85,3 +87,5 @@ $$;
 
 REVOKE ALL ON FUNCTION private.membership_trial(boolean) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION private.membership_trial(boolean) TO contractor_api;
+
+COMMIT;
