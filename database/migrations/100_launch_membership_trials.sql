@@ -4,7 +4,8 @@ CREATE TABLE private.launch_membership_campaign (
   assigned integer NOT NULL DEFAULT 0 CHECK (assigned BETWEEN 0 AND 50)
 );
 
-INSERT INTO private.launch_membership_campaign DEFAULT VALUES;
+INSERT INTO private.launch_membership_campaign (starts_at)
+VALUES (TIMESTAMPTZ '2027-01-02 00:00:00 America/Panama');
 
 CREATE TABLE private.membership_trials (
   user_id uuid PRIMARY KEY REFERENCES app_auth.users(id) ON DELETE CASCADE,
