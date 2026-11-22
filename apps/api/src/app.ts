@@ -1,3 +1,4 @@
+import { registerMembershipRoutes } from "./membership/routes.js";
 import { registerAdminRoutes } from "./admin/routes.js";
 import { registerAdminMailRoutes } from "./admin/mail-routes.js";
 import { registerInvoiceRoutes } from "./invoices/routes.js";
@@ -148,6 +149,7 @@ export async function buildApp() {
   });
 
   app.register(registerAuthRoutes);
+  app.register(registerMembershipRoutes);
   app.register(registerCatalogRoutes);
   app.register(registerProfileRoutes);
   app.register(registerProfileDocumentRoutes);
