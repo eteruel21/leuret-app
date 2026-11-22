@@ -103,3 +103,16 @@ export async function hashPassword(password: string): Promise<string> {
 export async function comparePassword(password: string, hash: string): Promise<boolean> {
   return bcrypt.compare(password, hash);
 }
+
+let dummyPasswordHash: Promise<string> | undefined;
+
+/**
+ * Gasta el mismo tiempo que una comparación real cuando el correo no existe
+ * (o la cuenta no tiene contraseña), para que el tiempo de respuesta del login
+ * no revele qué correos tienen cuenta. Siempre devuelve false.
+ */
+export async function comparePasswordAgainstDummy(password: string): Promise<false> {
+  dummyPasswordHash ??= bcrypt.hash(`dummy-${Math.random().toString(36)}`, 12);
+  await bcrypt.compare(password, await dummyPasswordHash);
+  return false;
+}
