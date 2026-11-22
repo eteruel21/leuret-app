@@ -54,6 +54,10 @@ export default function CalculationsLayout() {
       <Stack.Screen name="pergola" options={{ title: "Pérgola de madera" }} />
       <Stack.Screen name="iluminacion" options={{ title: "Iluminación y tomacorrientes" }} />
       <Stack.Screen name="cesped-riego" options={{ title: "Césped y riego" }} />
+      <Stack.Screen name="piscina" options={{ title: "Piscina de concreto" }} />
+      <Stack.Screen name="fachada" options={{ title: "Pintura de fachada exterior" }} />
+      <Stack.Screen name="ventilacion" options={{ title: "Ventilación y extracción" }} />
+      <Stack.Screen name="paneles-solares" options={{ title: "Paneles solares" }} />
       <Stack.Screen name="cercas" options={{ title: "Cercas" }} />
       <Stack.Screen name="puertas-ventanas" options={{ title: "Puertas y ventanas" }} />
       <Stack.Screen name="premezclado" options={{ title: "Concreto premezclado" }} />
