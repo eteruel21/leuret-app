@@ -801,7 +801,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  input: { flex: 1, height: "100%", color: colors.text },
+  input: { flex: 1, minWidth: 0, height: "100%", color: colors.text },
   unit: { color: colors.textSecondary, fontSize: 11 },
   info: {
     padding: 12,

@@ -1909,6 +1909,7 @@ const styles = StyleSheet.create({
 
   input: {
     flex: 1,
+    minWidth: 0,
     color: colors.text,
     fontSize: 15,
     fontWeight: "600",
