@@ -106,7 +106,15 @@ const environmentSchema = z.object({
     .int()
     .min(1)
     .max(90)
-    .default(30)
+    .default(30),
+
+  // MFA (TOTP). La clave cifra los secretos TOTP: 32 bytes en base64
+  // (`openssl rand -base64 32`). ADMIN_MFA_REQUIRED exige MFA en /admin/*.
+  MFA_ENCRYPTION_KEY: z.string().trim().min(1).optional(),
+  ADMIN_MFA_REQUIRED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true")
 }).superRefine(
   (environment, context) => {
     const requiresTurnstile = environment.NODE_ENV === "production" || environment.NODE_ENV === "staging";
@@ -125,6 +133,17 @@ const environmentSchema = z.object({
 
     if (requiresTurnstile && !environment.EMAIL_FROM) {
       context.addIssue({ code: "custom", path: ["EMAIL_FROM"], message: "EMAIL_FROM es obligatorio en staging y producción." });
+    }
+
+    if (
+      environment.MFA_ENCRYPTION_KEY &&
+      Buffer.from(environment.MFA_ENCRYPTION_KEY, "base64").length !== 32
+    ) {
+      context.addIssue({ code: "custom", path: ["MFA_ENCRYPTION_KEY"], message: "MFA_ENCRYPTION_KEY debe ser una clave de 32 bytes en base64." });
+    }
+
+    if (environment.ADMIN_MFA_REQUIRED && !environment.MFA_ENCRYPTION_KEY) {
+      context.addIssue({ code: "custom", path: ["MFA_ENCRYPTION_KEY"], message: "MFA_ENCRYPTION_KEY es obligatorio cuando ADMIN_MFA_REQUIRED=true." });
     }
 
     if (environment.DATABASE_MODE === "postgres") {
