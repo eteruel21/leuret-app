@@ -45,6 +45,7 @@ import {
 } from "../../utils/format";
 import { loadSyncedSetting, saveSyncedSetting } from "@/services/user-settings-service";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
+import { CreateBudgetButton } from "@/components/CreateBudgetButton";
 import { useSavedCalculation } from "@/components/SaveCalculation";
 import type { BudgetLineDraft } from "@/services/budget-service";
 
@@ -817,6 +818,7 @@ export default function MasonryCalculatorScreen() {
               onAddToBudget={handleAddToBudget}
             />
           ) : null}
+        {result ? <CreateBudgetButton buildLine={buildBudgetLine} defaultTitle="Bloques y repello" /> : null}
         {result ? saveButton : null}
 
           {budgetMessage ? (

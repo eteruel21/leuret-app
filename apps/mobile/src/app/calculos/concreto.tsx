@@ -52,6 +52,7 @@ import {
   formatDecimal as formatDecimalUtil,
 } from "../../utils/format";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
+import { CreateBudgetButton } from "@/components/CreateBudgetButton";
 import { useSavedCalculation } from "@/components/SaveCalculation";
 import type { BudgetLineDraft } from "@/services/budget-service";
 import { fetchCalculationDetail } from "@/services/calculation-service";
@@ -1145,6 +1146,7 @@ function ConcreteCalculatorForm({
               onAddToBudget={handleAddToBudget}
             />
           ) : null}
+        {result ? <CreateBudgetButton buildLine={buildBudgetLine} defaultTitle="Concreto" /> : null}
         {result ? saveButton : null}
 
           {budgetMessage ? (

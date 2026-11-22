@@ -44,6 +44,7 @@ import {
   type ElectricalScope,
 } from "../../utils/electrical-scope";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
+import { CreateBudgetButton } from "@/components/CreateBudgetButton";
 import { useSavedCalculation } from "@/components/SaveCalculation";
 import type { BudgetLineDraft } from "@/services/budget-service";
 
@@ -614,6 +615,7 @@ export default function ElectricalScreen() {
         {result ? (
           <Results result={result} scope={scope} currency={currency} onAdd={() => void addToBudget()} />
         ) : null}
+        {result ? <CreateBudgetButton buildLine={buildBudgetLine} defaultTitle="Instalación eléctrica" /> : null}
         {result ? saveButton : null}
 
         {message ? <Text style={styles.success}>{message}</Text> : null}

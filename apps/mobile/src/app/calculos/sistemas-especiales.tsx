@@ -34,6 +34,7 @@ import {
 import { formatDecimal, formatMoney } from "../../utils/format";
 import { loadSyncedSetting, saveSyncedSetting } from "@/services/user-settings-service";
 import { useCalculatorBudget } from "@/components/BudgetPickerModal";
+import { CreateBudgetButton } from "@/components/CreateBudgetButton";
 import { useSavedCalculation } from "@/components/SaveCalculation";
 import type { BudgetLineDraft } from "@/services/budget-service";
 
@@ -765,6 +766,7 @@ export default function SpecialSystemsScreen() {
             onAdd={addToBudget}
           />
         ) : null}
+        {result ? <CreateBudgetButton buildLine={buildBudgetLine} defaultTitle={config.title} /> : null}
         {result ? saveButton : null}
 
         {message ? (
