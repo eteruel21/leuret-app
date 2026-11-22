@@ -191,6 +191,11 @@ describe("MFA (TOTP) del superadministrador", () => {
   });
 
   it("cinco fallos bloquean el segundo factor y quedan auditados", async () => {
+    // Los fallos de pruebas anteriores (código repetido, recuperación repetida) se acumulan.
+    await adminPool.query(
+      "UPDATE app_auth.user_mfa SET failed_attempts = 0, locked_until = NULL WHERE user_id = $1",
+      [adminId]
+    );
     const mfaToken = await freshChallenge();
     for (let attempt = 1; attempt <= 4; attempt += 1) {
       expect((await verify(mfaToken, { code: "000000" })).statusCode).toBe(401);
